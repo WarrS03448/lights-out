@@ -1,0 +1,11 @@
+[package]
+name = "oozcli"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+oozextract = "=0.5.0"
+
+[profile.release]
+opt-level = 2

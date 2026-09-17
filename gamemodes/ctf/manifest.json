@@ -1,0 +1,49 @@
+{
+  "id": "CTF",
+  "base": "CTF",
+  "title": "Capture the Flag",
+  "display_name": "Capture the Flag 10v10",
+  "display_names": {
+    "en": "Capture the Flag 10v10",
+    "de": "Capture the Flag 10v10",
+    "es": "Captura la bandera 10v10",
+    "fr": "Capture du drapeau 10v10",
+    "pt": "Capture a bandeira 10v10",
+    "ru": "Захват флага 10 на 10",
+    "zh": "夺旗 10v10"
+  },
+  "rulesets": {
+    "en": "Capture the Flag 10v10\n\n• Two teams of 10. Each team has a flag on a stand at its base.\n• Take the enemy flag and carry it to your own base to score. Your own flag must be at home when you arrive.\n• A dropped flag returns to its stand after 30 seconds, or at once when one of its own team touches it.\n• First team to 3 captures wins; 10-minute time limit.\n• Respawn: 7 seconds.\n• Drones are allowed; their cooldown is 2.5× the normal duration.",
+    "de": "Capture the Flag 10v10\n\n• Zwei Teams mit je 10 Spielern. Jedes Team hat eine Flagge auf einem Ständer in seiner Basis.\n• Nimm die feindliche Flagge und bringe sie zu deiner eigenen Basis, um zu punkten. Deine eigene Flagge muss dabei zu Hause sein.\n• Eine fallen gelassene Flagge kehrt nach 30 Sekunden zurück – oder sofort, wenn ein Spieler des eigenen Teams sie berührt.\n• Das erste Team mit 3 Eroberungen gewinnt; Zeitlimit 10 Minuten.\n• Respawn: 7 Sekunden.\n• Drohnen sind erlaubt; ihre Abklingzeit ist 2,5-mal so lang wie normal.",
+    "es": "Captura la bandera 10v10\n\n• Dos equipos de 10. Cada equipo tiene una bandera en un soporte en su base.\n• Coge la bandera enemiga y llévala a tu propia base para puntuar. Tu bandera debe estar en casa cuando llegues.\n• Una bandera caída vuelve a su soporte a los 30 segundos, o al instante si la toca alguien de su propio equipo.\n• Gana el primer equipo que consiga 3 capturas; límite de tiempo de 10 minutos.\n• Reaparición: 7 segundos.\n• Los drones están permitidos; su enfriamiento es 2,5 veces el normal.",
+    "fr": "Capture du drapeau 10v10\n\n• Deux équipes de 10. Chaque équipe a un drapeau sur un support dans sa base.\n• Prenez le drapeau ennemi et ramenez-le à votre base pour marquer. Votre propre drapeau doit être en place à votre arrivée.\n• Un drapeau lâché revient sur son support après 30 secondes, ou immédiatement si un joueur de son équipe le touche.\n• La première équipe à 3 captures gagne ; limite de temps de 10 minutes.\n• Réapparition : 7 secondes.\n• Les drones sont autorisés ; leur temps de recharge est 2,5 fois plus long que la normale.",
+    "pt": "Capture a bandeira 10v10\n\n• Duas equipes de 10. Cada equipe tem uma bandeira em um suporte na sua base.\n• Pegue a bandeira inimiga e leve-a até a sua base para pontuar. A sua própria bandeira precisa estar em casa quando você chegar.\n• Uma bandeira derrubada volta ao suporte após 30 segundos, ou na hora se alguém da própria equipe tocá-la.\n• Vence a primeira equipe a fazer 3 capturas; limite de tempo de 10 minutos.\n• Respawn: 7 segundos.\n• Drones são permitidos; a recarga deles é 2,5 vezes a normal.",
+    "ru": "Захват флага 10 на 10\n\n• Две команды по 10 игроков. У каждой команды есть флаг на стойке в её базе.\n• Заберите вражеский флаг и принесите его на свою базу, чтобы получить очко. Ваш собственный флаг в этот момент должен быть на месте.\n• Брошенный флаг возвращается на стойку через 30 секунд или сразу, если его коснётся игрок своей команды.\n• Побеждает команда, первой сделавшая 3 захвата; лимит времени — 10 минут.\n• Возрождение: 7 секунд.\n• Дроны разрешены; их перезарядка в 2,5 раза дольше обычной.",
+    "zh": "夺旗 10v10\n\n• 两队各 10 人。每队基地里都有一面放在旗座上的旗帜。\n• 夺取敌方旗帜并带回己方基地即可得分。到达时己方旗帜必须在旗座上。\n• 掉落的旗帜 30 秒后自动返回旗座；己方队员触碰则立即返回。\n• 率先夺旗 3 次的队伍获胜；时间限制 10 分钟。\n• 重生时间：7 秒。\n• 允许使用无人机，冷却时间为正常的 2.5 倍。"
+  },
+  "description": "Return the enemy flag to base to win. [2.5X DRONE COOLDOWN]",
+  "players": {
+    "min": 1,
+    "max": 20
+  },
+  "estimate_minutes": 10,
+  "rules": {
+    "score_limit": 3,
+    "team_size": 10,
+    "max_players": 20,
+    "time_limit": 600
+  },
+  "maps": [
+    "Hospital",
+    "Trenches",
+    "CQB",
+    "Backrooms",
+    "Pool",
+    "Russian"
+  ],
+  "url_options": {
+    "MaxPlayers": 20
+  },
+  "enum": 13,
+  "version": "1.0.4"
+}

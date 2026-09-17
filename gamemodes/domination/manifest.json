@@ -1,0 +1,49 @@
+{
+  "id": "DOM",
+  "base": "DOM",
+  "title": "Domination",
+  "display_name": "Domination 10v10",
+  "display_names": {
+    "en": "Domination 10v10",
+    "de": "Herrschaft 10v10",
+    "es": "Dominio 10v10",
+    "fr": "Domination 10v10",
+    "pt": "Domínio 10v10",
+    "ru": "Превосходство 10 на 10",
+    "zh": "占领 10v10"
+  },
+  "rulesets": {
+    "en": "Domination 10v10\n\n• Two teams of 10. Three control points — A, B and C — all neutral when the match starts.\n• Stand on a point with no enemy inside to capture it: 8 seconds alone, faster with more players on it.\n• An enemy inside freezes the capture. Leaving the point loses the progress again.\n• A point stays yours until the other team captures it.\n• Every 4 seconds each team scores 1 point for every control point it holds.\n• First team to 200 wins; 10-minute time limit, after which the higher score wins.\n• Your spawns move to the points your team holds.\n• Respawn: 7 seconds.\n• Drones are allowed; their cooldown is 2.5× the normal duration.",
+    "de": "Herrschaft 10v10\n\n• Zwei Teams mit je 10 Spielern. Drei Kontrollpunkte – A, B und C – zu Beginn alle neutral.\n• Stelle dich ohne Gegner auf einen Punkt, um ihn einzunehmen: 8 Sekunden allein, schneller mit mehreren Spielern.\n• Ein Gegner auf dem Punkt hält die Einnahme an. Verlässt du den Punkt, geht der Fortschritt wieder verloren.\n• Ein Punkt bleibt euer, bis das andere Team ihn einnimmt.\n• Alle 4 Sekunden erhält jedes Team 1 Punkt für jeden Kontrollpunkt, den es hält.\n• Das erste Team mit 200 Punkten gewinnt; Zeitlimit 10 Minuten, danach gewinnt die höhere Punktzahl.\n• Eure Spawnpunkte wandern zu den Punkten, die euer Team hält.\n• Respawn: 7 Sekunden.\n• Drohnen sind erlaubt; ihre Abklingzeit ist 2,5-mal so lang wie normal.",
+    "es": "Dominio 10v10\n\n• Dos equipos de 10. Tres puntos de control — A, B y C — todos neutrales al empezar la partida.\n• Ponte en un punto sin enemigos dentro para capturarlo: 8 segundos en solitario, más rápido con más jugadores.\n• Un enemigo dentro congela la captura. Si sales del punto, el progreso se pierde.\n• Un punto sigue siendo tuyo hasta que el otro equipo lo capture.\n• Cada 4 segundos, cada equipo suma 1 punto por cada punto de control que controla.\n• Gana el primer equipo que llegue a 200; límite de 10 minutos y después gana la puntuación más alta.\n• Tus reapariciones se desplazan hacia los puntos que controla tu equipo.\n• Reaparición: 7 segundos.\n• Los drones están permitidos; su enfriamiento es 2,5 veces el normal.",
+    "fr": "Domination 10v10\n\n• Deux équipes de 10. Trois points de contrôle — A, B et C — tous neutres au début du match.\n• Tenez-vous sur un point sans ennemi à l'intérieur pour le capturer : 8 secondes seul, plus vite à plusieurs.\n• Un ennemi sur le point interrompt la capture. Quitter le point fait perdre la progression.\n• Un point reste le vôtre jusqu'à ce que l'autre équipe le capture.\n• Toutes les 4 secondes, chaque équipe marque 1 point par point de contrôle qu'elle détient.\n• La première équipe à 200 l'emporte ; limite de 10 minutes, ensuite le meilleur score gagne.\n• Vos réapparitions se déplacent vers les points que votre équipe détient.\n• Réapparition : 7 secondes.\n• Les drones sont autorisés ; leur temps de recharge est 2,5 fois plus long que la normale.",
+    "pt": "Domínio 10v10\n\n• Duas equipes de 10. Três pontos de controle — A, B e C — todos neutros no início da partida.\n• Fique em um ponto sem inimigos dentro para capturá-lo: 8 segundos sozinho, mais rápido com mais jogadores.\n• Um inimigo dentro congela a captura. Sair do ponto faz o progresso se perder.\n• Um ponto continua sendo seu até a outra equipe capturá-lo.\n• A cada 4 segundos, cada equipe marca 1 ponto por ponto de controle que mantém.\n• Vence a primeira equipe a chegar a 200; limite de 10 minutos e depois vence a maior pontuação.\n• Seus respawns se deslocam para os pontos que a sua equipe mantém.\n• Respawn: 7 segundos.\n• Drones são permitidos; a recarga deles é 2,5 vezes a normal.",
+    "ru": "Превосходство 10 на 10\n\n• Две команды по 10 игроков. Три точки — A, B и C — в начале матча все нейтральные.\n• Встаньте на точку, пока на ней нет врагов, чтобы захватить её: 8 секунд в одиночку, быстрее — если игроков больше.\n• Враг на точке останавливает захват. Если уйти с точки, прогресс теряется.\n• Точка остаётся вашей, пока её не захватит другая команда.\n• Каждые 4 секунды команда получает 1 очко за каждую удерживаемую точку.\n• Побеждает команда, первой набравшая 200 очков; лимит времени — 10 минут, затем побеждает большее число очков.\n• Ваши точки возрождения смещаются к точкам, которые удерживает ваша команда.\n• Возрождение: 7 секунд.\n• Дроны разрешены; их перезарядка в 2,5 раза дольше обычной.",
+    "zh": "占领 10v10\n\n• 两队各 10 人。三个控制点 —— A、B、C —— 开局时全部为中立。\n• 站在没有敌人的控制点上即可占领：单人 8 秒，人越多越快。\n• 只要有敌人在点内，占领进度就会暂停。离开控制点，进度会逐渐清零。\n• 控制点一旦被占领就归你所有，直到对方重新占领。\n• 每 4 秒，每支队伍按其占领的控制点数量各得 1 分。\n• 率先达到 200 分的队伍获胜；时间限制 10 分钟，时间到则分高者胜。\n• 你的重生点会向己方占领的控制点移动。\n• 重生时间：7 秒。\n• 允许使用无人机，冷却时间为正常的 2.5 倍。"
+  },
+  "description": "Hold the control points to score. First to 200. [2.5X DRONE COOLDOWN]",
+  "players": {
+    "min": 1,
+    "max": 20
+  },
+  "estimate_minutes": 10,
+  "rules": {
+    "score_limit": 200,
+    "team_size": 10,
+    "max_players": 20,
+    "time_limit": 600
+  },
+  "maps": [
+    "Hospital",
+    "Trenches",
+    "CQB",
+    "Backrooms",
+    "Pool",
+    "Russian"
+  ],
+  "url_options": {
+    "MaxPlayers": 20
+  },
+  "enum": 15,
+  "version": "1.0.0"
+}

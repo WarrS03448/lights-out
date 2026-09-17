@@ -1,0 +1,117 @@
+/* Bug report screen — OWNED BY THE BUG REPORT SCREEN. The only CSS file this screen edits.
+ * Consumes the shared tokens (tokens.css) and sits alongside the shared ui-* components. Screen-
+ * local classes are prefixed `bug-` so they never collide with another screen's rules. */
+
+.bug {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--sp-8) var(--sp-10);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+/* header — the same shape Settings uses, so the two screens the top bar switches between do not
+ * jump when you move from one to the other */
+.bug-head h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: .01em;
+  margin: 0;
+  text-wrap: balance;
+}
+.bug-sub { margin: var(--sp-1) 0 0; font-size: 12.5px; color: var(--muted); }
+
+/* One column, and capped: a bug report is prose, and a line 900px wide is a line nobody reads
+ * back before sending. */
+.bug-card {
+  background: var(--panel);
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  max-width: 640px;
+}
+
+/* who it goes as */
+.bug-who { display: flex; align-items: center; gap: var(--sp-3); }
+.bug-whotext { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bug-whoname { font-size: 13px; }
+.bug-whoid { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* the box */
+.bug-field { display: flex; flex-direction: column; gap: var(--sp-2); }
+.bug-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.bug-box {
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--ground);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-1);
+  padding: var(--sp-3);
+  /* Resizable vertically only: dragging it wider would push it out of the card. */
+  resize: vertical;
+  min-height: 150px;
+}
+.bug-box:focus { outline: none; border-color: var(--accent); }
+.bug-box:disabled { opacity: .5; cursor: not-allowed; }
+.bug-box::placeholder { color: var(--muted); }
+
+.bug-meter {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* send */
+.bug-actions { display: flex; }
+.bug-send {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-1);
+  padding: var(--sp-3) var(--sp-6);
+  cursor: pointer;
+  /* A countdown swaps "Send report" for "Wait 4s" in place, so the button must not resize under
+   * the cursor as the number ticks. */
+  min-width: 190px;
+  text-align: center;
+}
+.bug-send:hover:not(:disabled) { background: var(--accent-dark); border-color: var(--accent-dark); }
+.bug-send:disabled { opacity: .45; cursor: not-allowed; }
+
+/* the line under the button: the receipt, or why nothing was sent */
+.bug-note { font-size: 12.5px; min-height: 1.2em; color: var(--muted); }
+.bug-note.ok { color: var(--green); }
+.bug-note.warn { color: var(--gold); }
+
+.bug-privacy {
+  font-size: 11.5px;
+  color: var(--muted);
+  border-top: 1px solid var(--line-2);
+  padding-top: var(--sp-3);
+}
+
+@media (max-width: 900px) {
+  .bug { padding: var(--sp-6) var(--sp-5); }
+}

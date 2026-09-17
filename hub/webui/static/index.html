@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Offline-first: no remote origins. A stray CDN reference fails here instead of silently
+       working in dev and breaking on a machine with no internet (docs/ui-redesign-plan.md). -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; media-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lights Out</title>
+  <!-- Modular CSS: shared tokens first, then the shared component styles, then ONE stylesheet per
+       screen (each owned by its screen agent). tokens/ui are core; the screens/*.css files are the
+       only CSS a screen agent edits. Local files only (CSP: no CDN). -->
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="rounds.css">
+  <!-- The window's own title bar (frameless on Windows). Core, not a screen: it styles #topbar,
+       which every screen sits under. -->
+  <link rel="stylesheet" href="titlebar.css">
+  <link rel="stylesheet" href="screens/competitive.css">
+  <link rel="stylesheet" href="screens/gamemodes.css">
+  <link rel="stylesheet" href="screens/profile.css">
+  <link rel="stylesheet" href="screens/history.css">
+  <link rel="stylesheet" href="screens/leaderboard.css">
+  <link rel="stylesheet" href="screens/friends.css">
+  <link rel="stylesheet" href="screens/settings.css">
+  <!-- The post-match card is an overlay, not a view: it is raised over whichever screen is
+       showing when a match ends. Its CSS loads with the rest. -->
+  <link rel="stylesheet" href="screens/postmatch.css">
+  <link rel="stylesheet" href="screens/bugreport.css">
+</head>
+<body>
+  <!-- The frame the shared core draws: a full-width header (nav + status dot), then the
+       screen. The nav and status dot are owned by core.js; #app is (re)rendered by the active
+       screen module from the state snapshot. -->
+  <div id="root">
+    <header id="topbar">
+      <div class="brand-wrap">
+        <nav id="nav" class="nav"></nav>
+        <!-- The three service counts, immediately to the right of the nav's last item (Bug
+             report): how many are online, how many are searching, how many matches are in
+             flight. They sit HERE and not out at the right edge because that is where the
+             window buttons live now (titlebar.js appends .wincontrols to #topbar) - a figure
+             pressed up against Close is a figure nobody reads. Filled by core.js
+             renderStatus from the one `status` slice. -->
+        <div class="topstats" id="topstats">
+          <div class="status-dot" id="serverstatus"></div>
+          <span class="topstat" id="statqueued"></span>
+          <span class="topstat" id="statlive"></span>
+        </div>
+      </div>
+    </header>
+    <div id="update-notices"></div>
+    <div id="workspace">
+      <main id="app">
+        <div class="boot">Loading…</div>
+      </main>
+      <aside id="friends-dock"></aside>
+    </div>
+  </div>
+  <!-- Modular JS via plain <script> tags + a window.HubUI global registry (NOT ES modules): under
+       file:// + WebView2/WKWebView, `import` hits module CORS restrictions, so a global registry is
+       the safe pattern (docs/ui-redesign-plan.md). Load order matters: ui.js creates window.HubUI,
+       core.js adds the registry/router/bridge, then each screen registers itself. Local only (CSP). -->
+  <script src="ui.js"></script>
+  <script src="rounds.js"></script>
+  <!-- The 25 rank badges, inlined as an SVG sprite. NOT an <img> or an external
+       <use href="ranks.svg#rk-14">: that is fetched as a DOCUMENT, which default-src 'none'
+       above blocks. Injected once and referenced same-document instead (docs/rank-art.md).
+       After ui.js (it registers onto window.HubUI), before any screen that draws a badge. -->
+  <script src="ranksprite.js"></script>
+  <script src="core.js"></script>
+  <script src="network.js"></script>
+  <script src="clicksound.js"></script>
+  <!-- The title bar. After core.js so it can wrap HubUI.setStrings for its tooltips; it owns only
+       the window buttons and the drag handling on #topbar, never a screen. -->
+  <script src="titlebar.js"></script>
+  <script src="screens/competitive.js"></script>
+  <script src="screens/gamemodes.js"></script>
+  <script src="screens/profile.js"></script>
+  <script src="screens/history.js"></script>
+  <script src="screens/leaderboard.js"></script>
+  <script src="screens/friends.js"></script>
+  <script src="screens/settings.js"></script>
+  <!-- Last: an OVERLAY module (HubUI.registerOverlay), drawn over whatever view is active. -->
+  <script src="screens/postmatch.js"></script>
+  <script src="screens/bugreport.js"></script>
+</body>
+</html>

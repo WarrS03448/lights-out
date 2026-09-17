@@ -1,0 +1,26 @@
+{
+  "release": "2.3.86",
+  "date": "2026-09-17",
+  "scope": "Original client, server, gamemode generators, editor helper, packaging code and tests",
+  "source_export_changes": [
+    "Add MIT license, upstream notices, public documentation and test workflow",
+    "Omit private history, operations notes, game dumps, generated native stubs, and third-party sound recordings",
+    "Omit official Windows installer; link the existing official download",
+    "Sanitize historical test-pack build verdict and refresh fixture checksum",
+    "Replace one player ID in a code comment with a synthetic example",
+    "Make the release verification test locate its own checkout",
+    "Replace real identifiers reused by tests with synthetic fixtures",
+    "Bundle license notices with local builds and pin optional oozextract to 0.5.0",
+    "Include authenticated host travel, public policies and automated privacy checks for release 2.3.86"
+  ],
+  "gamemode_packs": [
+    {
+      "path": "packs/BB5-1.0.27.zip",
+      "sha256": "3787d8cdb1c23d3b6d529662447abf8bfa68426c0fbd1a66400a9267a33fc4f3"
+    },
+    {
+      "path": "packs/CTF-1.0.4.zip",
+      "sha256": "e0ef3843e4daa9ea9d4e4f092bfdd3b4ec937173692e2c5dece1343c12fd6f60"
+    }
+  ]
+}

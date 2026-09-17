@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ranked · Lights Out</title>
+<meta name="description" content="Inside a ranked Bodybomb 5v5 match on Lights Out: sign in with Steam, queue solo or as five, toss and veto, then climb the rank ladder.">
+<meta name="theme-color" content="#0b0b0c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23c8102e'/%3E%3Crect x='6' y='6' width='20' height='20' fill='none' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="preload" href="/assets/oswald-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/ibmplexsans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+  <a class="skip" href="#ranked">Skip to content</a>
+
+  <header class="topbar">
+    <div class="wrap">
+      <div class="brand-wrap">
+        <a class="brand" href="/"><span class="mark" aria-hidden="true">LO</span>Lights Out</a>
+        <nav class="nav" aria-label="Site">
+          <a href="/">Download</a>
+          <a href="/ranked" class="active" aria-current="page">Ranked</a>
+          <a href="/how">How it works</a>
+          <a href="/faq">FAQ</a>
+          <a href="/about">About</a>
+        </nav>
+      </div>
+      <a class="source-link" href="https://github.com/WarrS03448/lights-out" aria-label="View Lights Out source on GitHub">GitHub <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg></a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <span class="eyebrow">Ranked</span>
+        <h1>A rank on the line</h1>
+        <p class="hero-sub">Queue solo or with a party, get matched on skill, and play <strong>Bodybomb 5v5</strong> for RR.</p>
+      </div>
+    </section>
+
+    <!-- This was the front page's lead section until 2026-09-16; it is its own page now, and the
+         front page is the download and the mode list. Auto-host, auto-join and the in-game team
+         sort were all measured working on two machines on 2026-09-16, so the "still being finished"
+         note that used to close this section is gone and the flow below states them plainly. Do not
+         put a claim here the app cannot do. The rank names are NOT typed here: they come from
+         server/ladder.cjs, which is the one place that holds them, so the site cannot advertise a
+         ladder the app does not draw. -->
+    <section class="section ranked-section" id="ranked">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <h2>Inside a ranked match</h2>
+            <p class="section-lede">Ten players, one life a round, first to seven. The app runs the queue, the veto and the result.</p>
+          </div>
+          <span class="chip">Bodybomb 5v5</span>
+        </div>
+
+        <ol class="flow">
+          <li>
+            <h3>Sign in with Steam</h3>
+            <p>No new account. Your rank belongs to the account that plays it.</p>
+          </li>
+          <li>
+            <h3>Queue solo or as five</h3>
+            <p>Parties up to five, matched like for like, teams balanced on skill.</p>
+          </li>
+          <li>
+            <h3>Toss, then veto</h3>
+            <p>Captains call the coin. The winner takes the side or the first ban; bans cut the pool to one map.</p>
+          </li>
+          <li>
+            <h3>Play it, get rated</h3>
+            <p>Leave Bodycam closed: the app opens it when your match is found, drops you straight into the host's game, and puts both teams the way the lobby picked them. Nobody adds anybody and nobody types a code. The score is reported from inside the game.</p>
+          </li>
+        </ol>
+
+        <div class="ladder-wrap">
+          <h3 class="ui-card-title">{{RANK_COUNT}} ranks, {{RANK_RUNGS}} rungs</h3>
+          <ul class="ladder">
+{{RANK_LADDER}}
+          </ul>
+          <p class="pane-note">Rookie through Nightmare each have {{RANK_DIVISIONS}} divisions of 100 RR. From Spectre, RR counts upward without resetting. Reaper has no divisions: it requires 300+ counted RR and a place among the top 150. See your standing in the app’s leaderboard.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <h2>Get in a queue</h2>
+            <p class="section-lede">Install <strong>Bodybomb 5v5</strong> in the app, sign in with Steam on the Competitive tab, and hit Find match. <a href="/how" style="color: var(--accent)">Here is exactly what it touches</a> first.</p>
+          </div>
+        </div>
+        <div class="hero-cta">
+          <a class="btn-primary" href="/hub/download">Download for Windows</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap">
+      <p>Not affiliated with Reissad Studio. This tool does not modify game files; it adds a removable pak. Version {{HUB_VERSION}}.</p>
+      <div class="foot-links">
+        <a href="https://github.com/WarrS03448/lights-out">Source on GitHub</a>
+        <a href="/">Download</a>
+        <a href="/ranked">Ranked</a>
+        <a href="/how">How it works</a>
+        <a href="/faq">FAQ</a>
+        <a href="/about">About</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/cookies">Cookies &amp; storage</a>
+        <a href="/notices">Third-party notices</a>
+        <a href="mailto:contact@theneeb.com">Contact</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

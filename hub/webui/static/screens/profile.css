@@ -1,0 +1,171 @@
+/* Profile screen — OWNED BY THE PROFILE SCREEN. The only CSS file this screen edits.
+ * Uses the shared tokens (tokens.css) and shared components (ui.css, ui-* classes); everything
+ * below is screen-local. The layout mirrors the design's Profile artboard: a fixed identity/stats
+ * sidebar and a scrolling main column (recent matches). */
+
+.profile {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  min-height: 0;
+  height: 100%;
+}
+
+/* ---------------------------------------------------------------- left column */
+.profile-side {
+  background: var(--panel);
+  border-right: 1px solid var(--line-2);
+  padding: var(--sp-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.profile-id { display: flex; align-items: center; gap: var(--sp-4); }
+.profile-id .ui-avatar { width: 64px; height: 64px; font-size: 24px; }
+/* The rank emblem at the other end of the row from the picture, so the two things the row says -
+ * who this is, and how good they are - do not fight over the same corner. No square behind it:
+ * the badge is already a plate, and it is drawn to read on this panel (docs/rank-art.md). */
+.profile-id-badge { width: 56px; height: 64px; flex: none; margin-left: auto; }
+.profile-id-badge .rank-badge { display: block; width: 100%; height: 100%; }
+.profile-id-text { min-width: 0; }
+.profile-rank-open {
+  width: 100%; height: 100%; padding: 0; border: 1px solid transparent;
+  background: transparent; color: inherit; cursor: pointer; border-radius: 4px;
+}
+.profile-rank-open:hover { background: var(--panel-2); border-color: var(--line); }
+.profile-rank-open:focus-visible, .profile-rank-link:focus-visible {
+  outline: 2px solid var(--text); outline-offset: 3px;
+}
+.profile-name {
+  font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1;
+  text-transform: uppercase; text-wrap: balance;
+}
+.profile-sub { font-size: 12px; color: var(--muted); margin-top: var(--sp-2); }
+
+/* rank card — the accent block; rank rating is honestly "not tracked yet" until the RR service. */
+.profile-rank { background: var(--accent); color: var(--on-accent); padding: var(--sp-5); }
+/* Words only: the emblem this row used to open with now sits beside the player's name, and the
+ * level numeral it fell back to is gone from the screen entirely. */
+.profile-rank-head { display: flex; align-items: center; gap: var(--sp-4); }
+.profile-rank-name {
+  font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1;
+  text-transform: uppercase;
+}
+.profile-rank-rr {
+  font-size: 11px; letter-spacing: .1em; text-transform: uppercase; opacity: .9;
+  margin-top: var(--sp-2);
+}
+.profile-rank-link {
+  display: inline-block; margin-top: var(--sp-4); padding: 0; border: 0;
+  background: transparent; color: inherit; font: inherit; font-size: 12px;
+  text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+
+/* honest stat grid */
+.profile-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--line-2);
+}
+.profile-stats .ui-stat { border-top: none; padding: var(--sp-4); min-width: 0; }
+.profile-stats .ui-stat .n { font-size: 22px; }
+.profile-stats .ui-stat .n, .profile-stats .ui-stat .l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.profile-note { font-size: 11.5px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+
+/* ---------------------------------------------------------------- right column */
+.profile-main {
+  padding: var(--sp-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.profile-section { display: flex; flex-direction: column; gap: var(--sp-3); }
+.profile-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.profile-section-title {
+  font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+/* recent matches list (built from ui.listRow / ui.table) */
+.profile-recent .ui-listrow { border-left: 3px solid var(--line); }
+.recent-res {
+  width: 30px; height: 30px; display: grid; place-items: center; flex: none;
+  font-family: var(--font-display); font-weight: 700; font-size: 13px;
+  background: var(--panel-2); color: var(--text);
+}
+.recent-res.win       { background: var(--green);  color: var(--ground); }
+.recent-res.loss      { background: var(--accent); color: var(--on-accent); }
+.recent-res.cancelled { background: var(--line);   color: var(--muted); }
+.recent-res.fault     { background: var(--gold);   color: var(--ground); }
+.recent-map { font-weight: 600; font-size: 14px; }
+.recent-meta { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+/* narrow windows: stack the two columns so nothing is clipped (the shell is resizable). */
+@media (max-width: 860px) {
+  .profile { grid-template-columns: 1fr; overflow-y: auto; }
+  .profile-side { border-right: none; border-bottom: 1px solid var(--line-2); }
+  .profile-side, .profile-main { overflow-y: visible; }
+}
+
+.recent-open { cursor: pointer; }
+.recent-open:hover { background: var(--panel-2); }
+.recent-open:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Rank guide is a separate, scrollable screen inside Profile. The auto-fit grid responds to
+ * the space left by the Friends dock, rather than assuming the full window is available. */
+.profile-ranks { height: 100%; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.profile-ranks-head { padding: var(--sp-6) var(--sp-8); border-bottom: 1px solid var(--line-2); flex: none; }
+.profile-ranks-back { margin-bottom: var(--sp-4); }
+.profile-ranks-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.profile-ranks-title {
+  margin: 0; font: 700 30px/1.1 var(--font-display); text-transform: uppercase;
+}
+.profile-ranks-intro { margin: var(--sp-2) 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.profile-ranks-scroll { min-height: 0; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-6) var(--sp-8); }
+.profile-ranks-current {
+  display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-4) var(--sp-5);
+  margin-bottom: var(--sp-5); background: var(--panel); border: 1px solid var(--line);
+}
+.profile-ranks-current > .rank-badge { width: 52px; height: 60px; flex: none; }
+.profile-ranks-standing { min-width: 0; }
+.profile-ranks-label { font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.profile-ranks-current-name { font: 700 24px/1.3 var(--font-display); text-transform: uppercase; overflow-wrap: anywhere; }
+.profile-ranks-status { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.profile-ranks-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: var(--sp-4); }
+.profile-ranks-card { min-width: 0; padding: var(--sp-4); background: var(--panel); border: 1px solid var(--line-2); }
+.profile-ranks-card.is-current { border-color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
+.profile-ranks-card-head { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.profile-ranks-card-head > .rank-badge { width: 46px; height: 53px; flex: none; }
+.profile-ranks-name { margin: 0; font: 700 20px/1.2 var(--font-display); text-transform: uppercase; overflow-wrap: anywhere; }
+.profile-ranks-divisions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.profile-ranks-division {
+  flex: 1 1 60px; min-width: 0; display: flex; flex-direction: column; align-items: center;
+  padding: var(--sp-3) var(--sp-1); border: 1px solid transparent; background: var(--panel-2); text-align: center;
+}
+.profile-ranks-division > .rank-badge { display: block; width: 48px; height: 56px; margin-bottom: var(--sp-2); }
+.profile-ranks-division-name { font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.profile-ranks-rr { margin-top: var(--sp-2); font-size: 12px; font-weight: 600; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.profile-ranks-division-rr { font-size: 10px; overflow-wrap: anywhere; }
+.profile-ranks-note { margin: var(--sp-3) 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.profile-ranks-scroll > .profile-ranks-note { margin: 0 0 var(--sp-5); }
+.profile-ranks-division.is-current { border-color: var(--accent); }
+.profile-ranks-here {
+  display: inline-block; color: var(--on-accent); background: var(--accent);
+  padding: 3px 5px; margin-top: var(--sp-2); font-size: 10px; line-height: 1.3;
+}
+.profile-ranks-capstone .profile-ranks-card-head > .rank-badge { width: 64px; height: 74px; }
+.profile-ranks-capstone { grid-column: 1 / -1; }
+.profile-ranks-capstone .profile-ranks-note { max-width: 90ch; }
+@media (max-width: 860px) {
+  .profile-ranks-head, .profile-ranks-scroll { padding: var(--sp-5); }
+}

@@ -1,0 +1,97 @@
+/* Community Hub — shared design tokens (direction 1c "Dark split · red hero · Oswald / IBM Plex").
+ *
+ * SHARED, OWNED BY THE CORE. Every screen's CSS must consume these custom properties instead of
+ * hard-coding one-off hex/px values, so the whole app stays design-consistent (accent #c8102e,
+ * the fonts, the spacing scale). This file is loaded FIRST from index.html; screen CSS below it
+ * inherits the :root variables. A screen agent does not edit this file — if a screen needs a new
+ * shared token, that is a core change, requested against this file deliberately.
+ *
+ * Fonts are bundled locally (fonts/) — NOTHING is loaded from a CDN at runtime (see the CSP in
+ * index.html and docs/ui-redesign-plan.md). Both families are variable fonts: one woff2 per subset
+ * spans all weights. The system-font fallback stack keeps the app readable for languages the
+ * bundled latin subsets do not cover (ru cyrillic, zh CJK) and if a font ever fails to load. */
+
+/* ---------------------------------------------------------------- fonts (local, offline) */
+@font-face {
+  font-family: 'Oswald';
+  font-style: normal;
+  font-weight: 200 700;
+  font-display: swap;
+  src: url('fonts/oswald-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: 'Oswald';
+  font-style: normal;
+  font-weight: 200 700;
+  font-display: swap;
+  src: url('fonts/oswald-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url('fonts/ibmplexsans-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url('fonts/ibmplexsans-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+/* ---------------------------------------------------------------- tokens */
+:root {
+  /* color */
+  --ground: #0b0b0c;
+  --panel: #15151a;
+  --panel-2: #1e1e23;
+  --line: #33333a;
+  --line-2: #2a2a30;
+  --text: #f4f2f0;
+  --muted: #77777d;
+  --accent: #c8102e;
+  --accent-dark: #8f0a20;
+  --green: #3ddc84;
+  --gold: #e0b45c;
+  --on-accent: #fff;
+
+  /* type */
+  --font-display: 'Oswald', 'Bebas Neue', 'Arial Narrow', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, 'Microsoft YaHei UI', sans-serif;
+
+  /* spacing scale (8px base grid) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 28px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-11: 44px;
+
+  /* radii — the design is sharp/tactical, so radii are small and mostly 0 */
+  --radius-0: 0px;
+  --radius-1: 2px;
+  --radius-2: 4px;
+
+  /* elevation */
+  --shadow-1: 0 4px 16px rgba(0,0,0,.35);
+  --shadow-2: 0 8px 30px rgba(0,0,0,.4);
+
+  /* chrome sizing */
+  --topbar-h: 44px;
+
+  /* WINDOW SCALING. The whole page is zoomed by this factor so the layout fits whatever size
+   * the window is, instead of cutting the bottom off it (the zoom is applied in ui.css, and
+   * core.js measures the window and writes the factor here). The 1 is what the page renders
+   * with before the first measurement, and what it keeps if the script never runs. */
+  --ui-scale: 1;
+}

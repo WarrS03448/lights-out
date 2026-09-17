@@ -1,0 +1,82 @@
+{
+  "catalogue_version": 1,
+  "hub": {
+    "version": "2.3.86",
+    "download_url": "https://lightsout.up.railway.app/hub/LightsOut-Setup-2.3.86.exe",
+    "page_url": "https://lightsout.up.railway.app/",
+    "sha256": "bfd76f02d11d0f29709330d97ab3e221216258c085537b607ff8f28209a71184",
+    "size": 21325888,
+    "kind": "inno-setup"
+  },
+  "gamemodes": [
+    {
+      "id": "CTF",
+      "title": "Capture the Flag 10v10",
+      "titles": {
+        "en": "Capture the Flag 10v10",
+        "de": "Capture the Flag 10v10",
+        "es": "Captura la bandera 10v10",
+        "fr": "Capture du drapeau 10v10",
+        "pt": "Capture a bandeira 10v10",
+        "ru": "Захват флага 10 на 10",
+        "zh": "夺旗 10v10"
+      },
+      "version": "1.0.4",
+      "description": "Return the enemy flag to base to win. [2.5X DRONE COOLDOWN]",
+      "pack_url": "https://lightsout.up.railway.app/packs/CTF-1.0.4.zip",
+      "sha256": "e0ef3843e4daa9ea9d4e4f092bfdd3b4ec937173692e2c5dece1343c12fd6f60",
+      "size": 32874,
+      "localized": true,
+      "rulesets": {
+        "en": "Capture the Flag 10v10\n\n• Two teams of 10. Each team has a flag on a stand at its base.\n• Take the enemy flag and carry it to your own base to score. Your own flag must be at home when you arrive.\n• A dropped flag returns to its stand after 30 seconds, or at once when one of its own team touches it.\n• First team to 3 captures wins; 10-minute time limit.\n• Respawn: 7 seconds.\n• Drones are allowed; their cooldown is 2.5× the normal duration.",
+        "de": "Capture the Flag 10v10\n\n• Zwei Teams mit je 10 Spielern. Jedes Team hat eine Flagge auf einem Ständer in seiner Basis.\n• Nimm die feindliche Flagge und bringe sie zu deiner eigenen Basis, um zu punkten. Deine eigene Flagge muss dabei zu Hause sein.\n• Eine fallen gelassene Flagge kehrt nach 30 Sekunden zurück – oder sofort, wenn ein Spieler des eigenen Teams sie berührt.\n• Das erste Team mit 3 Eroberungen gewinnt; Zeitlimit 10 Minuten.\n• Respawn: 7 Sekunden.\n• Drohnen sind erlaubt; ihre Abklingzeit ist 2,5-mal so lang wie normal.",
+        "es": "Captura la bandera 10v10\n\n• Dos equipos de 10. Cada equipo tiene una bandera en un soporte en su base.\n• Coge la bandera enemiga y llévala a tu propia base para puntuar. Tu bandera debe estar en casa cuando llegues.\n• Una bandera caída vuelve a su soporte a los 30 segundos, o al instante si la toca alguien de su propio equipo.\n• Gana el primer equipo que consiga 3 capturas; límite de tiempo de 10 minutos.\n• Reaparición: 7 segundos.\n• Los drones están permitidos; su enfriamiento es 2,5 veces el normal.",
+        "fr": "Capture du drapeau 10v10\n\n• Deux équipes de 10. Chaque équipe a un drapeau sur un support dans sa base.\n• Prenez le drapeau ennemi et ramenez-le à votre base pour marquer. Votre propre drapeau doit être en place à votre arrivée.\n• Un drapeau lâché revient sur son support après 30 secondes, ou immédiatement si un joueur de son équipe le touche.\n• La première équipe à 3 captures gagne ; limite de temps de 10 minutes.\n• Réapparition : 7 secondes.\n• Les drones sont autorisés ; leur temps de recharge est 2,5 fois plus long que la normale.",
+        "pt": "Capture a bandeira 10v10\n\n• Duas equipes de 10. Cada equipe tem uma bandeira em um suporte na sua base.\n• Pegue a bandeira inimiga e leve-a até a sua base para pontuar. A sua própria bandeira precisa estar em casa quando você chegar.\n• Uma bandeira derrubada volta ao suporte após 30 segundos, ou na hora se alguém da própria equipe tocá-la.\n• Vence a primeira equipe a fazer 3 capturas; limite de tempo de 10 minutos.\n• Respawn: 7 segundos.\n• Drones são permitidos; a recarga deles é 2,5 vezes a normal.",
+        "ru": "Захват флага 10 на 10\n\n• Две команды по 10 игроков. У каждой команды есть флаг на стойке в её базе.\n• Заберите вражеский флаг и принесите его на свою базу, чтобы получить очко. Ваш собственный флаг в этот момент должен быть на месте.\n• Брошенный флаг возвращается на стойку через 30 секунд или сразу, если его коснётся игрок своей команды.\n• Побеждает команда, первой сделавшая 3 захвата; лимит времени — 10 минут.\n• Возрождение: 7 секунд.\n• Дроны разрешены; их перезарядка в 2,5 раза дольше обычной.",
+        "zh": "夺旗 10v10\n\n• 两队各 10 人。每队基地里都有一面放在旗座上的旗帜。\n• 夺取敌方旗帜并带回己方基地即可得分。到达时己方旗帜必须在旗座上。\n• 掉落的旗帜 30 秒后自动返回旗座；己方队员触碰则立即返回。\n• 率先夺旗 3 次的队伍获胜；时间限制 10 分钟。\n• 重生时间：7 秒。\n• 允许使用无人机，冷却时间为正常的 2.5 倍。"
+      },
+      "rules": {
+        "score_limit": 3,
+        "team_size": 10,
+        "max_players": 20,
+        "time_limit": 600
+      }
+    },
+    {
+      "id": "BB5",
+      "title": "Bodybomb 5v5",
+      "titles": {
+        "en": "Bodybomb 5v5",
+        "de": "Bodybomb 5v5",
+        "es": "Bodybomb 5v5",
+        "fr": "Bodybomb 5v5",
+        "pt": "Bodybomb 5v5",
+        "ru": "Bodybomb 5 на 5",
+        "zh": "Bodybomb 5v5"
+      },
+      "version": "1.0.27",
+      "description": "Competitive Bodybomb. 5v5, first to 7 round wins, sides and spawn bases swap after round 6. A 6–6 tie goes to a deciding round. The bomb starts on the ground at the attacker spawn. [4X DRONE COOLDOWN] [NO SPECTATOR DRONES]",
+      "pack_url": "https://lightsout.up.railway.app/packs/BB5-1.0.27.zip",
+      "sha256": "3787d8cdb1c23d3b6d529662447abf8bfa68426c0fbd1a66400a9267a33fc4f3",
+      "size": 62436,
+      "localized": true,
+      "rulesets": {
+        "en": "Bodybomb 5v5\n\n• Two teams of 5: attackers plant the bomb at a bomb site, defenders stop them or defuse it.\n• One life per round – no respawns. Dead players go straight to spectating their team (no spectator drone).\n• The bomb starts on the ground in the attacker spawn; any attacker can pick it up.\n• First team to 7 round wins takes the match (13 rounds maximum). Sides and spawn bases swap after round 6; a 6–6 tie goes to a deciding round.\n• Rounds last 3 minutes; friendly fire is on, as in Bodybomb.\n• Drones are allowed; their cooldown is 4× the normal duration.\n• No bots.",
+        "de": "Bodybomb 5v5\n\n• Zwei Teams mit je 5 Spielern: Die Angreifer legen die Bombe an einem Bombenplatz, die Verteidiger verhindern das oder entschärfen sie.\n• Ein Leben pro Runde – kein Respawn. Tote Spieler sehen sofort ihrem Team zu (keine Zuschauer-Drohne).\n• Die Bombe liegt zu Beginn am Boden im Angreifer-Spawn; jeder Angreifer kann sie aufnehmen.\n• Das erste Team mit 7 gewonnenen Runden gewinnt das Match (maximal 13 Runden). Seiten und Spawn-Basen wechseln nach Runde 6; bei 6:6 folgt eine Entscheidungsrunde.\n• Runden dauern 3 Minuten; Friendly Fire ist wie in Bodybomb aktiv.\n• Drohnen sind erlaubt; ihre Abklingzeit ist 4-mal so lang wie normal.\n• Keine Bots.",
+        "es": "Bodybomb 5v5\n\n• Dos equipos de 5: los atacantes plantan la bomba en un sitio de bomba, los defensores lo impiden o la desactivan.\n• Una vida por ronda, sin reapariciones. Los jugadores muertos pasan directamente a espectar a su equipo (sin dron de espectador).\n• La bomba empieza en el suelo en el spawn atacante; cualquier atacante puede cogerla.\n• Gana el partido el primer equipo con 7 rondas ganadas (máximo 13 rondas). Los bandos y las bases de aparición cambian tras la ronda 6; con 6–6 se juega una ronda decisiva.\n• Las rondas duran 3 minutos; el fuego amigo está activo, como en Bodybomb.\n• Los drones están permitidos; su enfriamiento es 4 veces el normal.\n• Sin bots.",
+        "fr": "Bodybomb 5v5\n\n• Deux équipes de 5 : les attaquants posent la bombe sur un site, les défenseurs les en empêchent ou la désamorcent.\n• Une vie par manche, pas de réapparition. Les joueurs morts passent directement en spectateur de leur équipe (pas de drone spectateur).\n• La bombe démarre au sol au spawn des attaquants ; n'importe quel attaquant peut la ramasser.\n• La première équipe à 7 manches gagnées remporte le match (13 manches maximum). Les camps et les bases de départ changent après la manche 6 ; à 6–6, une manche décisive départage les équipes.\n• Les manches durent 3 minutes ; le tir allié est actif, comme dans Bodybomb.\n• Les drones sont autorisés ; leur temps de recharge est 4 fois plus long que la normale.\n• Pas de bots.",
+        "pt": "Bodybomb 5v5\n\n• Duas equipes de 5: os atacantes plantam a bomba em um ponto de bomba, os defensores impedem ou desarmam.\n• Uma vida por round, sem respawn. Jogadores mortos passam direto a assistir à própria equipe (sem drone espectador).\n• A bomba começa no chão no spawn dos atacantes; qualquer atacante pode pegá-la.\n• Vence a partida a primeira equipe a ganhar 7 rounds (máximo de 13 rounds). Os lados e as bases de spawn trocam após o round 6; em 6–6, joga-se um round decisivo.\n• Os rounds duram 3 minutos; o fogo amigo está ativo, como no Bodybomb.\n• Drones são permitidos; a recarga deles é 4 vezes a normal.\n• Sem bots.",
+        "ru": "Bodybomb 5 на 5\n\n• Две команды по 5 игроков: атакующие устанавливают бомбу на точке, защитники мешают им или обезвреживают её.\n• Одна жизнь на раунд, возрождений нет. Погибшие игроки сразу наблюдают за своей командой (без дрона-наблюдателя).\n• Бомба в начале раунда лежит на земле на споте атакующих; поднять её может любой атакующий.\n• Матч выигрывает команда, первой победившая в 7 раундах (максимум 13 раундов). Стороны и базы появления меняются после 6-го раунда; при счёте 6:6 играется решающий раунд.\n• Раунд длится 3 минуты; огонь по своим включён, как в Bodybomb.\n• Дроны разрешены; их перезарядка в 4 раза дольше обычной.\n• Без ботов.",
+        "zh": "Bodybomb 5v5\n\n• 两队各 5 人：进攻方在炸弹点安放炸弹，防守方阻止或拆除炸弹。\n• 每回合只有一条命，不能重生。阵亡玩家直接观战己方队友（没有观战无人机）。\n• 炸弹在回合开始时放在进攻方出生点的地面上，任何进攻方队员都可以拾取。\n• 率先赢下 7 回合的队伍获胜（最多 13 回合）。第 6 回合后交换阵营和出生基地；6–6 时进行决胜回合。\n• 每回合 3 分钟；友军伤害开启，与 Bodybomb 相同。\n• 允许使用无人机，冷却时间为正常的 4 倍。\n• 没有机器人。"
+      },
+      "rules": {
+        "score_limit": 7,
+        "max_rounds": 13,
+        "team_switch_interval": 6,
+        "team_size": 5,
+        "max_players": 10
+      }
+    }
+  ]
+}

@@ -1,0 +1,605 @@
+/* lightsout.up.railway.app — the public site's stylesheet.
+ *
+ * The site wears the app's palette and type: the tokens below are copied from the app's own
+ * hub/webui/static/tokens.css (design direction 1c: "Dark split · red hero · Oswald / IBM Plex"),
+ * and the smaller components — the 3px-top panel, the uppercase Oswald label, the chip — mirror
+ * hub/webui/static/ui.css. Someone who downloads from this page should recognise the thing that
+ * opens.
+ *
+ * What it does NOT copy is the app's red SPLIT. The competitive screen puts a 460px slab of solid
+ * #c8102e down the left of a fixed window; on a document that reads as a wall of red with a hole
+ * in the middle of it, and it was cut on 2026-09-16. Red is an ACCENT here — the button, the
+ * rules, the badges, the eyebrow — over the app's dark ground. Same colours, no slab.
+ *
+ * It is a SEPARATE file from the app's CSS on purpose: the app is a fixed-size desktop window that
+ * scales itself with `zoom`, the site is a document that has to work on a phone. Sharing one
+ * stylesheet would mean one of the two fighting the other. When a token changes in the app, change
+ * it here too — that is a deliberate two-line edit, not an import.
+ *
+ * The fonts are the app's own woff2 files, copied to this folder and served from /assets/. Nothing
+ * here is fetched from a CDN, for the same reason the app bundles them: one less third party
+ * between a player and a download button.
+ */
+
+/* ---------------------------------------------------------------- fonts (self-hosted) */
+@font-face {
+  font-family: 'Oswald';
+  font-style: normal;
+  font-weight: 200 700;
+  font-display: swap;
+  src: url('oswald-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: 'Oswald';
+  font-style: normal;
+  font-weight: 200 700;
+  font-display: swap;
+  src: url('oswald-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url('ibmplexsans-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url('ibmplexsans-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+/* ---------------------------------------------------------------- tokens (mirror of the app's) */
+:root {
+  --ground: #0b0b0c;
+  --panel: #15151a;
+  --panel-2: #1e1e23;
+  --line: #33333a;
+  --line-2: #2a2a30;
+  --text: #f4f2f0;
+  --muted: #77777d;
+  --accent: #c8102e;
+  --accent-dark: #8f0a20;
+  /* One value the app has no use for: it never hovers its red, because its red is a background.
+   * Here the red is a button, so it needs a lit state. */
+  --accent-lit: #e11334;
+  --green: #3ddc84;
+  --gold: #e0b45c;
+  --on-accent: #fff;
+
+  --font-display: 'Oswald', 'Bebas Neue', 'Arial Narrow', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px; --sp-5: 20px;
+  --sp-6: 24px; --sp-7: 28px; --sp-8: 32px; --sp-10: 40px; --sp-11: 44px;
+
+  --radius-1: 2px;
+  --shadow-1: 0 4px 16px rgba(0,0,0,.35);
+  --shadow-2: 0 8px 30px rgba(0,0,0,.4);
+
+  --topbar-h: 52px;
+  /* The site's content column. The app is a 1280-wide window; this keeps the same density without
+   * letting a line of body text run the width of a 4K monitor. */
+  --page: 1120px;
+  --gutter: 16px;
+}
+
+/* ---------------------------------------------------------------- reset */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  /* The app hides overflow and never scrolls sideways; a document can, if one box is too wide. */
+  overflow-x: hidden;
+}
+img { max-width: 100%; display: block; }
+a { color: inherit; }
+::selection { background: var(--accent); color: var(--on-accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The skip link: the hero's download button is the first thing anyone wants, and a keyboard user
+ * should not tab through the nav to reach it. */
+.skip {
+  position: absolute; left: -9999px; top: 0; z-index: 100;
+  background: var(--accent); color: var(--on-accent);
+  padding: var(--sp-3) var(--sp-4); font-family: var(--font-display);
+  letter-spacing: .12em; text-transform: uppercase; text-decoration: none;
+}
+.skip:focus { left: 0; }
+
+.wrap { width: 100%; max-width: var(--page); margin: 0 auto; padding: 0 var(--gutter); }
+
+/* ---------------------------------------------------------------- topbar (the app's chrome) */
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  height: var(--topbar-h);
+  background: var(--ground);
+  border-bottom: 1px solid var(--line-2);
+}
+.topbar .wrap {
+  height: 100%;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4);
+}
+.brand-wrap { display: flex; align-items: center; gap: var(--sp-7); min-width: 0; }
+.brand {
+  display: flex; align-items: center; gap: var(--sp-3);
+  font-family: var(--font-display); font-weight: 600; font-size: 15px;
+  letter-spacing: .14em; text-transform: uppercase; text-decoration: none;
+  /* The topbar is a fixed-height bar, so the brand may never take a second line. */
+  white-space: nowrap;
+}
+/* The mark: the app's hero badge (the diagonal-hatched red square), at chrome size. */
+.brand .mark {
+  width: 26px; height: 26px; flex: none;
+  background: repeating-linear-gradient(135deg, #a80c26 0 4px, #8f0a20 4px 8px);
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; letter-spacing: .02em; color: #fff;
+}
+.nav {
+  display: flex; gap: var(--sp-5);
+  font-family: var(--font-display); font-weight: 500; font-size: 12px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+}
+.nav a { padding-bottom: 3px; border-bottom: 2px solid transparent; text-decoration: none; white-space: nowrap; }
+.nav a:hover { color: #fff; }
+.nav a.active { color: #fff; border-bottom-color: var(--accent); }
+
+/* A separate header action keeps the public source visible beside the site navigation. */
+.source-link {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  flex: none; min-height: 44px; padding: 0 var(--sp-3);
+  border: 1px solid var(--line); color: var(--text);
+  font-family: var(--font-display); font-weight: 500; font-size: 12px;
+  letter-spacing: .1em; text-transform: uppercase; text-decoration: none; white-space: nowrap;
+}
+.source-link:hover { border-color: var(--accent); background: var(--panel); color: #fff; }
+.source-link svg { flex: none; }
+
+/* ================================================================ hero
+ * Full width, dark, one column. The energy comes from the type and from one red mark, not from a
+ * field of red: an eyebrow over a hairline, a headline that fills the column, and a solid red
+ * button — which is the only large red object on the page, so it is unmissable. */
+.hero {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line-2);
+  padding: clamp(48px, 9vw, 104px) 0 clamp(44px, 7vw, 84px);
+}
+/* The app's hatched badge, blown up and faded into the top-right corner. It is the one texture the
+ * app has, and at 5% it reads as material rather than as decoration. Masked so it dissolves instead
+ * of ending on a hard diagonal edge. */
+.hero::after {
+  content: '';
+  position: absolute; top: -140px; right: -120px;
+  width: 620px; height: 620px;
+  background: repeating-linear-gradient(135deg, var(--accent) 0 7px, transparent 7px 16px);
+  opacity: .05;
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(closest-side, #000 20%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 20%, transparent 100%);
+}
+.hero .wrap { position: relative; z-index: 1; }
+
+.eyebrow {
+  display: flex; align-items: center; gap: var(--sp-3);
+  font-family: var(--font-display); font-weight: 600; font-size: 12px;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--accent);
+}
+/* The 3px red rule is the app's card top-border, turned on its side. */
+.eyebrow::before { content: ''; width: 34px; height: 3px; background: var(--accent); flex: none; }
+
+.hero h1 {
+  font-family: var(--font-display); font-weight: 700;
+  /* Cut from clamp(44px, 8.2vw, 92px) on 2026-09-16: at 92px the headline was the whole first
+   * screen and the download button was pushed under the fold on a laptop. */
+  font-size: clamp(34px, 5.4vw, 62px);
+  line-height: .94; letter-spacing: -.005em; text-transform: uppercase;
+  margin: var(--sp-5) 0 0;
+  max-width: 14ch;
+  text-wrap: balance;
+}
+.hero-sub {
+  margin: var(--sp-6) 0 0;
+  font-size: clamp(15px, 1.5vw, 18px); line-height: 1.6;
+  color: #c9c7c4; max-width: 56ch;
+}
+.hero-sub strong { color: var(--text); font-weight: 600; }
+
+/* Keep installation guidance beside the download, wrapping below it on small screens. */
+.hero-cta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-6); margin-top: var(--sp-8); }
+.btn-primary {
+  display: inline-block;
+  background: var(--accent); color: var(--on-accent);
+  font-family: var(--font-display); font-weight: 700;
+  font-size: clamp(17px, 1.8vw, 21px);
+  letter-spacing: .1em; text-transform: uppercase; text-decoration: none;
+  padding: var(--sp-5) clamp(24px, 4vw, 48px);
+  border: none; cursor: pointer;
+  transition: background .15s ease, transform .06s ease;
+}
+.btn-primary:hover { background: var(--accent-lit); transform: translateY(-1px); }
+.btn-primary:active { background: var(--accent-dark); transform: none; }
+.hero-note { margin: var(--sp-5) 0 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); max-width: 62ch; }
+.hero-note strong { color: #c9c7c4; }
+.hero-note a { color: var(--accent); text-underline-offset: 2px; }
+.hero-note a:hover { color: #fff; }
+.download-help { flex: 1 1 280px; max-width: 66ch; margin: 0; font-size: 13px; line-height: 1.55; color: #c9c7c4; }
+.download-help strong { color: var(--text); }
+.download-help a { color: var(--accent); text-underline-offset: 2px; }
+.download-help a:hover { color: #fff; }
+
+/* ================================================================ modes
+ * Full-width cards, one per gamemode, rendered from the catalogue. A card leads with the format
+ * (10v10) because that is the first thing a player wants to know, then the name, then the rules
+ * that decide whether they want to play it. */
+.modes-section { background: var(--ground); }
+.modes {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: var(--sp-4);
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+}
+.mode {
+  background: var(--panel);
+  border-top: 3px solid var(--line);
+  padding: var(--sp-6) var(--sp-6) var(--sp-5);
+  display: flex; flex-direction: column; gap: var(--sp-3);
+  min-width: 0;
+}
+.mode-top { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+/* The format badge — solid red, tabular, the loudest thing on the card. */
+.mode-format {
+  font-family: var(--font-display); font-weight: 700; font-size: 15px;
+  letter-spacing: .06em; text-transform: uppercase;
+  background: var(--accent); color: var(--on-accent);
+  padding: var(--sp-1) var(--sp-3); flex: none;
+}
+.mode-name {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: clamp(22px, 2.4vw, 30px); line-height: 1;
+  letter-spacing: .02em; text-transform: uppercase;
+  margin: 0; flex: 1; min-width: 0;
+}
+/* The ranked tell, carried over from the app's own gamemode screen: there a ranked row gets an
+ * accent edge and a solid "RANKED" tag beside its name (`.gm-row.ranked` / `.gm-tag` in
+ * hub/webui/static/screens/gamemodes.css), and every other row stays grey. Same two marks here,
+ * so the mode a player sees tagged on the site is the one tagged in the app. */
+.mode.ranked { border-top-color: var(--accent); }
+.mode-tag {
+  font-family: var(--font-display); font-weight: 600; font-size: 10px;
+  letter-spacing: .12em; text-transform: uppercase;
+  background: var(--accent); color: var(--on-accent);
+  padding: 3px 7px; flex: none;
+}
+.mode-ver { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mode-desc { font-size: 14px; line-height: 1.55; color: #c9c7c4; margin: 0; }
+/* The rule chips, derived from the mode's own ruleset. A mode with no recognised rules simply has
+ * no chip row — never an empty box. */
+.mode-chips { list-style: none; margin: var(--sp-1) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.mode-chips li {
+  font-family: var(--font-display); font-weight: 500; font-size: 11px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+  border: 1px solid var(--line); padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-1);
+}
+.pane-note { font-size: 13px; line-height: 1.6; color: var(--muted); margin: var(--sp-5) 0 0; max-width: 72ch; }
+
+
+/* ---------------------------------------------------------------- ranked
+ * The four beats of a ranked match, side by side. Deliberately NOT `.steps`: that is the stacked
+ * install path further down the page, and two identical numbered lists read as one repeated
+ * section. This one is a row of short cards with a small numeral. */
+.flow {
+  list-style: none; counter-reset: beat; margin: 0; padding: 0;
+  display: grid; gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+.flow li {
+  counter-increment: beat;
+  background: var(--panel); border-top: 3px solid var(--line-2);
+  padding: var(--sp-5); min-width: 0;
+}
+.flow li:first-child { border-top-color: var(--accent); }
+.flow li::before {
+  content: counter(beat, decimal-leading-zero);
+  display: block; margin-bottom: var(--sp-3);
+  font-family: var(--font-display); font-weight: 700; font-size: 13px;
+  letter-spacing: .14em; color: var(--accent); font-variant-numeric: tabular-nums;
+}
+.flow h3 { font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 var(--sp-2); }
+.flow p { margin: 0; font-size: 13.5px; line-height: 1.55; color: #c9c7c4; }
+
+/* The ladder, rendered from server/ladder.cjs so it can never disagree with the app's badges. */
+.ladder-wrap { margin-top: var(--sp-6); background: var(--panel-2); border-left: 3px solid var(--accent); padding: var(--sp-5) var(--sp-6); }
+.ladder-wrap .ui-card-title { font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; margin: 0 0 var(--sp-4); }
+.ladder { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.ladder li {
+  font-family: var(--font-display); font-weight: 500; font-size: 11.5px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+  border: 1px solid var(--line); padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-1);
+}
+/* The capstone is the one rung with no divisions, so it is the one chip that is not grey. */
+.ladder li.top { border-color: var(--accent); color: var(--accent); }
+.ladder-wrap .pane-note { margin-top: var(--sp-4); }
+
+/* ---------------------------------------------------------------- read on
+ * The front page's exit to /ranked, /how and /faq, which were sections of it until 2026-09-16.
+ * The same panel slab as .flow, minus the counter: these are three doors, not an ordered four. */
+.readon {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+.readon li { min-width: 0; }
+.readon a {
+  display: block; height: 100%;
+  background: var(--panel); border-top: 3px solid var(--line-2);
+  padding: var(--sp-5); text-decoration: none;
+  transition: border-color .15s ease, background .15s ease;
+}
+.readon a:hover { border-top-color: var(--accent); background: var(--panel-2); }
+.readon h3 {
+  font-family: var(--font-display); font-weight: 600; font-size: 16px;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--text);
+  margin: 0 0 var(--sp-2);
+}
+/* The red chevron is the affordance: the card is a link, and nothing else on it is underlined. It
+ * is DRAWN, not typed — the self-hosted woff2 subsets stop short of U+2192, so a literal arrow
+ * falls through to whatever the machine happens to have and can land as tofu. */
+.readon h3::after {
+  content: ''; display: inline-block; vertical-align: middle;
+  width: 6px; height: 6px; margin: -2px 0 0 var(--sp-3);
+  border: 2px solid var(--accent); border-left: 0; border-bottom: 0;
+  transform: rotate(45deg);
+  transition: margin-left .15s ease;
+}
+.readon a:hover h3::after { margin-left: calc(var(--sp-3) + 3px); }
+.readon p { margin: 0; font-size: 13.5px; line-height: 1.55; color: #c9c7c4; }
+
+/* ---------------------------------------------------------------- sections */
+.section { padding: var(--sp-11) 0; border-bottom: 1px solid var(--line-2); }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; margin-bottom: var(--sp-6); }
+.section h2 {
+  font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 3.4vw, 38px); line-height: 1.05;
+  letter-spacing: .01em; text-transform: uppercase; margin: 0;
+}
+.section-title { font-family: var(--font-display); font-weight: 600; font-size: 14px; letter-spacing: .14em; text-transform: uppercase; margin: 0; }
+.section-title .dim { color: var(--muted); }
+.section-lede { font-size: 14px; color: var(--muted); margin: var(--sp-2) 0 0; max-width: 62ch; }
+
+/* the badge chip — the app's `.ui-chip.accent` */
+.chip {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  font-family: var(--font-display); font-weight: 600; font-size: 11px;
+  letter-spacing: .16em; text-transform: uppercase;
+  border: 1px solid var(--accent); color: var(--accent);
+  padding: var(--sp-1) var(--sp-3); border-radius: var(--radius-1);
+}
+
+/* ---------------------------------------------------------------- how it works */
+.steps { list-style: none; counter-reset: step; margin: 0; padding: 0; display: grid; gap: var(--sp-3); }
+.step {
+  counter-increment: step;
+  background: var(--panel); border-top: 3px solid var(--line);
+  padding: var(--sp-5) var(--sp-6);
+  display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: var(--sp-5); align-items: start;
+}
+.step:first-child { border-top-color: var(--accent); }
+.step::before {
+  content: counter(step, decimal-leading-zero);
+  font-family: var(--font-display); font-weight: 700; font-size: 34px; line-height: 1;
+  color: var(--accent); font-variant-numeric: tabular-nums;
+}
+.step h3 { font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 var(--sp-2); }
+.step p { margin: 0; font-size: 14px; line-height: 1.6; color: #c9c7c4; }
+.step p + p { margin-top: var(--sp-2); }
+.step code, .prose code, .faq code {
+  font-family: ui-monospace, Consolas, 'Courier New', monospace;
+  font-size: .92em; background: var(--panel-2); border: 1px solid var(--line-2);
+  padding: 1px 5px; border-radius: var(--radius-1); word-break: break-word;
+}
+
+/* "what it never does" — the not-a-cheat substance, stated as mechanism */
+.notdo { margin-top: var(--sp-6); background: var(--panel-2); border-left: 3px solid var(--accent); padding: var(--sp-5) var(--sp-6); }
+.notdo .ui-card-title { font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; margin: 0 0 var(--sp-3); }
+.notdo ul { margin: 0; padding-left: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-2); }
+.notdo li { font-size: 14px; line-height: 1.55; color: #c9c7c4; }
+.notdo li strong { color: var(--text); font-weight: 600; }
+
+/* ---------------------------------------------------------------- faq */
+.faq { display: flex; flex-direction: column; gap: var(--sp-2); }
+.faq details { background: var(--panel); border-top: 2px solid var(--line-2); }
+.faq details[open] { border-top-color: var(--accent); }
+.faq summary {
+  cursor: pointer; list-style: none;
+  padding: var(--sp-4) var(--sp-5);
+  font-family: var(--font-display); font-weight: 600; font-size: 15px;
+  letter-spacing: .06em; text-transform: uppercase;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4);
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary:hover { color: #fff; }
+/* The open/closed tell. A plus that becomes a minus — no glyph font, no image. */
+.faq summary::after {
+  content: ''; flex: none; width: 12px; height: 12px; position: relative;
+  background:
+    linear-gradient(var(--accent), var(--accent)) center/12px 2px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) center/2px 12px no-repeat;
+  transition: transform .15s ease;
+}
+.faq details[open] summary::after {
+  background: linear-gradient(var(--accent), var(--accent)) center/12px 2px no-repeat;
+  transform: rotate(180deg);
+}
+.faq .answer { padding: 0 var(--sp-5) var(--sp-5); font-size: 14px; line-height: 1.65; color: #c9c7c4; max-width: 78ch; }
+.faq .answer p { margin: 0; }
+.faq .answer p + p { margin-top: var(--sp-3); }
+
+/* ---------------------------------------------------------------- prose (the about page) */
+.prose { max-width: 66ch; display: flex; flex-direction: column; gap: var(--sp-4); }
+.prose p { margin: 0; font-size: 15.5px; line-height: 1.7; color: #c9c7c4; }
+.prose p strong { color: var(--text); }
+.prose a, .faq a, .pane-note a { color: var(--accent); text-decoration-color: rgba(200, 16, 46, .5); text-underline-offset: 2px; }
+.prose a:hover, .faq a:hover, .pane-note a:hover { color: #fff; text-decoration-color: #fff; }
+/* A lead paragraph, so the about page opens with the same weight the hero does. */
+.prose .lead { font-size: 19px; line-height: 1.55; color: var(--text); }
+
+/* Legal pages keep the site's typography, with readable long-form spacing. */
+.legal-copy { max-width: 78ch; gap: var(--sp-8); overflow-wrap: anywhere; }
+.legal-copy section { display: flex; flex-direction: column; gap: var(--sp-4); }
+.legal-copy h2 { font-size: clamp(22px, 3vw, 30px); margin: 0; }
+.legal-copy ul { padding-left: 1.4rem; margin: 0; color: #c9c7c4; line-height: 1.7; }
+.legal-copy li + li { margin-top: .75rem; }
+.legal-copy .legal-date { color: var(--muted); font-size: 13px; }
+
+/* the secondary, outlined action */
+.btn-ghost {
+  display: inline-block; align-self: flex-start;
+  border: 1px solid var(--line); background: transparent; color: var(--text);
+  font-family: var(--font-display); font-weight: 600; font-size: 14px;
+  letter-spacing: .14em; text-transform: uppercase; text-decoration: none;
+  padding: var(--sp-4) var(--sp-7);
+  transition: border-color .15s ease, background .15s ease;
+}
+.btn-ghost:hover { border-color: var(--accent); background: var(--panel); }
+
+/* ---------------------------------------------------------------- footer */
+.foot { padding: var(--sp-8) 0 var(--sp-10); }
+.foot .wrap { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-4); }
+.foot p { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--muted); max-width: 70ch; }
+/* Six links since the three moved sections became pages, which is one more than a 375px row
+ * holds — it wraps rather than pushing the document into a sideways scroll. */
+.foot .foot-links { display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-5); font-family: var(--font-display); font-weight: 500; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.foot .foot-links a { text-decoration: none; }
+.foot .foot-links a:hover { color: #fff; }
+
+/* ================================================================ the front page, one screen
+ * The download page is sized to the window: the headline, the button, both mode cards and the way
+ * onward to the other pages have to be visible at once, with nothing below the fold. `body.home`
+ * is that layout, and index.html is the only page that wears it -- every other page on the site
+ * is a document and scrolls like one.
+ *
+ * It is GATED on the window having the room, and the gate is MEASURED rather than guessed: 1060 x
+ * 700 is the smallest window every block still fits inside with the clamps below at their tightest.
+ * Under it the copy wraps to more lines than the height can hold, so the front page goes back to
+ * being an ordinary scrolling document rather than a short page with its footer cut off.
+ *
+ * Two things make it fit. The vertical rhythm is measured in vh instead of px, so the page
+ * re-proportions with the window rather than overflowing it, and every type clamp takes
+ * min(vw, vh) -- a headline sized off the width alone is exactly what pushed the button under the
+ * fold on a short laptop screen. The prose that has to wrap to two lines in a narrow column is
+ * let out to its full width here, because a second line costs more than a long measure does.
+ *
+ * What it deliberately does NOT do is hide the overflow. A one-screen box that clips is a page
+ * that silently eats its own footer on a window nobody tested; this one is `min-height`, so a
+ * screen the clamps cannot quite serve degrades to a short scroll instead of to missing content.
+ */
+@media (min-width: 1060px) and (min-height: 700px) {
+  body.home { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+  /* The topbar has nothing left to stick to, and a sticky box inside a flex column is a layer for
+   * nothing. */
+  body.home .topbar { position: static; flex: none; }
+  /* Whatever height is left over after the three bands is shared BETWEEN them rather than dumped
+   * at the bottom: on a 1080-tall window the old flex-grow on the last band left a 200px hole
+   * above the footer and the page read as if something had failed to load. */
+  body.home > main { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-between; }
+
+  body.home .hero { flex: none; padding: clamp(14px, 2.2vh, 72px) 0 clamp(12px, 1.8vh, 54px); }
+  body.home .hero h1 {
+    font-size: clamp(28px, min(5.2vw, 4.3vh), 58px);
+    margin-top: clamp(8px, 1.3vh, 20px);
+  }
+  body.home .hero-sub {
+    margin-top: clamp(8px, 1.1vh, 24px);
+    font-size: clamp(14px, min(1.5vw, 1.9vh), 18px);
+    line-height: 1.5;
+  }
+  body.home .hero-cta { margin-top: clamp(12px, 1.8vh, 32px); }
+  body.home .btn-primary {
+    font-size: clamp(15px, min(1.8vw, 2.1vh), 21px);
+    padding-top: clamp(10px, 1.3vh, 20px);
+    padding-bottom: clamp(10px, 1.3vh, 20px);
+  }
+  body.home .hero-note { margin-top: clamp(8px, 1.2vh, 20px); max-width: none; }
+
+  body.home .section { flex: none; padding: clamp(12px, 1.6vh, 44px) 0; }
+  body.home .section h2 { font-size: clamp(20px, min(3.4vw, 3.4vh), 36px); }
+  body.home .section-head { margin-bottom: clamp(8px, 1vh, 24px); }
+  body.home .modes { gap: clamp(8px, 1.4vh, 16px); }
+  /* The busiest card's rule chips run to five; tightened, they sit on one row instead of two. */
+  body.home .mode-chips { gap: 6px; }
+  body.home .mode-chips li { font-size: 10.5px; letter-spacing: .1em; padding: 2px 7px; }
+  body.home .mode {
+    padding: clamp(10px, 1.3vh, 24px) var(--sp-5) clamp(8px, .9vh, 20px);
+    gap: clamp(5px, .7vh, 12px);
+  }
+  body.home .mode-name { font-size: clamp(19px, min(2.4vw, 2.8vh), 30px); }
+  body.home .mode-desc { font-size: clamp(12.5px, min(1.2vw, 1.55vh), 14px); line-height: 1.5; }
+  body.home .pane-note { margin-top: clamp(8px, 1.4vh, 20px); max-width: none; }
+
+  /* The page's last rule would be a line drawn across the window with nothing under it. */
+  body.home .readon-section { flex: none; border-bottom: 0; }
+  body.home .readon { gap: clamp(8px, 1.4vh, 12px); }
+  body.home .readon a { padding: clamp(10px, 1.3vh, 20px) var(--sp-5); }
+  body.home .readon h3 { font-size: clamp(14px, min(1.6vw, 1.9vh), 16px); margin-bottom: clamp(3px, .7vh, 8px); }
+  body.home .readon p { font-size: clamp(12.5px, min(1.2vw, 1.5vh), 13.5px); line-height: 1.45; }
+
+  body.home .foot { flex: none; padding: clamp(10px, 1.3vh, 28px) 0 clamp(12px, 1.5vh, 36px); }
+  /* One line of small print instead of two: in a 70ch column it wraps, and a second line costs
+   * more here than a long measure does. */
+  body.home .foot p { font-size: clamp(11.5px, min(1.1vw, 1.4vh), 12.5px); max-width: none; }
+}
+
+/* ---------------------------------------------------------------- responsive
+ * The app never has to do this — it is one fixed window that zooms. A phone is the majority of
+ * the traffic that reaches a download page. Most of the scaling above is already in the clamp()s;
+ * what is left is the chrome and the things that must stop sitting side by side. */
+@media (max-width: 760px) {
+  .topbar { height: auto; }
+  .topbar .wrap { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-2) var(--sp-4); padding-top: var(--sp-1); padding-bottom: var(--sp-2); }
+  .brand-wrap { display: contents; }
+  .brand { grid-column: 1; grid-row: 1; }
+  .source-link { grid-column: 2; grid-row: 1; }
+  .nav {
+    grid-column: 1 / -1; grid-row: 2;
+    min-width: 0; overflow-x: auto; scrollbar-width: none;
+    /* Leave room for keyboard focus outlines and the active underline. */
+    padding: 4px;
+  }
+  .nav::-webkit-scrollbar { display: none; }
+}
+@media (max-width: 620px) {
+  body { font-size: 14px; }
+  :root { --topbar-h: 48px; }
+  .brand { font-size: 13px; letter-spacing: .1em; }
+  .nav { gap: var(--sp-4); font-size: 11px; }
+  .hero h1 { max-width: none; }
+  .hero-cta { gap: var(--sp-4); }
+  .btn-primary { display: block; width: 100%; text-align: center; padding-left: var(--sp-4); padding-right: var(--sp-4); }
+
+  .flow li, .readon a { padding: var(--sp-4) var(--sp-5); }
+  .ladder-wrap { padding: var(--sp-4) var(--sp-5); }
+
+  .mode { padding: var(--sp-5); }
+  .mode-top { gap: var(--sp-3); }
+
+  .section { padding: var(--sp-8) 0; }
+  .step { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); padding: var(--sp-4) var(--sp-5); }
+  .step::before { font-size: 26px; }
+  .faq summary { font-size: 13.5px; padding: var(--sp-4); }
+  .faq .answer { padding: 0 var(--sp-4) var(--sp-4); }
+  .prose .lead { font-size: 17px; }
+}

@@ -1,0 +1,254 @@
+/* Post-match card — OWNED BY THE POST-MATCH CARD AGENT. The only CSS file this card edits.
+ * Consumes the shared tokens (tokens.css) and the shared modal (ui.css .ui-overlay/.ui-modal);
+ * everything below is card-local. Direction 1c: dark split, Oswald display, sharp/tactical.
+ *
+ * Deliberately the match-history detail panel's look (screens/history.css, the md-* block): the
+ * same head, the same two team columns, the same struck-through veto chips, the same type scale.
+ * The card adds exactly one thing that panel has no reason to have - the verdict, big, at the top
+ * - and the top border of the dialog is coloured by it, which is the whole card's tell from
+ * across a room. */
+
+/* Keep the window caption outside the result backdrop so dragging and window
+ * controls remain available without dismissing Victory/Defeat. */
+.pm-overlay { top: var(--topbar-h); }
+
+.pm-overlay .ui-modal { max-width: 720px; gap: var(--sp-4); background: var(--panel); }
+.pm-overlay .ui-modal > * { flex-shrink: 0; }
+.pm-overlay .ui-modal-title { font-size: 13px; letter-spacing: .14em; color: var(--muted); }
+.pm-overlay .ui-modal:focus { outline: none; }
+
+/* The accent line ui.css puts on every modal, recoloured by the result. */
+.pm-modal.pm-win     { border-top-color: var(--green); }
+.pm-modal.pm-loss    { border-top-color: var(--accent); }
+.pm-modal.pm-void    { border-top-color: var(--gold); }
+.pm-modal.pm-unknown { border-top-color: var(--line); }
+
+/* ---------------------------------------------------------------- the verdict */
+.pm-verdict { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2) 0 var(--sp-3); }
+.pm-headline {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 52px;
+  line-height: 1;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.pm-verdict.win .pm-headline  { color: var(--green); }
+.pm-verdict.loss .pm-headline { color: var(--accent); }
+.pm-verdict.void .pm-headline { color: var(--gold); }
+.pm-void-body { font-size: 12.5px; color: var(--muted); line-height: 1.5; max-width: 52ch; }
+
+/* ---------------------------------------------------------------- head (map + score) */
+.pm-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); padding: var(--sp-4); background: var(--panel-2); border: 1px solid var(--line); }
+.pm-head-left { min-width: 0; }
+.pm-map {
+  font-family: var(--font-display);
+  font-size: 22px; letter-spacing: .04em; text-transform: uppercase; color: var(--text);
+  overflow-wrap: anywhere;
+}
+.pm-meta { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+
+.pm-score {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 38px; line-height: 1.1; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  display: flex; align-items: baseline; gap: 6px;
+}
+.pm-score .pm-num.won { color: var(--text); }
+.pm-score .pm-colon { font-size: 22px; }
+/* No scoreline reported: a sentence, not a 0 : 0 nobody played. */
+.pm-score.none { flex: 0 1 45%; font-family: var(--font-body); font-size: 12px; font-weight: 400; line-height: 1.5; text-align: right; color: var(--muted); }
+
+/* ---------------------------------------------------------------- the rank move */
+.pm-rr {
+  align-self: flex-start; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line); background: var(--panel-2);
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+}
+.pm-rr.up   { color: var(--green); }
+.pm-rr.down { color: var(--accent); }
+.pm-rr.flat { color: var(--muted); font-family: var(--font-body); font-weight: 400; font-size: 12.5px; }
+
+/* ---------------------------------------------------------------- section headers */
+.pm-h {
+  font-family: var(--font-display);
+  font-weight: 600; font-size: 10.5px;
+  letter-spacing: .16em; text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+/* ---------------------------------------------------------------- the two sides */
+.pm-teams { display: grid; grid-template-columns: 1fr; gap: var(--sp-4); }
+.pm-team { min-width: 0; border: 1px solid var(--line); background: var(--panel-2); }
+.pm-team-h {
+  font-family: var(--font-display);
+  font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text); padding: var(--sp-3); background: var(--ground); line-height: 1.5;
+}
+.pm-team-h.won { color: var(--text); }
+.pm-player {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 38px; padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--line-2);
+  font-size: 12.5px; color: var(--text);
+}
+.pm-player.you { background: color-mix(in srgb, var(--accent) 9%, var(--panel-2)); box-shadow: inset 2px 0 var(--accent); }
+.pm-player.you .pm-pname { color: var(--text); font-weight: 600; }
+/* Somebody who abandoned: the match went on without them, and the card says which one it was. */
+.pm-player.left .pm-pname { text-decoration: line-through; opacity: .6; }
+.pm-pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------------------------------------------------------------- the veto */
+.pm-veto { display: flex; gap: 6px; flex-wrap: wrap; }
+.pm-ban {
+  font-size: 11px; padding: 3px 8px;
+  border: 1px solid var(--line); color: var(--muted);
+  text-decoration: line-through;
+}
+
+/* ---------------------------------------------------------------- footnotes */
+.pm-note { font-size: 11.5px; color: var(--gold); line-height: 1.5; text-wrap: pretty; max-width: 62ch; }
+.pm-hint { font-size: 11px; color: var(--muted); line-height: 1.5; border-top: 1px solid var(--line); padding-top: var(--sp-3); }
+
+/* ---------------------------------------------------------------- responsive */
+@media (max-width: 900px) { .pm-teams { grid-template-columns: 1fr; } }
+@media (max-width: 620px) {
+  .pm-headline { font-size: 34px; }
+  .pm-score:not(.none) { font-size: 30px; }
+}
+
+/* THE SCOREBOARD, joined onto the team lists rather than drawn as a second table underneath.
+ * The card already names all ten players; repeating them below it would be the same information
+ * twice on a panel whose whole virtue is being readable at a glance.
+ *
+ * The head strip and the rows share one template, declared once for both, so the numbers cannot
+ * drift out from under their labels. `no-tk` drops the TK column when no kill feed reached the
+ * match - the only column that ever varies. */
+.pm-cols,
+.pm-player.sb {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 34px 46px 34px;
+  align-items: center; gap: 6px;
+}
+.pm-cols.no-tk,
+.pm-player.sb.no-tk { grid-template-columns: minmax(0, 1fr) 34px 34px 46px; }
+.pm-cols {
+  font-family: var(--font-display);
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted, #8a8a90);
+  padding: var(--sp-2) var(--sp-3);
+}
+.pm-cols .pm-n { font-size: 10px; color: var(--muted); }
+.pm-n { font-variant-numeric: tabular-nums; text-align: right; font-size: 12.5px; }
+.pm-n.pending { color: var(--muted, #8a8a90); opacity: .7; }
+/* --accent is the palette's only red; there is no --danger token to reach for. */
+.pm-n.bad { color: var(--accent); }
+/* Nothing was reported about this player. The row stays - the board has to match the two teams -
+ * but it recedes, so a line of dashes does not read as a bad game. */
+.pm-player.unreported .pm-pname { opacity: .55; }
+
+/* One player's optional combat summary. It expands below the existing K/D/TK row so the card
+ * stays compact until the player asks for the richer evidence. */
+.pm-pidentity {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name toggle" "status toggle";
+  align-items: center;
+  column-gap: 6px;
+}
+.pm-pidentity .pm-pname { grid-area: name; }
+.pm-pidentity .combat-status { grid-area: status; justify-self: start; }
+.pm-pidentity .combat-toggle { grid-area: toggle; }
+.combat-status {
+  display: inline-flex;
+  width: fit-content;
+  font-size: 9px;
+  line-height: 1.3;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.combat-status.status-complete { color: var(--green); }
+.combat-status.status-partial { color: var(--gold); }
+.combat-toggle {
+  border: 1px solid var(--line);
+  background: var(--ground);
+  color: var(--muted);
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 9px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.combat-toggle:hover,
+.combat-toggle:focus-visible { border-color: var(--accent); color: var(--text); }
+.combat-toggle:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.combat-panel[hidden] { display: none; }
+.pm-combat {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-top: 1px solid var(--line-2);
+  background: var(--ground);
+}
+.combat-note { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.combat-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.combat-metric {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 7px;
+  border: 1px solid var(--line-2);
+  background: var(--panel-2);
+}
+.combat-label,
+.combat-weapons-title {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.25;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.combat-value { color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; }
+.combat-value.pending { color: var(--muted); }
+.combat-weapons-section { min-width: 0; display: grid; gap: 5px; }
+.combat-weapons-scroll { max-width: 100%; overflow-x: auto; }
+.combat-weapons {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.combat-weapons th,
+.combat-weapons td {
+  padding: 5px 7px;
+  border-top: 1px solid var(--line-2);
+  text-align: right;
+  white-space: nowrap;
+}
+.combat-weapons th { color: var(--muted); font-size: 9px; font-weight: 500; text-transform: uppercase; }
+.combat-weapons th:first-child,
+.combat-weapons td:first-child { text-align: left; }
+.combat-weapon-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.combat-weapons td.pending { color: var(--muted); }
+
+@media (max-width: 560px) {
+  .pm-overlay .ui-modal { padding: var(--sp-4); }
+  .pm-head { padding: var(--sp-3); }
+  .pm-map { font-size: 18px; }
+  .pm-cols,
+  .pm-player.sb { grid-template-columns: minmax(0, 1fr) 26px 26px 38px 26px; }
+  .pm-cols.no-tk,
+  .pm-player.sb.no-tk { grid-template-columns: minmax(0, 1fr) 26px 26px 38px; }
+  .combat-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .combat-toggle { max-width: 58px; overflow: hidden; text-overflow: ellipsis; }
+}

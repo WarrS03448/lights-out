@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQ · Lights Out</title>
+<meta name="description" content="Answers about Lights Out: is it free, will it get me banned, do my friends need it, the SmartScreen warning, updates, languages and how to remove it.">
+<meta name="theme-color" content="#0b0b0c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23c8102e'/%3E%3Crect x='6' y='6' width='20' height='20' fill='none' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="preload" href="/assets/oswald-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/ibmplexsans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+  <a class="skip" href="#faq">Skip to content</a>
+
+  <header class="topbar">
+    <div class="wrap">
+      <div class="brand-wrap">
+        <a class="brand" href="/"><span class="mark" aria-hidden="true">LO</span>Lights Out</a>
+        <nav class="nav" aria-label="Site">
+          <a href="/">Download</a>
+          <a href="/ranked">Ranked</a>
+          <a href="/how">How it works</a>
+          <a href="/faq" class="active" aria-current="page">FAQ</a>
+          <a href="/about">About</a>
+        </nav>
+      </div>
+      <a class="source-link" href="https://github.com/WarrS03448/lights-out" aria-label="View Lights Out source on GitHub">GitHub <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg></a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <span class="eyebrow">FAQ</span>
+        <h1>Questions</h1>
+        <p class="hero-sub">The ones that aren’t already answered by <a href="/how" style="color: var(--accent)">How it works</a>.</p>
+      </div>
+    </section>
+
+    <!-- Kept deliberately short, and on its own page since 2026-09-16. Anything How it works
+         already answers is NOT repeated here: the old list restated the install path, the ~mods
+         file, the build time and the telemetry, all four of which are steps or bullets there.
+         What is left is what that page does not say. -->
+    <section class="section" id="faq">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>FAQ</h2>
+        </div>
+        <div class="faq">
+          <details open>
+            <summary>Is it free?</summary>
+            <div class="answer"><p>Yes, completely. No account, no sign-up, no ads, no premium tier.</p></div>
+          </details>
+
+          <details>
+            <summary>How do I play ranked?</summary>
+            <div class="answer"><p>Install <strong>Bodybomb 5v5</strong> in the app, sign in with Steam on the Competitive tab, and hit Find match. Ranked needs the current version of both the app and the mode; the app updates itself. <a href="/ranked">Inside a ranked match</a> walks through the rest.</p></div>
+          </details>
+
+          <details id="faq-bans">
+            <summary>Will it get me banned?</summary>
+            <div class="answer"><p>Lights Out is not explicitly endorsed or supported by Bodycam’s developers. While we believe a ban or other disciplinary action is unlikely, the risk is not zero. By downloading and using Lights Out, you accept responsibility for that risk and any resulting account restrictions, bans or other disciplinary action.</p><p>Review Bodycam’s current license and policies before using it. This notice does not grant permission from Reissad Studio. <a href="/how">How it works</a> explains what the app installs.</p></div>
+          </details>
+
+          <details id="faq-data">
+            <summary>What gameplay and app information is recorded?</summary>
+            <div class="answer">
+              <p>Lights Out records match formation, results, available round and combat statistics, rating decisions, app actions, connection outcomes, and diagnostic error codes. Signed-in activity is associated with your Steam account so administrators can investigate failures, assess matchmaking, and make longer-term balance decisions.</p>
+              <p>The analytics console is restricted to administrators. New diagnostic capture excludes chat and report text, passwords, sign-in tokens, IP addresses, local file paths, screenshots, and raw exception messages. Existing features such as player reports and match chat keep their own records separately.</p>
+              <p>Detailed operational events are kept for 30 days, analytical match records for one year, and daily statistical totals for three years. Existing authoritative result and rating receipts keep their current lifetime. The app queues up to 1,000 diagnostic events within a 1 MiB local file and retries when connected; missing or partial gameplay evidence is marked as unavailable. <a href="mailto:contact@theneeb.com">Contact us</a> with questions about your records.</p>
+            </div>
+          </details>
+
+          <details id="faq-ping">
+            <summary>How does ping detection work, and how is the host chosen?</summary>
+            <div class="answer">
+              <p>While you search for a match, Lights Out connects to <a href="https://developers.cloudflare.com/realtime/turn/">Cloudflare’s relay service</a> and exchanges small test messages with other eligible players through that relay. It measures how long each message takes to travel to the other player and back, in milliseconds (ms). Lower readings mean less delay.</p>
+              <p>The app takes several readings in both directions and uses the middle reading to reduce the effect of brief spikes. Matchmaking uses the higher of the two players’ results for each connection, then compares possible hosts. It chooses the eligible player with the lowest average latency to everyone else, provided every connection to that host meets the ping limit. If averages tie, the host with the lower worst connection wins the tie.</p>
+              <p><strong>These ping checks do not expose your public or local IP address to any other user of the app.</strong> Test messages travel through Cloudflare’s relay, so other app users connect to the relay instead of directly to your device. Cloudflare can see the IP address you connect from. This protection applies to Lights Out’s ping checks; Bodycam’s own game connections are separate. These are data-only tests; they do not need your camera or microphone.</p>
+              <p><strong>This measures the app’s relay connection, not Bodycam’s actual in-game ping.</strong> The game uses its own network route, so your in-game reading may differ. These measurements help estimate the best host for the group; they do not guarantee a lag-free match. Missing or outdated results are treated as unavailable, not as zero ping.</p>
+            </div>
+          </details>
+
+          <details>
+            <summary>Do my friends need it too?</summary>
+            <div class="answer"><p>Yes. A community gamemode has to be installed on every PC in the lobby, host and players alike. Everyone should install the same version; the app shows which one you have.</p></div>
+          </details>
+
+          <details id="faq-smartscreen">
+            <summary>Windows says “Windows protected your PC”. Is the download safe?</summary>
+            <div class="answer">
+              <p>Microsoft Defender SmartScreen checks the reputation of downloaded apps. Lights Out’s installer isn’t code signed yet, meaning it does not have a verified publisher signature, and Windows may not recognize it. This can trigger the <strong>“Windows protected your PC”</strong> warning. An unrecognized-app warning is not itself a malware detection or a guarantee that a file is safe.</p>
+              <p>If you downloaded the installer from this site and trust it:</p>
+              <ol>
+                <li>On the <strong>“Windows protected your PC”</strong> screen, click <strong>More info</strong>.</li>
+                <li>Click <strong>Run anyway</strong> to start the Lights Out installer.</li>
+                <li>Follow the installer’s on-screen instructions.</li>
+              </ol>
+              <p>If <strong>Run anyway</strong> is missing, your device’s security settings or administrator may prevent this override. If Windows reports a specific threat, stop instead of following these steps. <a href="mailto:contact@theneeb.com">Contact us</a> with the exact message for help.</p>
+              <p><a href="https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation">Read Microsoft’s explanation of SmartScreen app reputation</a>.</p>
+            </div>
+          </details>
+
+          <details>
+            <summary>How do I remove it completely?</summary>
+            <div class="answer"><p>Uninstall inside the app takes the gamemode file back out of Bodycam. Lights Out itself then uninstalls like any Windows program; the only thing left behind is a few small settings files in <code>%LOCALAPPDATA%\CommunityHub</code>, which you can delete by hand.</p></div>
+          </details>
+
+          <details>
+            <summary>Bodycam just updated. Do I need to do anything?</summary>
+            <div class="answer"><p>If a mode stops appearing after a game update, open the app and Install again, and it rebuilds the pak against your updated game files.</p></div>
+          </details>
+
+          <details>
+            <summary>How do updates to the app or the gamemodes work?</summary>
+            <div class="answer"><p>Lights Out checks this site each time it starts. New gamemode versions show an “update available” note next to the mode, and a newer app version installs itself in the background, so there is no need to come back here.</p></div>
+          </details>
+
+          <details>
+            <summary>Which languages does it support?</summary>
+            <div class="answer"><p>The same seven as Bodycam: English, German, Spanish, French, Portuguese, Russian and Chinese. It asks on first run and can be changed any time.</p></div>
+          </details>
+
+          <details>
+            <summary>I have a question or found a bug.</summary>
+            <div class="answer"><p>Email <a href="mailto:contact@theneeb.com">contact@theneeb.com</a>, or see the <a href="/about">About</a> page.</p></div>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- A <details> does not open itself for a fragment that points at the element rather than at
+       something inside it, so a link to /faq#faq-smartscreen would land on a closed row. Eight
+       lines so any answer linked to directly arrives open. The page is complete without it. -->
+  <script>
+    (function openTargetedAnswer() {
+      function open() {
+        var id = location.hash.slice(1);
+        if (!id) return;
+        var el = document.getElementById(id);
+        if (el && el.tagName === 'DETAILS') el.open = true;
+      }
+      window.addEventListener('hashchange', open);
+      open();
+    })();
+  </script>
+
+  <footer class="foot">
+    <div class="wrap">
+      <p>Not affiliated with Reissad Studio. This tool does not modify game files; it adds a removable pak. Version {{HUB_VERSION}}.</p>
+      <div class="foot-links">
+        <a href="https://github.com/WarrS03448/lights-out">Source on GitHub</a>
+        <a href="/">Download</a>
+        <a href="/ranked">Ranked</a>
+        <a href="/how">How it works</a>
+        <a href="/faq">FAQ</a>
+        <a href="/about">About</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/cookies">Cookies &amp; storage</a>
+        <a href="/notices">Third-party notices</a>
+        <a href="mailto:contact@theneeb.com">Contact</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

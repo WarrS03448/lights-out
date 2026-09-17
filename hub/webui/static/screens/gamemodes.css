@@ -1,0 +1,285 @@
+/* Gamemodes screen — OWNED BY THE GAMEMODES SCREEN. The only CSS file this screen edits.
+ * Uses the shared tokens (tokens.css) and shared components (ui.css, ui-* classes); class names
+ * here are local to this screen. See screens/competitive.css for the pattern. */
+
+.gm {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ---------------------------------------------------------------- header */
+.gm-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-6);
+  padding: var(--sp-8) var(--sp-11) var(--sp-4);
+}
+.gm-head-left { min-width: 0; }
+.gm-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: .01em;
+  text-transform: uppercase;
+  margin: 0;
+  text-wrap: balance;
+}
+.gm-intro {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: var(--sp-2) 0 0;
+  max-width: 64ch;
+  text-wrap: pretty;
+}
+
+/* ---------------------------------------------------------------- status banner */
+.gm-banner,
+.gm-banner-none {
+  margin: 0 var(--sp-11);
+}
+.gm-banner {
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 12.5px;
+  line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  border-left: 3px solid var(--line);
+  background: var(--panel);
+}
+.gm-banner.warn { border-left-color: var(--gold); color: var(--gold); }
+.gm-banner.error { border-left-color: var(--accent); color: var(--text); }
+.gm-banner.ok { border-left-color: var(--green); color: var(--text); }
+.gm-banner.working { border-left-color: var(--accent); }
+.gm-banner-msg {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+/* message on the left, the percentage on the right, above the bar */
+.gm-banner-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.gm-banner-pct {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .06em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;   /* the number must not jog the layout as it counts up */
+  flex: none;
+}
+.gm-banner-none { height: 0; }
+
+/* the job progress bar */
+.gm-progress { height: 4px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.gm-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  width: 0;
+  transition: width .2s ease;
+}
+.gm-progress-fill.indeterminate {
+  width: 40%;
+  animation: gm-slide 1.4s linear infinite;
+  transition: none;
+}
+@keyframes gm-slide {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+
+/* ---------------------------------------------------------------- scroll body */
+.gm-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--sp-5) var(--sp-11) var(--sp-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.gm-section { display: flex; flex-direction: column; gap: var(--sp-3); }
+.gm-section-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.gm-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+/* ---------------------------------------------------------------- a mode row */
+.gm-row {
+  background: var(--panel);
+  padding: var(--sp-4) var(--sp-5);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  border-left: 3px solid var(--line);
+}
+.gm-row.ranked { border-left-color: var(--accent); }
+
+.gm-icon {
+  width: 54px;
+  height: 54px;
+  flex: none;
+  background: repeating-linear-gradient(135deg, #242429 0 5px, #1c1c21 5px 10px);
+  overflow: hidden;
+}
+.gm-icon-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.gm-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.gm-name-row { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.gm-name { font-weight: 600; font-size: 15px; }
+.gm-tag {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  background: var(--accent);
+  color: var(--on-accent);
+  padding: 3px 7px;
+}
+.gm-tag.update { background: transparent; color: var(--gold); border: 1px solid var(--gold); }
+.gm-sub { font-size: 12px; color: var(--muted); }
+.gm-desc { font-size: 12px; color: #b8b8be; line-height: 1.45; text-wrap: pretty; }
+
+.gm-actions { display: flex; align-items: center; gap: var(--sp-2); flex: none; }
+
+/* the ruleset button */
+.gm-ruleset {
+  width: 34px; height: 34px; flex: none;
+  padding: 0;
+  display: grid; place-items: center;
+  border: 1px solid var(--line);
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color .15s ease;
+}
+.gm-ruleset:hover { border-color: var(--accent); }
+.gm-ruleset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Center the visible question mark without depending on font baseline or tracking. */
+.gm-ruleset-glyph {
+  display: block;
+  width: 18px;
+  height: 18px;
+  color: #b8b8be;
+  transition: color .15s ease;
+}
+.gm-ruleset-glyph svg { display: block; width: 100%; height: 100%; }
+.gm-ruleset:hover .gm-ruleset-glyph { color: var(--accent); }
+
+/* action buttons (Install / Update / Uninstall) */
+.gm-btn {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  padding: 9px 18px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color .15s ease, transform .06s ease, background-color .15s ease;
+}
+.gm-btn:hover { border-color: var(--accent); transform: translateY(-1px); }
+.gm-btn:active { transform: translateY(0); }
+.gm-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gm-btn:disabled { opacity: .45; cursor: not-allowed; transform: none; border-color: var(--line); }
+.gm-btn.solid { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.gm-btn.solid:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+.gm-btn.update { color: var(--gold); border-color: var(--gold); }
+.gm-btn.update:hover { border-color: var(--gold); background: rgba(224, 180, 92, .1); }
+
+/* ---------------------------------------------------------------- footer note */
+.gm-footer {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+/* ---------------------------------------------------------------- ruleset + maps modal */
+.gm-overlay .ui-modal { max-width: 640px; gap: var(--sp-5); }
+/* The dialog is focused programmatically (tabindex -1) only so Escape works; it is not an
+ * interactive control, so suppress the UA focus ring. Controls inside keep their accent rings. */
+.gm-overlay .ui-modal:focus { outline: none; }
+.gm-modal-kicker {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-top: calc(var(--sp-2) * -1);
+}
+.gm-meta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--panel-2);
+}
+.gm-meta-tile { background: var(--panel); padding: var(--sp-3) var(--sp-4); }
+.gm-meta-k { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.gm-meta-v { font-weight: 600; font-size: 13.5px; margin-top: var(--sp-1); }
+
+.gm-rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.gm-rule { display: flex; gap: var(--sp-3); font-size: 13px; line-height: 1.5; color: #e4e2de; }
+.gm-bullet { color: var(--accent); flex: none; }
+.gm-rule-text { flex: 1; text-wrap: pretty; }
+
+.gm-maps { border-top: 1px solid var(--panel-2); padding-top: var(--sp-3); }
+.gm-maps-label { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.gm-maps-list { font-size: 12.5px; color: #b8b8be; margin-top: var(--sp-2); }
+
+.gm-modal-foot { display: flex; justify-content: flex-end; }
+
+/* ---------------------------------------------------------------- responsive */
+@media (max-width: 900px) {
+  .gm-head, .gm-scroll { padding-left: var(--sp-6); padding-right: var(--sp-6); }
+  .gm-banner, .gm-banner-none { margin-left: var(--sp-6); margin-right: var(--sp-6); }
+  .gm-meta { grid-template-columns: repeat(2, 1fr); }
+  .gm-icon { display: none; }
+}
+@media (max-width: 620px) {
+  .gm-row { flex-wrap: wrap; }
+  .gm-actions { width: 100%; justify-content: flex-end; }
+}
+
+/* respect reduced-motion for the indeterminate progress + button transforms */
+@media (prefers-reduced-motion: reduce) {
+  .gm-progress-fill.indeterminate { animation: none; width: 100%; }
+  .gm-btn:hover, .gm-btn:active { transform: none; }
+}

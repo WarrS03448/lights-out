@@ -1,0 +1,2836 @@
+[MB] make_blueprints.py starting; engine 5.5.4-40574608+++UE5+Release-5.5
+[MB] delete /Game/GM/Gamemode/GM_DOM: ok
+[MB] delete /Game/GM/Gamemode/DOM/BP_DOM_Point: ok
+[MB] delete /Game/GM/Gamemode/DOM/GE_DOM_DroneCooldown: ok
+[MB] delete /Game/GM/DATA/DataAsset/DA_DOM: ok
+[MB] delete /Game/GM/Gamemode/GM_CTF: ok
+[MB] delete /Game/GM/Gamemode/CTF/BP_CTF_Base: ok
+[MB] delete /Game/GM/Gamemode/CTF/BP_CTF_Flag: ok
+[MB] delete /Game/GM/Gamemode/CTF/GE_CTF_DroneCooldown: ok
+[MB] delete /Game/MenuSystemPro/INGAME/HUD_Dot: ok
+[MB] delete /Game/GM/DATA/DataAsset/DA_CTF: ok
+[MB] delete /Game/GM/Gamemode/GM_BB5: ok
+[MB] delete /Game/GM/Gamemode/BB5/BP_BB5StartRequest: ok
+[MB] delete /Game/GM/Gamemode/BB5/BP_BB5TeamRequest: ok
+[MB] delete /Game/GM/Gamemode/BB5/AC_BB5BombRule: ok
+[MB] delete /Game/GM/Gamemode/BB5/GE_BB5_DroneCooldown: ok
+[MB] delete /Game/GM/DATA/DataAsset/DA_BB5: ok
+[MB] delete /Game/AdvancedLocomotionV4/Blueprints/Components/BP_InventoryComponent: ok
+[MB] delete /Game/BodycamWeapons/Core/Blueprint/Bombe: ok
+[MB] delete /Game/GM/Gamemode/GM_CHLobby: ok
+[MB] delete /Game/GM/GM_Host: ok
+[MB] delete /Game/MenuSystemPro/Blueprints/Core/BodycamGI: ok
+[MB] delete /Game/GM/Gamemode/BP_BodycamGameModeAbstract: ok
+[MB] created /Game/GM/Gamemode/BP_BodycamGameModeAbstract (parent BodycamGameMode)
+[MB]   var GamemodeForCompatibility (byte): ok
+[MB]   var HUDClassCommonUILevelOverrides (struct[]): ok
+[MB]   var HUDClassCommonUI (class): ok
+[MB]   var HMS_bBotsMethod (bool): ok
+[MB]   var bTriggerWeatherTransition (bool): ok
+[MB]   component BodycamTimeLimitRuleSet (BodycamTimeLimitRuleSetComponent): BodycamTimeLimitRuleSet
+[MB]   begin play: ok
+[MB] building parent event stubs [EventGraph] ...
+[MB] build parent event stubs [EventGraph]: graph EventGraph: 8 node(s), 0 link(s), 0 error(s)
+[MB] compile BP_BodycamGameModeAbstract: CLEAN
+[MB] LAYOUT MATCHES the game's BP_BodycamGameModeAbstract_C
+[MB] created /Game/GM/DATA/DataAsset/DA_CTF: score limit 3, 10 per team, 20 players, respawn 7 s
+[MB] created /Game/GM/Gamemode/GM_CTF (parent BP_BodycamGameModeAbstract_C)
+[MB]   component BodycamCaptureRuleSet (BodycamCaptureRuleSetComponent): BodycamCaptureRuleSet
+[MB] compile GM_CTF (shell): CLEAN
+[MB] created widget /Game/MenuSystemPro/INGAME/HUD_Dot
+[MB]   var Image (object): ok
+[MB] building HUD_Dot stub events [EventGraph] ...
+[MB] build HUD_Dot stub events [EventGraph]: graph EventGraph: 2 node(s), 0 link(s), 0 error(s)
+[MB] compile HUD_Dot stub: CLEAN
+[MB] stub texture already exists: /Game/MenuSystemPro/FlatDarkGlowingGUI/textures/icons/normal_icon/512x512px/t_radio_512x512
+[MB] stub texture already exists: /Game/MenuSystemPro/Textures/Menu/T_UI_Frame_Setting_Divider
+[MB] stub mesh already exists: /Game/MilitaryWarehouse/Meshes/SetDressing/SM_CaptureFlag04
+[MB] stub cue already exists: /Game/UI/Sfx/Cues/Simple_Click_Sound_HardPoint_Cue
+[MB] stub cue already exists: /Game/UI/Sfx/Cues/Simple_Click_Sound_HardPointNoPlayers_Cue1
+[MB] created /Game/GM/Gamemode/CTF/GE_CTF_DroneCooldown (parent GameplayEffect)
+[MB] compile GE_CTF_DroneCooldown: CLEAN
+[MB]   GE default duration_policy = <GameplayEffectDurationType.INFINITE: 1>
+[MB]   GE default stacking_type = <GameplayEffectStackingType.AGGREGATE_BY_TARGET: 2>
+[MB]   GE default stack_limit_count = 1
+[MB]   GE modifier: ok: CharacterAttributeSet.GadgetCooldown Multiply 2.5 (now 1 modifier(s); attribute valid=1)
+[MB] compile GE_CTF_DroneCooldown (final): CLEAN
+[MB] created /Game/GM/Gamemode/CTF/BP_CTF_Flag (parent Actor)
+[MB]   component Mesh (StaticMeshComponent): Mesh
+[MB]   component Trigger (SphereComponent): Trigger
+[MB]   component Dot (BodycamWidgetComponent): Dot
+[MB]   Dot defaults: ok: Dot -> HUD_Dot_C, screen space
+[MB]   var TeamID (int): ok
+[MB]   var Side (byte): ok
+[MB]   var FlagState (byte): ok
+[MB]   var Carrier (object): ok
+[MB]   var HomeLocation (struct): ok
+[MB]   var GM (object): ok
+[MB]   var StaticMat (object): ok
+[MB]   var LastEvent (byte): ok
+[MB]   var EventSeq (int): ok
+[MB]   var bCapturedNext (bool): ok
+[MB]   var DotState (byte): ok
+[MB]   var LastLocalPawn (object): ok
+[MB]   var EventTeam (int): ok
+[MB]   replicated Carrier: ok
+[MB]   replicated LastEvent: ok
+[MB]   replicated EventTeam: ok
+[MB]   replicated Side (RepNotify OnRep_Side): ok
+[MB]   replicated TeamID (RepNotify OnRep_TeamID): ok
+[MB]   replicated FlagState (RepNotify OnRep_FlagState): ok
+[MB]   replicated EventSeq (RepNotify OnRep_EventSeq): ok
+[MB]   OnRep_Side graph: ok: K2Node_FunctionEntry[<then(exec) ] 
+[MB]   OnRep_TeamID graph: ok: K2Node_FunctionEntry[<then(exec) ] 
+[MB]   OnRep_FlagState graph: ok: K2Node_FunctionEntry[<then(exec) ] 
+[MB]   OnRep_EventSeq graph: ok: K2Node_FunctionEntry[<then(exec) ] 
+[MB] compile BP_CTF_Flag (vars): CLEAN
+[MB] created /Game/GM/Gamemode/CTF/BP_CTF_Base (parent Actor)
+[MB]   component Trigger (SphereComponent): Trigger
+[MB]   component Pad (StaticMeshComponent): Pad
+[MB]   var TeamID (int): ok
+[MB]   var Side (byte): ok
+[MB]   var OwnFlag (object): ok
+[MB]   var EnemyFlag (object): ok
+[MB]   var GM (object): ok
+[MB]   replicated TeamID: ok
+[MB]   replicated Side: ok
+[MB] compile BP_CTF_Base (vars): CLEAN
+[MB]   var TeamA (int): ok
+[MB]   var TeamB (int): ok
+[MB]   var bTeamsReady (bool): ok
+[MB]   var bSidesReady (bool): ok
+[MB]   var bOccupied (bool): ok
+[MB]   var bFlagsPlaced (bool): ok
+[MB]   var Base1Starts (object[]): ok
+[MB]   var Base2Starts (object[]): ok
+[MB]   var AllStarts (object[]): ok
+[MB]   var SpawnCandidates (object[]): ok
+[MB]   var Pawns (object[]): ok
+[MB]   var EnemyPawns (object[]): ok
+[MB]   var KnownTeamIds (int[]): ok
+[MB]   var Center1 (struct): ok
+[MB]   var Center2 (struct): ok
+[MB]   var Axis (struct): ok
+[MB]   var Anchor1 (struct): ok
+[MB]   var Anchor2 (struct): ok
+[MB]   var FlagHome1 (struct): ok
+[MB]   var FlagHome2 (struct): ok
+[MB]   var AxisLenSq (float): ok
+[MB]   var TmpBest (float): ok
+[MB]   var TmpDist (float): ok
+[MB]   var TmpLocs (struct[]): ok
+[MB]   var ChosenStart (object): ok
+[MB]   var TmpBestActor (object): ok
+[MB]   var Flag1 (object): ok
+[MB]   var Flag2 (object): ok
+[MB]   var Base1 (object): ok
+[MB]   var Base2 (object): ok
+[MB] compile GM_CTF (vars): CLEAN
+[MB] building Flag events [EventGraph] ...
+[MB] build Flag events [EventGraph]: graph EventGraph: 11 node(s), 0 link(s), 0 error(s)
+[MB] building Base events [EventGraph] ...
+[MB] build Base events [EventGraph]: graph EventGraph: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM events [EventGraph] ...
+[MB] build GM events [EventGraph]: graph EventGraph: 6 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature EnsureTeams [EnsureTeams] ...
+[MB] build GM function signature EnsureTeams [EnsureTeams]: graph EnsureTeams: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature ApplyTeamIds [ApplyTeamIds] ...
+[MB] build GM function signature ApplyTeamIds [ApplyTeamIds]: graph ApplyTeamIds: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature EnsureSides [EnsureSides] ...
+[MB] build GM function signature EnsureSides [EnsureSides]: graph EnsureSides: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature AverageLocation [AverageLocation] ...
+[MB] build GM function signature AverageLocation [AverageLocation]: graph AverageLocation: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature ExtremeStart [ExtremeStart] ...
+[MB] build GM function signature ExtremeStart [ExtremeStart]: graph ExtremeStart: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature DeriveSidesFromWaiting [DeriveSidesFromWaiting] ...
+[MB] build GM function signature DeriveSidesFromWaiting [DeriveSidesFromWaiting]: graph DeriveSidesFromWaiting: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature SideT [SideT] ...
+[MB] build GM function signature SideT [SideT]: graph SideT: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature GatherPawns [GatherPawns] ...
+[MB] build GM function signature GatherPawns [GatherPawns]: graph GatherPawns: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature IsStartFree [IsStartFree] ...
+[MB] build GM function signature IsStartFree [IsStartFree]: graph IsStartFree: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature EnemyDistance [EnemyDistance] ...
+[MB] build GM function signature EnemyDistance [EnemyDistance]: graph EnemyDistance: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature NearFlag [NearFlag] ...
+[MB] build GM function signature NearFlag [NearFlag]: graph NearFlag: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature CollectCandidates [CollectCandidates] ...
+[MB] build GM function signature CollectCandidates [CollectCandidates]: graph CollectCandidates: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature CollectFallback [CollectFallback] ...
+[MB] build GM function signature CollectFallback [CollectFallback]: graph CollectFallback: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature ChooseStart [ChooseStart] ...
+[MB] build GM function signature ChooseStart [ChooseStart]: graph ChooseStart: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature StartForPlayer [StartForPlayer] ...
+[MB] build GM function signature StartForPlayer [StartForPlayer]: graph StartForPlayer: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM function signature FloorPoint [FloorPoint] ...
+[MB] build GM function signature FloorPoint [FloorPoint]: graph FloorPoint: 2 node(s), 0 link(s), 0 error(s)
+[MB]   override FindPlayerStart: ok: K2Node_FunctionEntry[<then(exec) <Player(object) <IncomingName(string) ] K2Node_FunctionResult[>execute(exec) >ReturnValue(object) ] 
+[MB]   override ChoosePlayerStart: ok: K2Node_FunctionEntry[<then(exec) <Player(object) ] K2Node_FunctionResult[>execute(exec) >ReturnValue(object) ] 
+[MB] compile BP_CTF_Flag (events): CLEAN
+[MB] compile BP_CTF_Base (events): CLEAN
+[MB] compile GM_CTF (events): CLEAN
+[MB] building Flag logic [EventGraph] ...
+[MB] build Flag logic [EventGraph]: graph EventGraph: 198 node(s), 221 link(s), 0 error(s)
+[MB]     bp: reusing the existing ReceiveBeginPlay event node
+[MB]     ovl: reusing the existing ReceiveActorBeginOverlap event node
+[MB] building Flag OnRep_Side [OnRep_Side] ...
+[MB] build Flag OnRep_Side [OnRep_Side]: graph OnRep_Side: 2 node(s), 1 link(s), 0 error(s)
+[MB] building Flag OnRep_TeamID [OnRep_TeamID] ...
+[MB] build Flag OnRep_TeamID [OnRep_TeamID]: graph OnRep_TeamID: 2 node(s), 1 link(s), 0 error(s)
+[MB] building Flag OnRep_FlagState [OnRep_FlagState] ...
+[MB] build Flag OnRep_FlagState [OnRep_FlagState]: graph OnRep_FlagState: 2 node(s), 1 link(s), 0 error(s)
+[MB] building Flag OnRep_EventSeq [OnRep_EventSeq] ...
+[MB] build Flag OnRep_EventSeq [OnRep_EventSeq]: graph OnRep_EventSeq: 2 node(s), 1 link(s), 0 error(s)
+[MB] building Base logic [EventGraph] ...
+[MB] build Base logic [EventGraph]: graph EventGraph: 48 node(s), 61 link(s), 0 error(s)
+[MB]     bp: reusing the existing ReceiveBeginPlay event node
+[MB]     ovl: reusing the existing ReceiveActorBeginOverlap event node
+[MB] building GM logic [EventGraph] ...
+[MB] build GM logic [EventGraph]: graph EventGraph: 159 node(s), 218 link(s), 0 error(s)
+[MB]     bp: reusing the existing ReceiveBeginPlay event node
+[MB] building GM function EnsureTeams [EnsureTeams] ...
+[MB] build GM function EnsureTeams [EnsureTeams]: graph EnsureTeams: 47 node(s), 64 link(s), 0 error(s)
+[MB] building GM function ApplyTeamIds [ApplyTeamIds] ...
+[MB] build GM function ApplyTeamIds [ApplyTeamIds]: graph ApplyTeamIds: 13 node(s), 15 link(s), 0 error(s)
+[MB] building GM function EnsureSides [EnsureSides] ...
+[MB] build GM function EnsureSides [EnsureSides]: graph EnsureSides: 55 node(s), 66 link(s), 0 error(s)
+[MB] building GM function AverageLocation [AverageLocation] ...
+[MB] build GM function AverageLocation [AverageLocation]: graph AverageLocation: 10 node(s), 11 link(s), 0 error(s)
+[MB] building GM function ExtremeStart [ExtremeStart] ...
+[MB] build GM function ExtremeStart [ExtremeStart]: graph ExtremeStart: 19 node(s), 28 link(s), 0 error(s)
+[MB] building GM function DeriveSidesFromWaiting [DeriveSidesFromWaiting] ...
+[MB] build GM function DeriveSidesFromWaiting [DeriveSidesFromWaiting]: graph DeriveSidesFromWaiting: 30 node(s), 45 link(s), 0 error(s)
+[MB] building GM function SideT [SideT] ...
+[MB] build GM function SideT [SideT]: graph SideT: 9 node(s), 9 link(s), 0 error(s)
+[MB] building GM function GatherPawns [GatherPawns] ...
+[MB] build GM function GatherPawns [GatherPawns]: graph GatherPawns: 24 node(s), 29 link(s), 0 error(s)
+[MB] building GM function IsStartFree [IsStartFree] ...
+[MB] build GM function IsStartFree [IsStartFree]: graph IsStartFree: 13 node(s), 14 link(s), 0 error(s)
+[MB] building GM function EnemyDistance [EnemyDistance] ...
+[MB] build GM function EnemyDistance [EnemyDistance]: graph EnemyDistance: 13 node(s), 15 link(s), 0 error(s)
+[MB] building GM function NearFlag [NearFlag] ...
+[MB] build GM function NearFlag [NearFlag]: graph NearFlag: 11 node(s), 12 link(s), 0 error(s)
+[MB] building GM function CollectCandidates [CollectCandidates] ...
+[MB] build GM function CollectCandidates [CollectCandidates]: graph CollectCandidates: 34 node(s), 51 link(s), 0 error(s)
+[MB] building GM function CollectFallback [CollectFallback] ...
+[MB] build GM function CollectFallback [CollectFallback]: graph CollectFallback: 23 node(s), 31 link(s), 0 error(s)
+[MB] building GM function ChooseStart [ChooseStart] ...
+[MB] build GM function ChooseStart [ChooseStart]: graph ChooseStart: 30 node(s), 39 link(s), 0 error(s)
+[MB] building GM function StartForPlayer [StartForPlayer] ...
+[MB] build GM function StartForPlayer [StartForPlayer]: graph StartForPlayer: 18 node(s), 21 link(s), 0 error(s)
+[MB] building GM function FloorPoint [FloorPoint] ...
+[MB] build GM function FloorPoint [FloorPoint]: graph FloorPoint: 15 node(s), 22 link(s), 0 error(s)
+[MB] building GM FindPlayerStart override [FindPlayerStart] ...
+[MB] build GM FindPlayerStart override [FindPlayerStart]: graph FindPlayerStart: 9 node(s), 15 link(s), 0 error(s)
+[MB] building GM ChoosePlayerStart override [ChoosePlayerStart] ...
+[MB] build GM ChoosePlayerStart override [ChoosePlayerStart]: graph ChoosePlayerStart: 9 node(s), 14 link(s), 0 error(s)
+[MB] compile BP_CTF_Flag (logic): CLEAN
+[MB] compile BP_CTF_Base (logic): CLEAN
+[MB] compile GM_CTF (logic): CLEAN
+[MB]   BP_CTF_Flag default replicates = True
+[MB]   BP_CTF_Flag default replicate_movement = True
+[MB]   BP_CTF_Flag default always_relevant = True
+[MB]   BP_CTF_Base default replicates = True
+[MB]   BP_CTF_Base default replicate_movement = True
+[MB]   BP_CTF_Base default always_relevant = True
+[MB]   GM_CTF class default ConfigDataAsset -> DA_CTF
+[MB] compile BP_CTF_Flag (final): CLEAN
+[MB] compile BP_CTF_Base (final): CLEAN
+[MB] compile GM_CTF (final): CLEAN
+[MB] layout of BP_CTF_Flag (BP_CTF_Flag_C):
+#0 StructProperty UberGraphFrame [BP_CTF_Flag_C] flags=202200
+#1 ObjectProperty Dot [BP_CTF_Flag_C] flags=8001400080204
+#2 ObjectProperty Trigger [BP_CTF_Flag_C] flags=8001400080204
+#3 ObjectProperty Mesh [BP_CTF_Flag_C] flags=8001400080204
+#4 ObjectProperty DefaultSceneRoot [BP_CTF_Flag_C] flags=8001400080204
+#5 IntProperty TeamID [BP_CTF_Flag_C] flags=8001140010225
+#6 ByteProperty Side [BP_CTF_Flag_C] flags=8001140010225
+#7 ByteProperty FlagState [BP_CTF_Flag_C] flags=8001140010225
+#8 ObjectProperty Carrier [BP_CTF_Flag_C] flags=8001000010a25
+#9 StructProperty HomeLocation [BP_CTF_Flag_C] flags=8001040010205
+#10 ObjectProperty GM [BP_CTF_Flag_C] flags=8001000010a05
+#11 ObjectProperty StaticMat [BP_CTF_Flag_C] flags=8001000010205
+#12 ByteProperty LastEvent [BP_CTF_Flag_C] flags=8001040010225
+#13 IntProperty EventSeq [BP_CTF_Flag_C] flags=8001140010225
+#14 BoolProperty bCapturedNext [BP_CTF_Flag_C] flags=8001040010205
+#15 ByteProperty DotState [BP_CTF_Flag_C] flags=8001040010205
+#16 ObjectProperty LastLocalPawn [BP_CTF_Flag_C] flags=8001000010a05
+#17 IntProperty EventTeam [BP_CTF_Flag_C] flags=8001040010225
+#18 StructProperty PrimaryActorTick [Actor] flags=10000000010001
+#19 BoolProperty bNetTemporary [Actor] flags=18001000000000
+#20 BoolProperty bOnlyRelevantToOwner [Actor] flags=18001000010015
+#21 BoolProperty bAlwaysRelevant [Actor] flags=18001000010005
+#22 BoolProperty bReplicateMovement [Actor] flags=48001100010021
+#23 BoolProperty bCallPreReplication [Actor] flags=48041000010001
+#24 BoolProperty bCallPreReplicationForReplay [Actor] flags=48041000010001
+#25 BoolProperty bHidden [Actor] flags=48001200000035
+#26 BoolProperty bTearOff [Actor] flags=48001000000020
+#27 BoolProperty bForceNetAddressable [Actor] flags=48001000000000
+#28 EnumProperty LevelInstanceType [Actor] flags=48001c40002200
+#29 EnumProperty LevelInstanceFlags [Actor] flags=48001c40002200
+#30 BoolProperty bIsMainWorldOnly [Actor] flags=18041800000001
+#31 BoolProperty bExchangedRoles [Actor] flags=18001000002000
+#32 BoolProperty bNetLoadOnClient [Actor] flags=18001000000001
+#33 BoolProperty bNetUseOwnerRelevancy [Actor] flags=18001000010005
+#34 BoolProperty bRelevantForNetworkReplays [Actor] flags=18001000000000
+#35 BoolProperty bRelevantForLevelBounds [Actor] flags=18041000000001
+#36 BoolProperty bReplayRewindable [Actor] flags=18041000010001
+#37 BoolProperty bAllowTickBeforeBeginPlay [Actor] flags=18001000010001
+#38 BoolProperty bAutoDestroyWhenFinished [Actor] flags=48001000000004
+#39 BoolProperty bCanBeDamaged [Actor] flags=48001001000025
+#40 BoolProperty bBlockInput [Actor] flags=18001000010001
+#41 BoolProperty bCollideWhenPlacing [Actor] flags=18001000000000
+#42 BoolProperty bFindCameraComponentWhenViewTarget [Actor] flags=18041000000005
+#43 BoolProperty bGenerateOverlapEventsDuringLevelStreaming [Actor] flags=18001000000005
+#44 BoolProperty bIgnoresOriginShifting [Actor] flags=18041000000001
+#45 BoolProperty bEnableAutoLODGeneration [Actor] flags=18001000000005
+#46 BoolProperty bIsEditorOnlyActor [Actor] flags=18041000000001
+#47 BoolProperty bReplicates [Actor] flags=28081000010015
+#48 BoolProperty bCanBeInCluster [Actor] flags=280c1000000001
+#49 BoolProperty bAllowReceiveTickEventOnDedicatedServer [Actor] flags=28081000000000
+#50 BoolProperty bReplicateUsingRegisteredSubObjectList [Actor] flags=280c1000014015
+#51 BoolProperty bActorEnableCollision [Actor] flags=48001000000000
+#52 BoolProperty bActorIsBeingDestroyed [Actor] flags=48001000202000
+#53 BoolProperty bAsyncPhysicsTickEnabled [Actor] flags=28081000000001
+#54 EnumProperty UpdateOverlapsMethodDuringLevelStreaming [Actor] flags=28081040000201
+#55 EnumProperty DefaultUpdateOverlapsMethodDuringLevelStreaming [Actor] flags=48001040024201
+#56 ByteProperty RemoteRole [Actor] flags=48001040022a21
+#57 FloatProperty InitialLifeSpan [Actor] flags=18001040000215
+#58 FloatProperty CustomTimeDilation [Actor] flags=18041040000204
+#59 IntProperty RayTracingGroupId [Actor] flags=48001040000200
+#60 EnumProperty GridPlacement [Actor] flags=28081860000200
+#61 NameProperty RuntimeGrid [Actor] flags=280c1840000201
+#62 StructProperty AttachmentReplication [Actor] flags=20089100002020
+#63 StructProperty ReplicatedMovement [Actor] flags=40041100010021
+#64 ObjectProperty Owner [Actor] flags=11c001100000220
+#65 NameProperty NetDriverName [Actor] flags=28081040000200
+#66 ByteProperty Role [Actor] flags=48001040020a21
+#67 ByteProperty NetDormancy [Actor] flags=18001040010215
+#68 EnumProperty SpawnCollisionHandlingMethod [Actor] flags=18001040000205
+#69 ByteProperty AutoReceiveInput [Actor] flags=18001040000201
+#70 IntProperty InputPriority [Actor] flags=18001040000201
+#71 ObjectProperty InputComponent [Actor] flags=11c001000280208
+#72 IntProperty NetTag [Actor] flags=18001040002200
+#73 FloatProperty NetCullDistanceSquared [Actor] flags=18001040010205
+#74 FloatProperty NetUpdateFrequency [Actor] flags=18001040010205
+#75 FloatProperty MinNetUpdateFrequency [Actor] flags=18001040010205
+#76 FloatProperty NetPriority [Actor] flags=18001040010205
+#77 EnumProperty PhysicsReplicationMode [Actor] flags=48001040010201
+#78 ObjectProperty Instigator [Actor] flags=14d001100000224
+#79 ArrayProperty Children [Actor] flags=114000000002200
+#80 ObjectProperty RootComponent [Actor] flags=12c08100008021c
+#81 StructProperty PivotOffset [Actor] flags=280c1840000215
+#82 ObjectProperty HLODLayer [Actor] flags=14c001800000201
+#83 ArrayProperty Layers [Actor] flags=10040000000201
+#84 WeakObjectProperty ParentComponentActor [Actor] flags=4c001860000200
+#85 WeakObjectProperty ParentComponent [Actor] flags=4c001040080208
+#86 StructProperty ActorGuid [Actor] flags=28cc1c40000214
+#87 StructProperty ActorInstanceGuid [Actor] flags=28cc1c40002214
+#88 StructProperty ContentBundleGuid [Actor] flags=284c1c40000214
+#89 ArrayProperty DataLayers [Actor] flags=200c0800020201
+#90 ArrayProperty DataLayerAssets [Actor] flags=240c0800000201
+#91 ObjectProperty ExternalDataLayerAsset [Actor] flags=12c4c1800020201
+#92 ObjectProperty GroupActor [Actor] flags=11c001800002200
+#93 FloatProperty SpriteScale [Actor] flags=18001840000205
+#94 UInt64Property HiddenEditorViews [Actor] flags=18001840002200
+#95 StrProperty ActorLabel [Actor] flags=48000800000200
+#96 NameProperty FolderPath [Actor] flags=48001840000200
+#97 StructProperty FolderGuid [Actor] flags=48401840000200
+#98 BoolProperty bHiddenEd [Actor] flags=18001800000000
+#99 BoolProperty bIsEditorPreviewActor [Actor] flags=18001800002000
+#100 BoolProperty bHiddenEdLayer [Actor] flags=18001800002000
+#101 BoolProperty bHiddenEdLevel [Actor] flags=18001800002000
+#102 BoolProperty bLockLocation [Actor] flags=28081800000000
+#103 BoolProperty bActorLabelEditable [Actor] flags=28081800000000
+#104 BoolProperty bEditable [Actor] flags=28081800000000
+#105 BoolProperty bListedInSceneOutliner [Actor] flags=28081800000000
+#106 BoolProperty bOptimizeBPComponentData [Actor] flags=280c1800010001
+#107 BoolProperty bCanPlayFromHere [Actor] flags=28081800000000
+#108 BoolProperty bIsSpatiallyLoaded [Actor] flags=280c1800000001
+#109 BoolProperty bHiddenEdTemporary [Actor] flags=48001800002000
+#110 BoolProperty bForceExternalActorLevelReferenceForPIE [Actor] flags=48001800002000
+#111 ArrayProperty Tags [Actor] flags=10040000000205
+#112 MulticastSparseDelegateProperty OnTakeAnyDamage [Actor] flags=10001010080000
+#113 MulticastSparseDelegateProperty OnTakePointDamage [Actor] flags=10001010080000
+#114 MulticastSparseDelegateProperty OnTakeRadialDamage [Actor] flags=10001010080000
+#115 MulticastSparseDelegateProperty OnActorBeginOverlap [Actor] flags=10001010080000
+#116 MulticastSparseDelegateProperty OnActorEndOverlap [Actor] flags=10001010080000
+#117 MulticastSparseDelegateProperty OnBeginCursorOver [Actor] flags=10001010080000
+#118 MulticastSparseDelegateProperty OnEndCursorOver [Actor] flags=10001010080000
+#119 MulticastSparseDelegateProperty OnClicked [Actor] flags=10001010080000
+#120 MulticastSparseDelegateProperty OnReleased [Actor] flags=10001010080000
+#121 MulticastSparseDelegateProperty OnInputTouchBegin [Actor] flags=10001010080000
+#122 MulticastSparseDelegateProperty OnInputTouchEnd [Actor] flags=10001010080000
+#123 MulticastSparseDelegateProperty OnInputTouchEnter [Actor] flags=10001010080000
+#124 MulticastSparseDelegateProperty OnInputTouchLeave [Actor] flags=10001010080000
+#125 MulticastSparseDelegateProperty OnActorHit [Actor] flags=10001010080000
+#126 MulticastSparseDelegateProperty OnDestroyed [Actor] flags=10001010080000
+#127 MulticastSparseDelegateProperty OnEndPlay [Actor] flags=10001010080000
+#128 ArrayProperty InstanceComponents [Actor] flags=144008000000208
+#129 ArrayProperty BlueprintCreatedComponents [Actor] flags=114408400000208
+
+[MB] layout of BP_CTF_Base (BP_CTF_Base_C):
+#0 StructProperty UberGraphFrame [BP_CTF_Base_C] flags=202200
+#1 ObjectProperty Pad [BP_CTF_Base_C] flags=8001400080204
+#2 ObjectProperty Trigger [BP_CTF_Base_C] flags=8001400080204
+#3 ObjectProperty DefaultSceneRoot [BP_CTF_Base_C] flags=8001400080204
+#4 IntProperty TeamID [BP_CTF_Base_C] flags=8001040010225
+#5 ByteProperty Side [BP_CTF_Base_C] flags=8001040010225
+#6 ObjectProperty OwnFlag [BP_CTF_Base_C] flags=8001000010a05
+#7 ObjectProperty EnemyFlag [BP_CTF_Base_C] flags=8001000010a05
+#8 ObjectProperty GM [BP_CTF_Base_C] flags=8001000010a05
+#9 StructProperty PrimaryActorTick [Actor] flags=10000000010001
+#10 BoolProperty bNetTemporary [Actor] flags=18001000000000
+#11 BoolProperty bOnlyRelevantToOwner [Actor] flags=18001000010015
+#12 BoolProperty bAlwaysRelevant [Actor] flags=18001000010005
+#13 BoolProperty bReplicateMovement [Actor] flags=48001100010021
+#14 BoolProperty bCallPreReplication [Actor] flags=48041000010001
+#15 BoolProperty bCallPreReplicationForReplay [Actor] flags=48041000010001
+#16 BoolProperty bHidden [Actor] flags=48001200000035
+#17 BoolProperty bTearOff [Actor] flags=48001000000020
+#18 BoolProperty bForceNetAddressable [Actor] flags=48001000000000
+#19 EnumProperty LevelInstanceType [Actor] flags=48001c40002200
+#20 EnumProperty LevelInstanceFlags [Actor] flags=48001c40002200
+#21 BoolProperty bIsMainWorldOnly [Actor] flags=18041800000001
+#22 BoolProperty bExchangedRoles [Actor] flags=18001000002000
+#23 BoolProperty bNetLoadOnClient [Actor] flags=18001000000001
+#24 BoolProperty bNetUseOwnerRelevancy [Actor] flags=18001000010005
+#25 BoolProperty bRelevantForNetworkReplays [Actor] flags=18001000000000
+#26 BoolProperty bRelevantForLevelBounds [Actor] flags=18041000000001
+#27 BoolProperty bReplayRewindable [Actor] flags=18041000010001
+#28 BoolProperty bAllowTickBeforeBeginPlay [Actor] flags=18001000010001
+#29 BoolProperty bAutoDestroyWhenFinished [Actor] flags=48001000000004
+#30 BoolProperty bCanBeDamaged [Actor] flags=48001001000025
+#31 BoolProperty bBlockInput [Actor] flags=18001000010001
+#32 BoolProperty bCollideWhenPlacing [Actor] flags=18001000000000
+#33 BoolProperty bFindCameraComponentWhenViewTarget [Actor] flags=18041000000005
+#34 BoolProperty bGenerateOverlapEventsDuringLevelStreaming [Actor] flags=18001000000005
+#35 BoolProperty bIgnoresOriginShifting [Actor] flags=18041000000001
+#36 BoolProperty bEnableAutoLODGeneration [Actor] flags=18001000000005
+#37 BoolProperty bIsEditorOnlyActor [Actor] flags=18041000000001
+#38 BoolProperty bReplicates [Actor] flags=28081000010015
+#39 BoolProperty bCanBeInCluster [Actor] flags=280c1000000001
+#40 BoolProperty bAllowReceiveTickEventOnDedicatedServer [Actor] flags=28081000000000
+#41 BoolProperty bReplicateUsingRegisteredSubObjectList [Actor] flags=280c1000014015
+#42 BoolProperty bActorEnableCollision [Actor] flags=48001000000000
+#43 BoolProperty bActorIsBeingDestroyed [Actor] flags=48001000202000
+#44 BoolProperty bAsyncPhysicsTickEnabled [Actor] flags=28081000000001
+#45 EnumProperty UpdateOverlapsMethodDuringLevelStreaming [Actor] flags=28081040000201
+#46 EnumProperty DefaultUpdateOverlapsMethodDuringLevelStreaming [Actor] flags=48001040024201
+#47 ByteProperty RemoteRole [Actor] flags=48001040022a21
+#48 FloatProperty InitialLifeSpan [Actor] flags=18001040000215
+#49 FloatProperty CustomTimeDilation [Actor] flags=18041040000204
+#50 IntProperty RayTracingGroupId [Actor] flags=48001040000200
+#51 EnumProperty GridPlacement [Actor] flags=28081860000200
+#52 NameProperty RuntimeGrid [Actor] flags=280c1840000201
+#53 StructProperty AttachmentReplication [Actor] flags=20089100002020
+#54 StructProperty ReplicatedMovement [Actor] flags=40041100010021
+#55 ObjectProperty Owner [Actor] flags=11c001100000220
+#56 NameProperty NetDriverName [Actor] flags=28081040000200
+#57 ByteProperty Role [Actor] flags=48001040020a21
+#58 ByteProperty NetDormancy [Actor] flags=18001040010215
+#59 EnumProperty SpawnCollisionHandlingMethod [Actor] flags=18001040000205
+#60 ByteProperty AutoReceiveInput [Actor] flags=18001040000201
+#61 IntProperty InputPriority [Actor] flags=18001040000201
+#62 ObjectProperty InputComponent [Actor] flags=11c001000280208
+#63 IntProperty NetTag [Actor] flags=18001040002200
+#64 FloatProperty NetCullDistanceSquared [Actor] flags=18001040010205
+#65 FloatProperty NetUpdateFrequency [Actor] flags=18001040010205
+#66 FloatProperty MinNetUpdateFrequency [Actor] flags=18001040010205
+#67 FloatProperty NetPriority [Actor] flags=18001040010205
+#68 EnumProperty PhysicsReplicationMode [Actor] flags=48001040010201
+#69 ObjectProperty Instigator [Actor] flags=14d001100000224
+#70 ArrayProperty Children [Actor] flags=114000000002200
+#71 ObjectProperty RootComponent [Actor] flags=12c08100008021c
+#72 StructProperty PivotOffset [Actor] flags=280c1840000215
+#73 ObjectProperty HLODLayer [Actor] flags=14c001800000201
+#74 ArrayProperty Layers [Actor] flags=10040000000201
+#75 WeakObjectProperty ParentComponentActor [Actor] flags=4c001860000200
+#76 WeakObjectProperty ParentComponent [Actor] flags=4c001040080208
+#77 StructProperty ActorGuid [Actor] flags=28cc1c40000214
+#78 StructProperty ActorInstanceGuid [Actor] flags=28cc1c40002214
+#79 StructProperty ContentBundleGuid [Actor] flags=284c1c40000214
+#80 ArrayProperty DataLayers [Actor] flags=200c0800020201
+#81 ArrayProperty DataLayerAssets [Actor] flags=240c0800000201
+#82 ObjectProperty ExternalDataLayerAsset [Actor] flags=12c4c1800020201
+#83 ObjectProperty GroupActor [Actor] flags=11c001800002200
+#84 FloatProperty SpriteScale [Actor] flags=18001840000205
+#85 UInt64Property HiddenEditorViews [Actor] flags=18001840002200
+#86 StrProperty ActorLabel [Actor] flags=48000800000200
+#87 NameProperty FolderPath [Actor] flags=48001840000200
+#88 StructProperty FolderGuid [Actor] flags=48401840000200
+#89 BoolProperty bHiddenEd [Actor] flags=18001800000000
+#90 BoolProperty bIsEditorPreviewActor [Actor] flags=18001800002000
+#91 BoolProperty bHiddenEdLayer [Actor] flags=18001800002000
+#92 BoolProperty bHiddenEdLevel [Actor] flags=18001800002000
+#93 BoolProperty bLockLocation [Actor] flags=28081800000000
+#94 BoolProperty bActorLabelEditable [Actor] flags=28081800000000
+#95 BoolProperty bEditable [Actor] flags=28081800000000
+#96 BoolProperty bListedInSceneOutliner [Actor] flags=28081800000000
+#97 BoolProperty bOptimizeBPComponentData [Actor] flags=280c1800010001
+#98 BoolProperty bCanPlayFromHere [Actor] flags=28081800000000
+#99 BoolProperty bIsSpatiallyLoaded [Actor] flags=280c1800000001
+#100 BoolProperty bHiddenEdTemporary [Actor] flags=48001800002000
+#101 BoolProperty bForceExternalActorLevelReferenceForPIE [Actor] flags=48001800002000
+#102 ArrayProperty Tags [Actor] flags=10040000000205
+#103 MulticastSparseDelegateProperty OnTakeAnyDamage [Actor] flags=10001010080000
+#104 MulticastSparseDelegateProperty OnTakePointDamage [Actor] flags=10001010080000
+#105 MulticastSparseDelegateProperty OnTakeRadialDamage [Actor] flags=10001010080000
+#106 MulticastSparseDelegateProperty OnActorBeginOverlap [Actor] flags=10001010080000
+#107 MulticastSparseDelegateProperty OnActorEndOverlap [Actor] flags=10001010080000
+#108 MulticastSparseDelegateProperty OnBeginCursorOver [Actor] flags=10001010080000
+#109 MulticastSparseDelegateProperty OnEndCursorOver [Actor] flags=10001010080000
+#110 MulticastSparseDelegateProperty OnClicked [Actor] flags=10001010080000
+#111 MulticastSparseDelegateProperty OnReleased [Actor] flags=10001010080000
+#112 MulticastSparseDelegateProperty OnInputTouchBegin [Actor] flags=10001010080000
+#113 MulticastSparseDelegateProperty OnInputTouchEnd [Actor] flags=10001010080000
+#114 MulticastSparseDelegateProperty OnInputTouchEnter [Actor] flags=10001010080000
+#115 MulticastSparseDelegateProperty OnInputTouchLeave [Actor] flags=10001010080000
+#116 MulticastSparseDelegateProperty OnActorHit [Actor] flags=10001010080000
+#117 MulticastSparseDelegateProperty OnDestroyed [Actor] flags=10001010080000
+#118 MulticastSparseDelegateProperty OnEndPlay [Actor] flags=10001010080000
+#119 ArrayProperty InstanceComponents [Actor] flags=144008000000208
+#120 ArrayProperty BlueprintCreatedComponents [Actor] flags=114408400000208
+
+[MB] layout of GM_CTF (GM_CTF_C):
+#0 StructProperty UberGraphFrame [GM_CTF_C] flags=202200
+#1 ObjectProperty BodycamCaptureRuleSet [GM_CTF_C] flags=8001400080204
+#2 IntProperty TeamA [GM_CTF_C] flags=8001040010205
+#3 IntProperty TeamB [GM_CTF_C] flags=8001040010205
+#4 BoolProperty bTeamsReady [GM_CTF_C] flags=8001040010205
+#5 BoolProperty bSidesReady [GM_CTF_C] flags=8001040010205
+#6 BoolProperty bOccupied [GM_CTF_C] flags=8001040010205
+#7 BoolProperty bFlagsPlaced [GM_CTF_C] flags=8001040010205
+#8 ArrayProperty Base1Starts [GM_CTF_C] flags=10805
+#9 ArrayProperty Base2Starts [GM_CTF_C] flags=10805
+#10 ArrayProperty AllStarts [GM_CTF_C] flags=10805
+#11 ArrayProperty SpawnCandidates [GM_CTF_C] flags=10805
+#12 ArrayProperty Pawns [GM_CTF_C] flags=10805
+#13 ArrayProperty EnemyPawns [GM_CTF_C] flags=10805
+#14 ArrayProperty KnownTeamIds [GM_CTF_C] flags=10005
+#15 StructProperty Center1 [GM_CTF_C] flags=8001040010205
+#16 StructProperty Center2 [GM_CTF_C] flags=8001040010205
+#17 StructProperty Axis [GM_CTF_C] flags=8001040010205
+#18 StructProperty Anchor1 [GM_CTF_C] flags=8001040010205
+#19 StructProperty Anchor2 [GM_CTF_C] flags=8001040010205
+#20 StructProperty FlagHome1 [GM_CTF_C] flags=8001040010205
+#21 StructProperty FlagHome2 [GM_CTF_C] flags=8001040010205
+#22 DoubleProperty AxisLenSq [GM_CTF_C] flags=8001040010205
+#23 DoubleProperty TmpBest [GM_CTF_C] flags=8001040010205
+#24 DoubleProperty TmpDist [GM_CTF_C] flags=8001040010205
+#25 ArrayProperty TmpLocs [GM_CTF_C] flags=10005
+#26 ObjectProperty ChosenStart [GM_CTF_C] flags=8001000010a05
+#27 ObjectProperty TmpBestActor [GM_CTF_C] flags=8001000010a05
+#28 ObjectProperty Flag1 [GM_CTF_C] flags=8001000010a05
+#29 ObjectProperty Flag2 [GM_CTF_C] flags=8001000010a05
+#30 ObjectProperty Base1 [GM_CTF_C] flags=8001000010a05
+#31 ObjectProperty Base2 [GM_CTF_C] flags=8001000010a05
+#32 StructProperty UberGraphFrame [BP_BodycamGameModeAbstract_C] flags=202200
+#33 ObjectProperty BodycamTimeLimitRuleSet [BP_BodycamGameModeAbstract_C] flags=8001400080204
+#34 ObjectProperty DefaultSceneRoot [BP_BodycamGameModeAbstract_C] flags=8001400080204
+#35 ByteProperty GamemodeForCompatibility [BP_BodycamGameModeAbstract_C] flags=8001040010205
+#36 ArrayProperty HUDClassCommonUILevelOverrides [BP_BodycamGameModeAbstract_C] flags=10005
+#37 ClassProperty HUDClassCommonUI [BP_BodycamGameModeAbstract_C] flags=8001000010205
+#38 BoolProperty HMS_bBotsMethod [BP_BodycamGameModeAbstract_C] flags=8001040010205
+#39 BoolProperty bTriggerWeatherTransition [BP_BodycamGameModeAbstract_C] flags=8001040010205
+#40 MulticastInlineDelegateProperty OnPlayerKilled [BodycamGameMode] flags=10000010080205
+#41 MulticastInlineDelegateProperty OnPhaseChanged [BodycamGameMode] flags=10000000080205
+#42 StructProperty GameModeTags [BodycamGameMode] flags=20080000000005
+#43 ObjectProperty ConfigDataAsset [BodycamGameMode] flags=28081000000205
+#44 ClassProperty DefaultDroneClass [BodycamGameMode] flags=28081000000205
+#45 ClassProperty TeamManagementComponentClass [BodycamGameMode] flags=2c081000000205
+#46 ArrayProperty PreventingRules [BodycamGameMode] flags=24088000000209
+#47 FloatProperty HMS_SavedRoundRemainingTime [BodycamGameMode] flags=28081040000205
+#48 ArrayProperty ArrivedPlayers [BodycamGameMode] flags=20080000000205
+#49 ObjectProperty SpawnSystemComponent [BodycamGameMode] flags=2a08100008020d
+#50 ObjectProperty TeamManagementComponent [BodycamGameMode] flags=4a00100008020d
+#51 MapProperty LastDeathLocations [BodycamGameMode] flags=40000000000005
+#52 ArrayProperty EndMatchPersistentEffects [BodycamGameMode] flags=44000000000205
+#53 BoolProperty bIsHMSEnabled [HMS_GameMode] flags=18001040000205
+#54 StructProperty HMS_MigrationSettings [HMS_GameMode] flags=10001000000005
+#55 BoolProperty HMS_IsRunningAsyncCreateGameSaveTask [HMS_GameMode] flags=18001040000205
+#56 BoolProperty HMS_IsRunningGameSaveUpdate [HMS_GameMode] flags=18001040000205
+#57 FloatProperty HMS_CurrentPreviousPlayersReconnectTimeout [HMS_GameMode] flags=18001040000205
+#58 StructProperty HMS_CurrentGameSave [HMS_GameMode] flags=10000000000005
+#59 StructProperty HMS_CurrentGameSaveSourceTransferState [HMS_GameMode] flags=10000000000005
+#60 WeakObjectProperty HMS_CurrentChosenNewHost [HMS_GameMode] flags=1c001040000205
+#61 StrProperty HMS_CurrentChosenNewHostName [HMS_GameMode] flags=18000000000205
+#62 IntProperty HMS_NumPlayersReconnected [HMS_GameMode] flags=18001040000205
+#63 IntProperty HMS_NumPlayersExpectedToReconnect [HMS_GameMode] flags=18001040000205
+#64 ObjectProperty HMS_CustomGameSaveDataObject [HMS_GameMode] flags=18001000000205
+#65 StructProperty HMS_MigrationFlags [HMS_GameMode] flags=10001000000005
+#66 StrProperty OptionsString [GameModeBase] flags=18000000000214
+#67 ClassProperty GameSessionClass [GameModeBase] flags=1c001000000205
+#68 ClassProperty GameStateClass [GameModeBase] flags=1c001002000215
+#69 ClassProperty PlayerControllerClass [GameModeBase] flags=1c001002000215
+#70 ClassProperty PlayerStateClass [GameModeBase] flags=1c001002000215
+#71 ClassProperty HUDClass [GameModeBase] flags=1c001000000205
+#72 ClassProperty DefaultPawnClass [GameModeBase] flags=1c001000000205
+#73 ClassProperty SpectatorClass [GameModeBase] flags=1c001002000215
+#74 ClassProperty ReplaySpectatorPlayerControllerClass [GameModeBase] flags=1c001002000215
+#75 ClassProperty ServerStatReplicatorClass [GameModeBase] flags=1c001002000215
+#76 ObjectProperty GameSession [GameModeBase] flags=11c001000002200
+#77 ObjectProperty GameState [GameModeBase] flags=11c001000002200
+#78 ObjectProperty ServerStatReplicator [GameModeBase] flags=11c001000002200
+#79 TextProperty DefaultPlayerName [GameModeBase] flags=10000000000001
+#80 BoolProperty bUseSeamlessTravel [GameModeBase] flags=18001000000005
+#81 BoolProperty bStartPlayersAsSpectators [GameModeBase] flags=28081000000015
+#82 BoolProperty bPauseable [GameModeBase] flags=28081000000005
+#83 EnumProperty GameNetDriverReplicationSystem [GameModeBase] flags=28081040004205
+#84 ObjectProperty SpriteComponent [Info] flags=14c001800080208
+#85 StructProperty PrimaryActorTick [Actor] flags=10000000010001
+#86 BoolProperty bNetTemporary [Actor] flags=18001000000000
+#87 BoolProperty bOnlyRelevantToOwner [Actor] flags=18001000010015
+#88 BoolProperty bAlwaysRelevant [Actor] flags=18001000010005
+#89 BoolProperty bReplicateMovement [Actor] flags=48001100010021
+#90 BoolProperty bCallPreReplication [Actor] flags=48041000010001
+#91 BoolProperty bCallPreReplicationForReplay [Actor] flags=48041000010001
+#92 BoolProperty bHidden [Actor] flags=48001200000035
+#93 BoolProperty bTearOff [Actor] flags=48001000000020
+#94 BoolProperty bForceNetAddressable [Actor] flags=48001000000000
+#95 EnumProperty LevelInstanceType [Actor] flags=48001c40002200
+#96 EnumProperty LevelInstanceFlags [Actor] flags=48001c40002200
+#97 BoolProperty bIsMainWorldOnly [Actor] flags=18041800000001
+#98 BoolProperty bExchangedRoles [Actor] flags=18001000002000
+#99 BoolProperty bNetLoadOnClient [Actor] flags=18001000000001
+#100 BoolProperty bNetUseOwnerRelevancy [Actor] flags=18001000010005
+#101 BoolProperty bRelevantForNetworkReplays [Actor] flags=18001000000000
+#102 BoolProperty bRelevantForLevelBounds [Actor] flags=18041000000001
+#103 BoolProperty bReplayRewindable [Actor] flags=18041000010001
+#104 BoolProperty bAllowTickBeforeBeginPlay [Actor] flags=18001000010001
+#105 BoolProperty bAutoDestroyWhenFinished [Actor] flags=48001000000004
+#106 BoolProperty bCanBeDamaged [Actor] flags=48001001000025
+#107 BoolProperty bBlockInput [Actor] flags=18001000010001
+#108 BoolProperty bCollideWhenPlacing [Actor] flags=18001000000000
+#109 BoolProperty bFindCameraComponentWhenViewTarget [Actor] flags=18041000000005
+#110 BoolProperty bGenerateOverlapEventsDuringLevelStreaming [Actor] flags=18001000000005
+#111 BoolProperty bIgnoresOriginShifting [Actor] flags=18041000000001
+#112 BoolProperty bEnableAutoLODGeneration [Actor] flags=18001000000005
+#113 BoolProperty bIsEditorOnlyActor [Actor] flags=18041000000001
+#114 BoolProperty bReplicates [Actor] flags=28081000010015
+#115 BoolProperty bCanBeInCluster [Actor] flags=280c1000000001
+#116 BoolProperty bAllowReceiveTickEventOnDedicatedServer [Actor] flags=28081000000000
+#117 BoolProperty bReplicateUsingRegisteredSubObjectList [Actor] flags=280c1000014015
+#118 BoolProperty bActorEnableCollision [Actor] flags=48001000000000
+#119 BoolProperty bActorIsBeingDestroyed [Actor] flags=48001000202000
+#120 BoolProperty bAsyncPhysicsTickEnabled [Actor] flags=28081000000001
+#121 EnumProperty UpdateOverlapsMethodDuringLevelStreaming [Actor] flags=28081040000201
+#122 EnumProperty DefaultUpdateOverlapsMethodDuringLevelStreaming [Actor] flags=48001040024201
+#123 ByteProperty RemoteRole [Actor] flags=48001040022a21
+#124 FloatProperty InitialLifeSpan [Actor] flags=18001040000215
+#125 FloatProperty CustomTimeDilation [Actor] flags=18041040000204
+#126 IntProperty RayTracingGroupId [Actor] flags=48001040000200
+#127 EnumProperty GridPlacement [Actor] flags=28081860000200
+#128 NameProperty RuntimeGrid [Actor] flags=280c1840000201
+#129 StructProperty AttachmentReplication [Actor] flags=20089100002020
+#130 StructProperty ReplicatedMovement [Actor] flags=40041100010021
+#131 ObjectProperty Owner [Actor] flags=11c001100000220
+#132 NameProperty NetDriverName [Actor] flags=28081040000200
+#133 ByteProperty Role [Actor] flags=48001040020a21
+#134 ByteProperty NetDormancy [Actor] flags=18001040010215
+#135 EnumProperty SpawnCollisionHandlingMethod [Actor] flags=18001040000205
+#136 ByteProperty AutoReceiveInput [Actor] flags=18001040000201
+#137 IntProperty InputPriority [Actor] flags=18001040000201
+#138 ObjectProperty InputComponent [Actor] flags=11c001000280208
+#139 IntProperty NetTag [Actor] flags=18001040002200
+#140 FloatProperty NetCullDistanceSquared [Actor] flags=18001040010205
+#141 FloatProperty NetUpdateFrequency [Actor] flags=18001040010205
+#142 FloatProperty MinNetUpdateFrequency [Actor] flags=18001040010205
+#143 FloatProperty NetPriority [Actor] flags=18001040010205
+#144 EnumProperty PhysicsReplicationMode [Actor] flags=48001040010201
+#145 ObjectProperty Instigator [Actor] flags=14d001100000224
+#146 ArrayProperty Children [Actor] flags=114000000002200
+#147 ObjectProperty RootComponent [Actor] flags=12c08100008021c
+#148 StructProperty PivotOffset [Actor] flags=280c1840000215
+#149 ObjectProperty HLODLayer [Actor] flags=14c001800000201
+#150 ArrayProperty Layers [Actor] flags=10040000000201
+#151 WeakObjectProperty ParentComponentActor [Actor] flags=4c001860000200
+#152 WeakObjectProperty ParentComponent [Actor] flags=4c001040080208
+#153 StructProperty ActorGuid [Actor] flags=28cc1c40000214
+#154 StructProperty ActorInstanceGuid [Actor] flags=28cc1c40002214
+#155 StructProperty ContentBundleGuid [Actor] flags=284c1c40000214
+#156 ArrayProperty DataLayers [Actor] flags=200c0800020201
+#157 ArrayProperty DataLayerAssets [Actor] flags=240c0800000201
+#158 ObjectProperty ExternalDataLayerAsset [Actor] flags=12c4c1800020201
+#159 ObjectProperty GroupActor [Actor] flags=11c001800002200
+#160 FloatProperty SpriteScale [Actor] flags=18001840000205
+#161 UInt64Property HiddenEditorViews [Actor] flags=18001840002200
+#162 StrProperty ActorLabel [Actor] flags=48000800000200
+#163 NameProperty FolderPath [Actor] flags=48001840000200
+#164 StructProperty FolderGuid [Actor] flags=48401840000200
+#165 BoolProperty bHiddenEd [Actor] flags=18001800000000
+#166 BoolProperty bIsEditorPreviewActor [Actor] flags=18001800002000
+#167 BoolProperty bHiddenEdLayer [Actor] flags=18001800002000
+#168 BoolProperty bHiddenEdLevel [Actor] flags=18001800002000
+#169 BoolProperty bLockLocation [Actor] flags=28081800000000
+#170 BoolProperty bActorLabelEditable [Actor] flags=28081800000000
+#171 BoolProperty bEditable [Actor] flags=28081800000000
+#172 BoolProperty bListedInSceneOutliner [Actor] flags=28081800000000
+#173 BoolProperty bOptimizeBPComponentData [Actor] flags=280c1800010001
+#174 BoolProperty bCanPlayFromHere [Actor] flags=28081800000000
+#175 BoolProperty bIsSpatiallyLoaded [Actor] flags=280c1800000001
+#176 BoolProperty bHiddenEdTemporary [Actor] flags=48001800002000
+#177 BoolProperty bForceExternalActorLevelReferenceForPIE [Actor] flags=48001800002000
+#178 ArrayProperty Tags [Actor] flags=10040000000205
+#179 MulticastSparseDelegateProperty OnTakeAnyDamage [Actor] flags=10001010080000
+#180 MulticastSparseDelegateProperty OnTakePointDamage [Actor] flags=10001010080000
+#181 MulticastSparseDelegateProperty OnTakeRadialDamage [Actor] flags=10001010080000
+#182 MulticastSparseDelegateProperty OnActorBeginOverlap [Actor] flags=10001010080000
+#183 MulticastSparseDelegateProperty OnActorEndOverlap [Actor] flags=10001010080000
+#184 MulticastSparseDelegateProperty OnBeginCursorOver [Actor] flags=10001010080000
+#185 MulticastSparseDelegateProperty OnEndCursorOver [Actor] flags=10001010080000
+#186 MulticastSparseDelegateProperty OnClicked [Actor] flags=10001010080000
+#187 MulticastSparseDelegateProperty OnReleased [Actor] flags=10001010080000
+#188 MulticastSparseDelegateProperty OnInputTouchBegin [Actor] flags=10001010080000
+#189 MulticastSparseDelegateProperty OnInputTouchEnd [Actor] flags=10001010080000
+#190 MulticastSparseDelegateProperty OnInputTouchEnter [Actor] flags=10001010080000
+#191 MulticastSparseDelegateProperty OnInputTouchLeave [Actor] flags=10001010080000
+#192 MulticastSparseDelegateProperty OnActorHit [Actor] flags=10001010080000
+#193 MulticastSparseDelegateProperty OnDestroyed [Actor] flags=10001010080000
+#194 MulticastSparseDelegateProperty OnEndPlay [Actor] flags=10001010080000
+#195 ArrayProperty InstanceComponents [Actor] flags=144008000000208
+#196 ArrayProperty BlueprintCreatedComponents [Actor] flags=114408400000208
+
+[MB] stage 2 done
+[MB] created /Game/MenuSystemPro/Blueprints/Core/BodycamGI (parent GameInstance)
+[MB]   var Selected Level Name (name): ok
+[MB]   var Session Name (string): ok
+[MB]   var SessionToJoin (Client) (string): ok
+[MB]   var Search String (string): ok
+[MB]   var MostFillServer (int): ok
+[MB] building BodycamGI stand-in function signature GetCurrentLevel [GetCurrentLevel] ...
+[MB] build BodycamGI stand-in function signature GetCurrentLevel [GetCurrentLevel]: graph GetCurrentLevel: 2 node(s), 0 link(s), 0 error(s)
+[MB] building BodycamGI stand-in function signature UpdateGamemode [UpdateGamemode] ...
+[MB] build BodycamGI stand-in function signature UpdateGamemode [UpdateGamemode]: graph UpdateGamemode: 2 node(s), 0 link(s), 0 error(s)
+[MB] building BodycamGI stand-in function signature HostPartyInLobby [HostPartyInLobby] ...
+[MB] build BodycamGI stand-in function signature HostPartyInLobby [HostPartyInLobby]: graph HostPartyInLobby: 2 node(s), 0 link(s), 0 error(s)
+[MB] building BodycamGI stand-in function signature UpdateSessionAndTravelToMap [UpdateSessionAndTravelToMap] ...
+[MB] build BodycamGI stand-in function signature UpdateSessionAndTravelToMap [UpdateSessionAndTravelToMap]: graph UpdateSessionAndTravelToMap: 2 node(s), 0 link(s), 0 error(s)
+[MB] compile BodycamGI stand-in: CLEAN
+[MB] created /Game/BodycamWeapons/Core/Blueprint/Bombe (parent Actor)
+[MB] compile Bombe stub: CLEAN
+[MB] created /Game/AdvancedLocomotionV4/Blueprints/Components/BP_InventoryComponent (parent ActorComponent)
+[MB] building BP_InventoryComponent stub events [EventGraph] ...
+[MB] build BP_InventoryComponent stub events [EventGraph]: graph EventGraph: 1 node(s), 0 link(s), 0 error(s)
+[MB] building BP_InventoryComponent stub function DropItem [DropItem] ...
+[MB] build BP_InventoryComponent stub function DropItem [DropItem]: graph DropItem: 2 node(s), 0 link(s), 0 error(s)
+[MB] building BP_InventoryComponent stub function GetItemForSlot [GetItemForSlot] ...
+[MB] build BP_InventoryComponent stub function GetItemForSlot [GetItemForSlot]: graph GetItemForSlot: 2 node(s), 0 link(s), 0 error(s)
+[MB] compile BP_InventoryComponent stub: CLEAN
+[MB] created /Game/GM/Gamemode/BB5/GE_BB5_DroneCooldown (parent GameplayEffect)
+[MB] compile GE_BB5_DroneCooldown: CLEAN
+[MB]   GE default duration_policy = <GameplayEffectDurationType.INFINITE: 1>
+[MB]   GE default stacking_type = <GameplayEffectStackingType.AGGREGATE_BY_TARGET: 2>
+[MB]   GE default stack_limit_count = 1
+[MB]   GE modifier: ok: CharacterAttributeSet.GadgetCooldown Multiply 4 (now 1 modifier(s); attribute valid=1)
+[MB] compile GE_BB5_DroneCooldown (final): CLEAN
+[MB] created /Game/GM/DATA/DataAsset/DA_BB5: first to 7 of 12 rounds, sides swap every 6, 5 per team, 10 players, 180 s rounds
+[MB] created /Game/GM/Gamemode/BB5/AC_BB5BombRule (parent ObjectiveRuleSetComponent)
+[MB]   var BombClass (class): ok
+[MB]   var Attacker (object): ok
+[MB]   var CurrentBomb (object): ok
+[MB]   var DropTries (int): ok
+[MB]   var TeamPawns (object[]): ok
+[MB]   var TmpLocs (struct[]): ok
+[MB]   var SpawnCentre (struct): ok
+[MB]   var AnchorLoc (struct): ok
+[MB]   var bHaveAnchor (bool): ok
+[MB]   var Base1Starts (object[]): ok
+[MB]   var Base2Starts (object[]): ok
+[MB]   var SpawnCandidates (object[]): ok
+[MB]   var ChosenStart (object): ok
+[MB]   var bStartsReady (bool): ok
+[MB]   var bStartTaken (bool): ok
+[MB]   var bLatched (bool): ok
+[MB]   var LatchTeam (int): ok
+[MB]   var LatchSide (int): ok
+[MB]   var LatchObjectiveTeam (int): ok
+[MB]   var TeamTally (int): ok
+[MB]   var StartScratch (string): ok
+[MB]   var StartApprovedRoster (string): ok
+[MB]   var StartApprovedMatch (string): ok
+[MB]   var FinalScratch (string): ok
+[MB]   var FinalBatch (string): ok
+[MB]   var FinalMeta (string): ok
+[MB]   var FinalMatch (string): ok
+[MB]   var FinalCombat (string): ok
+[MB]   var StartDeadline (int): ok
+[MB]   var FinalPending (bool): ok
+[MB]   var FinalAcknowledged (bool): ok
+[MB]   var FinalCaptured (bool): ok
+[MB]   var CompetitiveStarted (bool): ok
+[MB]   var CombatManager (object): ok
+[MB]   var GuardSeen (string): ok
+[MB]   var GuardNext (string): ok
+[MB]   var GuardDispatched (bool): ok
+[MB] compile AC_BB5BombRule (vars): CLEAN
+[MB] building AC_BB5BombRule events [EventGraph] ...
+[MB] build AC_BB5BombRule events [EventGraph]: graph EventGraph: 3 node(s), 0 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function signature AverageOf [AverageOf] ...
+[MB] build AC_BB5BombRule function signature AverageOf [AverageOf]: graph AverageOf: 2 node(s), 0 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function signature GatherStarts [GatherStarts] ...
+[MB] build AC_BB5BombRule function signature GatherStarts [GatherStarts]: graph GatherStarts: 1 node(s), 0 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function signature LatchFrom [LatchFrom] ...
+[MB] build AC_BB5BombRule function signature LatchFrom [LatchFrom]: graph LatchFrom: 1 node(s), 0 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function signature SideForPlayer [SideForPlayer] ...
+[MB] build AC_BB5BombRule function signature SideForPlayer [SideForPlayer]: graph SideForPlayer: 2 node(s), 0 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function signature PickStart [PickStart] ...
+[MB] build AC_BB5BombRule function signature PickStart [PickStart]: graph PickStart: 2 node(s), 0 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function signature ResolveStart [ResolveStart] ...
+[MB] build AC_BB5BombRule function signature ResolveStart [ResolveStart]: graph ResolveStart: 2 node(s), 0 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function signature RecountTeams [RecountTeams] ...
+[MB] build AC_BB5BombRule function signature RecountTeams [RecountTeams]: graph RecountTeams: 1 node(s), 0 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function signature StartRoster [StartRoster] ...
+[MB] build AC_BB5BombRule function signature StartRoster [StartRoster]: graph StartRoster: 2 node(s), 0 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function signature FinalRows [FinalRows] ...
+[MB] build AC_BB5BombRule function signature FinalRows [FinalRows]: graph FinalRows: 2 node(s), 0 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function signature BeginCompetitive [BeginCompetitive] ...
+[MB] build AC_BB5BombRule function signature BeginCompetitive [BeginCompetitive]: graph BeginCompetitive: 1 node(s), 0 link(s), 0 error(s)
+[MB]   override AssignPlayerToObjective: ok: K2Node_FunctionEntry[<then(exec) <Player(object) ] K2Node_CallParentFunction[>execute(exec) <then(exec) >self(object) >Player(object) <ReturnValue(object) ] K2Node_FunctionResult[>execute(exec) >ReturnValue(object) ] 
+[MB] compile AC_BB5BombRule (events): CLEAN
+[MB] building AC_BB5BombRule logic [EventGraph] ...
+[MB] build AC_BB5BombRule logic [EventGraph]: graph EventGraph: 89 node(s), 109 link(s), 0 error(s)
+[MB] building AC_BB5BombRule AssignPlayerToObjective override [AssignPlayerToObjective] ...
+[MB] build AC_BB5BombRule AssignPlayerToObjective override [AssignPlayerToObjective]: graph AssignPlayerToObjective: 18 node(s), 22 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function AverageOf [AverageOf] ...
+[MB] build AC_BB5BombRule function AverageOf [AverageOf]: graph AverageOf: 28 node(s), 39 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function GatherStarts [GatherStarts] ...
+[MB] build AC_BB5BombRule function GatherStarts [GatherStarts]: graph GatherStarts: 27 node(s), 31 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function LatchFrom [LatchFrom] ...
+[MB] build AC_BB5BombRule function LatchFrom [LatchFrom]: graph LatchFrom: 32 node(s), 42 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function SideForPlayer [SideForPlayer] ...
+[MB] build AC_BB5BombRule function SideForPlayer [SideForPlayer]: graph SideForPlayer: 29 node(s), 37 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function PickStart [PickStart] ...
+[MB] build AC_BB5BombRule function PickStart [PickStart]: graph PickStart: 44 node(s), 50 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function ResolveStart [ResolveStart] ...
+[MB] build AC_BB5BombRule function ResolveStart [ResolveStart]: graph ResolveStart: 15 node(s), 24 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function RecountTeams [RecountTeams] ...
+[MB] build AC_BB5BombRule function RecountTeams [RecountTeams]: graph RecountTeams: 20 node(s), 27 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function StartRoster [StartRoster] ...
+[MB] build AC_BB5BombRule function StartRoster [StartRoster]: graph StartRoster: 25 node(s), 28 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function FinalRows [FinalRows] ...
+[MB] build AC_BB5BombRule function FinalRows [FinalRows]: graph FinalRows: 36 node(s), 43 link(s), 0 error(s)
+[MB] building AC_BB5BombRule function BeginCompetitive [BeginCompetitive] ...
+[MB] build AC_BB5BombRule function BeginCompetitive [BeginCompetitive]: graph BeginCompetitive: 10 node(s), 12 link(s), 0 error(s)
+[MB] compile AC_BB5BombRule (logic): CLEAN
+[MB] created /Game/GM/Gamemode/BB5/BP_BB5TeamRequest (parent Actor)
+[MB]   var Subject (object): ok
+[MB]   var HostId (string): ok
+[MB]   var SubjectId (string): ok
+[MB]   var Rule (object): ok
+[MB]   var Deadline (int): ok
+[MB]   var Phase (int): ok
+[MB] compile BP_BB5TeamRequest (vars): CLEAN
+[MB] building BP_BB5TeamRequest events [EventGraph] ...
+[MB] build BP_BB5TeamRequest events [EventGraph]: graph EventGraph: 5 node(s), 0 link(s), 0 error(s)
+[MB] compile BP_BB5TeamRequest (events): CLEAN
+[MB] building BP_BB5TeamRequest logic [EventGraph] ...
+[MB] build BP_BB5TeamRequest logic [EventGraph]: graph EventGraph: 130 node(s), 175 link(s), 0 error(s)
+[MB]     one_delegate: CreateEvent bound to OnOne
+[MB]     two_delegate: CreateEvent bound to OnTwo
+[MB]     stranger_delegate: CreateEvent bound to OnStranger
+[MB] compile BP_BB5TeamRequest (logic): CLEAN
+[MB] created /Game/GM/Gamemode/BB5/BP_BB5StartRequest (parent Actor)
+[MB]   var Rule (object): ok
+[MB]   var MatchKey (string): ok
+[MB]   var Snapshot (string): ok
+[MB]   var Deadline (int): ok
+[MB]   var Phase (int): ok
+[MB] compile BP_BB5StartRequest (vars): CLEAN
+[MB] building BP_BB5StartRequest events [EventGraph] ...
+[MB] build BP_BB5StartRequest events [EventGraph]: graph EventGraph: 2 node(s), 0 link(s), 0 error(s)
+[MB] compile BP_BB5StartRequest (events): CLEAN
+[MB] building BP_BB5StartRequest logic [EventGraph] ...
+[MB] build BP_BB5StartRequest logic [EventGraph]: graph EventGraph: 46 node(s), 60 link(s), 0 error(s)
+[MB]     delegate: CreateEvent bound to OnStartReply
+[MB] compile BP_BB5StartRequest (logic): CLEAN
+[MB] delete existing /Game/GM/Gamemode/BB5/BP_CHCombatManager
+[MB] created /Game/GM/Gamemode/BB5/BP_CHCombatManager (parent Actor)
+[MB] delete existing /Game/GM/Gamemode/BB5/BP_CHCombatObserver
+[MB] created /Game/GM/Gamemode/BB5/BP_CHCombatObserver (parent Actor)
+[MB] compile BP_CHCombatManager (shell): CLEAN
+[MB] compile BP_CHCombatObserver (shell): CLEAN
+[MB] delete existing /Game/GM/Gamemode/BB5/BP_CHCombatRequest
+[MB] created /Game/GM/Gamemode/BB5/BP_CHCombatRequest (parent Actor)
+[MB]   var Manager (object): ok
+[MB]   var Attempt (int): ok
+[MB] building combat request events [EventGraph] ...
+[MB] build combat request events [EventGraph]: graph EventGraph: 2 node(s), 0 link(s), 0 error(s)
+[MB] compile BP_CHCombatRequest (events): CLEAN
+[MB]   var CombatSeq (int): ok
+[MB]   var CombatEpoch (string): ok
+[MB]   var CombatQueue (string[]): ok
+[MB]   var CombatGaps (int): ok
+[MB]   var CombatBound (int): ok
+[MB]   var CombatFound (bool): ok
+[MB]   var CombatResolvedState (object): ok
+[MB]   var CombatActive (bool): ok
+[MB]   var CombatClosed (bool): ok
+[MB]   var CombatInFlight (bool): ok
+[MB]   var CombatCausers (object[]): ok
+[MB]   var CombatBoundary (bool): ok
+[MB]   var CombatBatchRows (string[]): ok
+[MB]   var CombatBatch (string): ok
+[MB]   var CombatBatchCount (int): ok
+[MB]   var CombatAttempt (int): ok
+[MB]   var CombatSentAt (double): ok
+[MB] compile BP_CHCombatManager (vars): CLEAN
+[MB]   var CombatPawn (object): ok
+[MB]   var CombatGM (object): ok
+[MB]   var CombatSurvivor (object): ok
+[MB]   var CombatAction (object): ok
+[MB]   var CombatASC (object): ok
+[MB]   var CombatReady (bool): ok
+[MB] compile BP_CHCombatObserver (vars): CLEAN
+[MB] building combat manager events [EventGraph] ...
+[MB] build combat manager events [EventGraph]: graph EventGraph: 8 node(s), 0 link(s), 0 error(s)
+[MB] building combat signature ResolveCombatActor [ResolveCombatActor] ...
+[MB] build combat signature ResolveCombatActor [ResolveCombatActor]: graph ResolveCombatActor: 2 node(s), 0 link(s), 0 error(s)
+[MB] building combat signature ResolveCombatCauser [ResolveCombatCauser] ...
+[MB] build combat signature ResolveCombatCauser [ResolveCombatCauser]: graph ResolveCombatCauser: 2 node(s), 0 link(s), 0 error(s)
+[MB] compile BP_CHCombatManager (events): CLEAN
+[MB] building combat observer events [EventGraph] ...
+[MB] build combat observer events [EventGraph]: graph EventGraph: 3 node(s), 0 link(s), 0 error(s)
+[MB] compile BP_CHCombatObserver (events): CLEAN
+[MB] building combat observer logic [EventGraph] ...
+[MB] build combat observer logic [EventGraph]: graph EventGraph: 204 node(s), 294 link(s), 0 error(s)
+[MB]     health_event: CreateEvent bound to CombatHealth
+[MB] compile BP_CHCombatObserver (logic): CLEAN
+[MB] building combat function ResolveCombatActor [ResolveCombatActor] ...
+[MB] build combat function ResolveCombatActor [ResolveCombatActor]: graph ResolveCombatActor: 26 node(s), 41 link(s), 0 error(s)
+[MB] building combat function ResolveCombatCauser [ResolveCombatCauser] ...
+[MB] build combat function ResolveCombatCauser [ResolveCombatCauser]: graph ResolveCombatCauser: 24 node(s), 30 link(s), 0 error(s)
+[MB] building combat manager logic [EventGraph] ...
+[MB] build combat manager logic [EventGraph]: graph EventGraph: 138 node(s), 173 link(s), 0 error(s)
+[MB]     round_event: CreateEvent bound to CombatReconcile
+[MB]     live_event: CreateEvent bound to CombatRoundStarted
+[MB] building acknowledged batch transport [EventGraph] ...
+[MB] build acknowledged batch transport [EventGraph]: graph EventGraph: 52 node(s), 68 link(s), 0 error(s)
+[MB] building authenticated combat request [EventGraph] ...
+[MB] build authenticated combat request [EventGraph]: graph EventGraph: 15 node(s), 18 link(s), 0 error(s)
+[MB]     delegate: CreateEvent bound to OnResponse
+[MB] compile BP_CHCombatRequest (logic): CLEAN
+[MB] compile BP_CHCombatManager (logic): CLEAN
+[MB] layout of BP_CHCombatManager (BP_CHCombatManager_C):
+#0 StructProperty UberGraphFrame [BP_CHCombatManager_C] flags=202200
+#1 ObjectProperty DefaultSceneRoot [BP_CHCombatManager_C] flags=8001400080204
+#2 IntProperty CombatSeq [BP_CHCombatManager_C] flags=8001040010205
+#3 StrProperty CombatEpoch [BP_CHCombatManager_C] flags=8000000010205
+#4 ArrayProperty CombatQueue [BP_CHCombatManager_C] flags=10005
+#5 IntProperty CombatGaps [BP_CHCombatManager_C] flags=8001040010205
+#6 IntProperty CombatBound [BP_CHCombatManager_C] flags=8001040010205
+#7 BoolProperty CombatFound [BP_CHCombatManager_C] flags=8001040010205
+#8 ObjectProperty CombatResolvedState [BP_CHCombatManager_C] flags=8001000010a05
+#9 BoolProperty CombatActive [BP_CHCombatManager_C] flags=8001040010205
+#10 BoolProperty CombatClosed [BP_CHCombatManager_C] flags=8001040010205
+#11 BoolProperty CombatInFlight [BP_CHCombatManager_C] flags=8001040010205
+#12 ArrayProperty CombatCausers [BP_CHCombatManager_C] flags=10805
+#13 BoolProperty CombatBoundary [BP_CHCombatManager_C] flags=8001040010205
+#14 ArrayProperty CombatBatchRows [BP_CHCombatManager_C] flags=10005
+#15 StrProperty CombatBatch [BP_CHCombatManager_C] flags=8000000010205
+#16 IntProperty CombatBatchCount [BP_CHCombatManager_C] flags=8001040010205
+#17 IntProperty CombatAttempt [BP_CHCombatManager_C] flags=8001040010205
+#18 DoubleProperty CombatSentAt [BP_CHCombatManager_C] flags=8001040010205
+#19 StructProperty PrimaryActorTick [Actor] flags=10000000010001
+#20 BoolProperty bNetTemporary [Actor] flags=18001000000000
+#21 BoolProperty bOnlyRelevantToOwner [Actor] flags=18001000010015
+#22 BoolProperty bAlwaysRelevant [Actor] flags=18001000010005
+#23 BoolProperty bReplicateMovement [Actor] flags=48001100010021
+#24 BoolProperty bCallPreReplication [Actor] flags=48041000010001
+#25 BoolProperty bCallPreReplicationForReplay [Actor] flags=48041000010001
+#26 BoolProperty bHidden [Actor] flags=48001200000035
+#27 BoolProperty bTearOff [Actor] flags=48001000000020
+#28 BoolProperty bForceNetAddressable [Actor] flags=48001000000000
+#29 EnumProperty LevelInstanceType [Actor] flags=48001c40002200
+#30 EnumProperty LevelInstanceFlags [Actor] flags=48001c40002200
+#31 BoolProperty bIsMainWorldOnly [Actor] flags=18041800000001
+#32 BoolProperty bExchangedRoles [Actor] flags=18001000002000
+#33 BoolProperty bNetLoadOnClient [Actor] flags=18001000000001
+#34 BoolProperty bNetUseOwnerRelevancy [Actor] flags=18001000010005
+#35 BoolProperty bRelevantForNetworkReplays [Actor] flags=18001000000000
+#36 BoolProperty bRelevantForLevelBounds [Actor] flags=18041000000001
+#37 BoolProperty bReplayRewindable [Actor] flags=18041000010001
+#38 BoolProperty bAllowTickBeforeBeginPlay [Actor] flags=18001000010001
+#39 BoolProperty bAutoDestroyWhenFinished [Actor] flags=48001000000004
+#40 BoolProperty bCanBeDamaged [Actor] flags=48001001000025
+#41 BoolProperty bBlockInput [Actor] flags=18001000010001
+#42 BoolProperty bCollideWhenPlacing [Actor] flags=18001000000000
+#43 BoolProperty bFindCameraComponentWhenViewTarget [Actor] flags=18041000000005
+#44 BoolProperty bGenerateOverlapEventsDuringLevelStreaming [Actor] flags=18001000000005
+#45 BoolProperty bIgnoresOriginShifting [Actor] flags=18041000000001
+#46 BoolProperty bEnableAutoLODGeneration [Actor] flags=18001000000005
+#47 BoolProperty bIsEditorOnlyActor [Actor] flags=18041000000001
+#48 BoolProperty bReplicates [Actor] flags=28081000010015
+#49 BoolProperty bCanBeInCluster [Actor] flags=280c1000000001
+#50 BoolProperty bAllowReceiveTickEventOnDedicatedServer [Actor] flags=28081000000000
+#51 BoolProperty bReplicateUsingRegisteredSubObjectList [Actor] flags=280c1000014015
+#52 BoolProperty bActorEnableCollision [Actor] flags=48001000000000
+#53 BoolProperty bActorIsBeingDestroyed [Actor] flags=48001000202000
+#54 BoolProperty bAsyncPhysicsTickEnabled [Actor] flags=28081000000001
+#55 EnumProperty UpdateOverlapsMethodDuringLevelStreaming [Actor] flags=28081040000201
+#56 EnumProperty DefaultUpdateOverlapsMethodDuringLevelStreaming [Actor] flags=48001040024201
+#57 ByteProperty RemoteRole [Actor] flags=48001040022a21
+#58 FloatProperty InitialLifeSpan [Actor] flags=18001040000215
+#59 FloatProperty CustomTimeDilation [Actor] flags=18041040000204
+#60 IntProperty RayTracingGroupId [Actor] flags=48001040000200
+#61 EnumProperty GridPlacement [Actor] flags=28081860000200
+#62 NameProperty RuntimeGrid [Actor] flags=280c1840000201
+#63 StructProperty AttachmentReplication [Actor] flags=20089100002020
+#64 StructProperty ReplicatedMovement [Actor] flags=40041100010021
+#65 ObjectProperty Owner [Actor] flags=11c001100000220
+#66 NameProperty NetDriverName [Actor] flags=28081040000200
+#67 ByteProperty Role [Actor] flags=48001040020a21
+#68 ByteProperty NetDormancy [Actor] flags=18001040010215
+#69 EnumProperty SpawnCollisionHandlingMethod [Actor] flags=18001040000205
+#70 ByteProperty AutoReceiveInput [Actor] flags=18001040000201
+#71 IntProperty InputPriority [Actor] flags=18001040000201
+#72 ObjectProperty InputComponent [Actor] flags=11c001000280208
+#73 IntProperty NetTag [Actor] flags=18001040002200
+#74 FloatProperty NetCullDistanceSquared [Actor] flags=18001040010205
+#75 FloatProperty NetUpdateFrequency [Actor] flags=18001040010205
+#76 FloatProperty MinNetUpdateFrequency [Actor] flags=18001040010205
+#77 FloatProperty NetPriority [Actor] flags=18001040010205
+#78 EnumProperty PhysicsReplicationMode [Actor] flags=48001040010201
+#79 ObjectProperty Instigator [Actor] flags=14d001100000224
+#80 ArrayProperty Children [Actor] flags=114000000002200
+#81 ObjectProperty RootComponent [Actor] flags=12c08100008021c
+#82 StructProperty PivotOffset [Actor] flags=280c1840000215
+#83 ObjectProperty HLODLayer [Actor] flags=14c001800000201
+#84 ArrayProperty Layers [Actor] flags=10040000000201
+#85 WeakObjectProperty ParentComponentActor [Actor] flags=4c001860000200
+#86 WeakObjectProperty ParentComponent [Actor] flags=4c001040080208
+#87 StructProperty ActorGuid [Actor] flags=28cc1c40000214
+#88 StructProperty ActorInstanceGuid [Actor] flags=28cc1c40002214
+#89 StructProperty ContentBundleGuid [Actor] flags=284c1c40000214
+#90 ArrayProperty DataLayers [Actor] flags=200c0800020201
+#91 ArrayProperty DataLayerAssets [Actor] flags=240c0800000201
+#92 ObjectProperty ExternalDataLayerAsset [Actor] flags=12c4c1800020201
+#93 ObjectProperty GroupActor [Actor] flags=11c001800002200
+#94 FloatProperty SpriteScale [Actor] flags=18001840000205
+#95 UInt64Property HiddenEditorViews [Actor] flags=18001840002200
+#96 StrProperty ActorLabel [Actor] flags=48000800000200
+#97 NameProperty FolderPath [Actor] flags=48001840000200
+#98 StructProperty FolderGuid [Actor] flags=48401840000200
+#99 BoolProperty bHiddenEd [Actor] flags=18001800000000
+#100 BoolProperty bIsEditorPreviewActor [Actor] flags=18001800002000
+#101 BoolProperty bHiddenEdLayer [Actor] flags=18001800002000
+#102 BoolProperty bHiddenEdLevel [Actor] flags=18001800002000
+#103 BoolProperty bLockLocation [Actor] flags=28081800000000
+#104 BoolProperty bActorLabelEditable [Actor] flags=28081800000000
+#105 BoolProperty bEditable [Actor] flags=28081800000000
+#106 BoolProperty bListedInSceneOutliner [Actor] flags=28081800000000
+#107 BoolProperty bOptimizeBPComponentData [Actor] flags=280c1800010001
+#108 BoolProperty bCanPlayFromHere [Actor] flags=28081800000000
+#109 BoolProperty bIsSpatiallyLoaded [Actor] flags=280c1800000001
+#110 BoolProperty bHiddenEdTemporary [Actor] flags=48001800002000
+#111 BoolProperty bForceExternalActorLevelReferenceForPIE [Actor] flags=48001800002000
+#112 ArrayProperty Tags [Actor] flags=10040000000205
+#113 MulticastSparseDelegateProperty OnTakeAnyDamage [Actor] flags=10001010080000
+#114 MulticastSparseDelegateProperty OnTakePointDamage [Actor] flags=10001010080000
+#115 MulticastSparseDelegateProperty OnTakeRadialDamage [Actor] flags=10001010080000
+#116 MulticastSparseDelegateProperty OnActorBeginOverlap [Actor] flags=10001010080000
+#117 MulticastSparseDelegateProperty OnActorEndOverlap [Actor] flags=10001010080000
+#118 MulticastSparseDelegateProperty OnBeginCursorOver [Actor] flags=10001010080000
+#119 MulticastSparseDelegateProperty OnEndCursorOver [Actor] flags=10001010080000
+#120 MulticastSparseDelegateProperty OnClicked [Actor] flags=10001010080000
+#121 MulticastSparseDelegateProperty OnReleased [Actor] flags=10001010080000
+#122 MulticastSparseDelegateProperty OnInputTouchBegin [Actor] flags=10001010080000
+#123 MulticastSparseDelegateProperty OnInputTouchEnd [Actor] flags=10001010080000
+#124 MulticastSparseDelegateProperty OnInputTouchEnter [Actor] flags=10001010080000
+#125 MulticastSparseDelegateProperty OnInputTouchLeave [Actor] flags=10001010080000
+#126 MulticastSparseDelegateProperty OnActorHit [Actor] flags=10001010080000
+#127 MulticastSparseDelegateProperty OnDestroyed [Actor] flags=10001010080000
+#128 MulticastSparseDelegateProperty OnEndPlay [Actor] flags=10001010080000
+#129 ArrayProperty InstanceComponents [Actor] flags=144008000000208
+#130 ArrayProperty BlueprintCreatedComponents [Actor] flags=114408400000208
+
+[MB] layout of BP_CHCombatObserver (BP_CHCombatObserver_C):
+#0 StructProperty UberGraphFrame [BP_CHCombatObserver_C] flags=202200
+#1 ObjectProperty DefaultSceneRoot [BP_CHCombatObserver_C] flags=8001400080204
+#2 ObjectProperty CombatPawn [BP_CHCombatObserver_C] flags=8001000010a05
+#3 ObjectProperty CombatGM [BP_CHCombatObserver_C] flags=8001000010a05
+#4 ObjectProperty CombatSurvivor [BP_CHCombatObserver_C] flags=8001000090205
+#5 ObjectProperty CombatAction [BP_CHCombatObserver_C] flags=8001000010205
+#6 ObjectProperty CombatASC [BP_CHCombatObserver_C] flags=8001000090205
+#7 BoolProperty CombatReady [BP_CHCombatObserver_C] flags=8001040010205
+#8 StructProperty PrimaryActorTick [Actor] flags=10000000010001
+#9 BoolProperty bNetTemporary [Actor] flags=18001000000000
+#10 BoolProperty bOnlyRelevantToOwner [Actor] flags=18001000010015
+#11 BoolProperty bAlwaysRelevant [Actor] flags=18001000010005
+#12 BoolProperty bReplicateMovement [Actor] flags=48001100010021
+#13 BoolProperty bCallPreReplication [Actor] flags=48041000010001
+#14 BoolProperty bCallPreReplicationForReplay [Actor] flags=48041000010001
+#15 BoolProperty bHidden [Actor] flags=48001200000035
+#16 BoolProperty bTearOff [Actor] flags=48001000000020
+#17 BoolProperty bForceNetAddressable [Actor] flags=48001000000000
+#18 EnumProperty LevelInstanceType [Actor] flags=48001c40002200
+#19 EnumProperty LevelInstanceFlags [Actor] flags=48001c40002200
+#20 BoolProperty bIsMainWorldOnly [Actor] flags=18041800000001
+#21 BoolProperty bExchangedRoles [Actor] flags=18001000002000
+#22 BoolProperty bNetLoadOnClient [Actor] flags=18001000000001
+#23 BoolProperty bNetUseOwnerRelevancy [Actor] flags=18001000010005
+#24 BoolProperty bRelevantForNetworkReplays [Actor] flags=18001000000000
+#25 BoolProperty bRelevantForLevelBounds [Actor] flags=18041000000001
+#26 BoolProperty bReplayRewindable [Actor] flags=18041000010001
+#27 BoolProperty bAllowTickBeforeBeginPlay [Actor] flags=18001000010001
+#28 BoolProperty bAutoDestroyWhenFinished [Actor] flags=48001000000004
+#29 BoolProperty bCanBeDamaged [Actor] flags=48001001000025
+#30 BoolProperty bBlockInput [Actor] flags=18001000010001
+#31 BoolProperty bCollideWhenPlacing [Actor] flags=18001000000000
+#32 BoolProperty bFindCameraComponentWhenViewTarget [Actor] flags=18041000000005
+#33 BoolProperty bGenerateOverlapEventsDuringLevelStreaming [Actor] flags=18001000000005
+#34 BoolProperty bIgnoresOriginShifting [Actor] flags=18041000000001
+#35 BoolProperty bEnableAutoLODGeneration [Actor] flags=18001000000005
+#36 BoolProperty bIsEditorOnlyActor [Actor] flags=18041000000001
+#37 BoolProperty bReplicates [Actor] flags=28081000010015
+#38 BoolProperty bCanBeInCluster [Actor] flags=280c1000000001
+#39 BoolProperty bAllowReceiveTickEventOnDedicatedServer [Actor] flags=28081000000000
+#40 BoolProperty bReplicateUsingRegisteredSubObjectList [Actor] flags=280c1000014015
+#41 BoolProperty bActorEnableCollision [Actor] flags=48001000000000
+#42 BoolProperty bActorIsBeingDestroyed [Actor] flags=48001000202000
+#43 BoolProperty bAsyncPhysicsTickEnabled [Actor] flags=28081000000001
+#44 EnumProperty UpdateOverlapsMethodDuringLevelStreaming [Actor] flags=28081040000201
+#45 EnumProperty DefaultUpdateOverlapsMethodDuringLevelStreaming [Actor] flags=48001040024201
+#46 ByteProperty RemoteRole [Actor] flags=48001040022a21
+#47 FloatProperty InitialLifeSpan [Actor] flags=18001040000215
+#48 FloatProperty CustomTimeDilation [Actor] flags=18041040000204
+#49 IntProperty RayTracingGroupId [Actor] flags=48001040000200
+#50 EnumProperty GridPlacement [Actor] flags=28081860000200
+#51 NameProperty RuntimeGrid [Actor] flags=280c1840000201
+#52 StructProperty AttachmentReplication [Actor] flags=20089100002020
+#53 StructProperty ReplicatedMovement [Actor] flags=40041100010021
+#54 ObjectProperty Owner [Actor] flags=11c001100000220
+#55 NameProperty NetDriverName [Actor] flags=28081040000200
+#56 ByteProperty Role [Actor] flags=48001040020a21
+#57 ByteProperty NetDormancy [Actor] flags=18001040010215
+#58 EnumProperty SpawnCollisionHandlingMethod [Actor] flags=18001040000205
+#59 ByteProperty AutoReceiveInput [Actor] flags=18001040000201
+#60 IntProperty InputPriority [Actor] flags=18001040000201
+#61 ObjectProperty InputComponent [Actor] flags=11c001000280208
+#62 IntProperty NetTag [Actor] flags=18001040002200
+#63 FloatProperty NetCullDistanceSquared [Actor] flags=18001040010205
+#64 FloatProperty NetUpdateFrequency [Actor] flags=18001040010205
+#65 FloatProperty MinNetUpdateFrequency [Actor] flags=18001040010205
+#66 FloatProperty NetPriority [Actor] flags=18001040010205
+#67 EnumProperty PhysicsReplicationMode [Actor] flags=48001040010201
+#68 ObjectProperty Instigator [Actor] flags=14d001100000224
+#69 ArrayProperty Children [Actor] flags=114000000002200
+#70 ObjectProperty RootComponent [Actor] flags=12c08100008021c
+#71 StructProperty PivotOffset [Actor] flags=280c1840000215
+#72 ObjectProperty HLODLayer [Actor] flags=14c001800000201
+#73 ArrayProperty Layers [Actor] flags=10040000000201
+#74 WeakObjectProperty ParentComponentActor [Actor] flags=4c001860000200
+#75 WeakObjectProperty ParentComponent [Actor] flags=4c001040080208
+#76 StructProperty ActorGuid [Actor] flags=28cc1c40000214
+#77 StructProperty ActorInstanceGuid [Actor] flags=28cc1c40002214
+#78 StructProperty ContentBundleGuid [Actor] flags=284c1c40000214
+#79 ArrayProperty DataLayers [Actor] flags=200c0800020201
+#80 ArrayProperty DataLayerAssets [Actor] flags=240c0800000201
+#81 ObjectProperty ExternalDataLayerAsset [Actor] flags=12c4c1800020201
+#82 ObjectProperty GroupActor [Actor] flags=11c001800002200
+#83 FloatProperty SpriteScale [Actor] flags=18001840000205
+#84 UInt64Property HiddenEditorViews [Actor] flags=18001840002200
+#85 StrProperty ActorLabel [Actor] flags=48000800000200
+#86 NameProperty FolderPath [Actor] flags=48001840000200
+#87 StructProperty FolderGuid [Actor] flags=48401840000200
+#88 BoolProperty bHiddenEd [Actor] flags=18001800000000
+#89 BoolProperty bIsEditorPreviewActor [Actor] flags=18001800002000
+#90 BoolProperty bHiddenEdLayer [Actor] flags=18001800002000
+#91 BoolProperty bHiddenEdLevel [Actor] flags=18001800002000
+#92 BoolProperty bLockLocation [Actor] flags=28081800000000
+#93 BoolProperty bActorLabelEditable [Actor] flags=28081800000000
+#94 BoolProperty bEditable [Actor] flags=28081800000000
+#95 BoolProperty bListedInSceneOutliner [Actor] flags=28081800000000
+#96 BoolProperty bOptimizeBPComponentData [Actor] flags=280c1800010001
+#97 BoolProperty bCanPlayFromHere [Actor] flags=28081800000000
+#98 BoolProperty bIsSpatiallyLoaded [Actor] flags=280c1800000001
+#99 BoolProperty bHiddenEdTemporary [Actor] flags=48001800002000
+#100 BoolProperty bForceExternalActorLevelReferenceForPIE [Actor] flags=48001800002000
+#101 ArrayProperty Tags [Actor] flags=10040000000205
+#102 MulticastSparseDelegateProperty OnTakeAnyDamage [Actor] flags=10001010080000
+#103 MulticastSparseDelegateProperty OnTakePointDamage [Actor] flags=10001010080000
+#104 MulticastSparseDelegateProperty OnTakeRadialDamage [Actor] flags=10001010080000
+#105 MulticastSparseDelegateProperty OnActorBeginOverlap [Actor] flags=10001010080000
+#106 MulticastSparseDelegateProperty OnActorEndOverlap [Actor] flags=10001010080000
+#107 MulticastSparseDelegateProperty OnBeginCursorOver [Actor] flags=10001010080000
+#108 MulticastSparseDelegateProperty OnEndCursorOver [Actor] flags=10001010080000
+#109 MulticastSparseDelegateProperty OnClicked [Actor] flags=10001010080000
+#110 MulticastSparseDelegateProperty OnReleased [Actor] flags=10001010080000
+#111 MulticastSparseDelegateProperty OnInputTouchBegin [Actor] flags=10001010080000
+#112 MulticastSparseDelegateProperty OnInputTouchEnd [Actor] flags=10001010080000
+#113 MulticastSparseDelegateProperty OnInputTouchEnter [Actor] flags=10001010080000
+#114 MulticastSparseDelegateProperty OnInputTouchLeave [Actor] flags=10001010080000
+#115 MulticastSparseDelegateProperty OnActorHit [Actor] flags=10001010080000
+#116 MulticastSparseDelegateProperty OnDestroyed [Actor] flags=10001010080000
+#117 MulticastSparseDelegateProperty OnEndPlay [Actor] flags=10001010080000
+#118 ArrayProperty InstanceComponents [Actor] flags=144008000000208
+#119 ArrayProperty BlueprintCreatedComponents [Actor] flags=114408400000208
+
+[MB] layout of BP_CHCombatRequest (BP_CHCombatRequest_C):
+#0 StructProperty UberGraphFrame [BP_CHCombatRequest_C] flags=202200
+#1 ObjectProperty DefaultSceneRoot [BP_CHCombatRequest_C] flags=8001400080204
+#2 ObjectProperty Manager [BP_CHCombatRequest_C] flags=8001000010a05
+#3 IntProperty Attempt [BP_CHCombatRequest_C] flags=8001040010205
+#4 StructProperty PrimaryActorTick [Actor] flags=10000000010001
+#5 BoolProperty bNetTemporary [Actor] flags=18001000000000
+#6 BoolProperty bOnlyRelevantToOwner [Actor] flags=18001000010015
+#7 BoolProperty bAlwaysRelevant [Actor] flags=18001000010005
+#8 BoolProperty bReplicateMovement [Actor] flags=48001100010021
+#9 BoolProperty bCallPreReplication [Actor] flags=48041000010001
+#10 BoolProperty bCallPreReplicationForReplay [Actor] flags=48041000010001
+#11 BoolProperty bHidden [Actor] flags=48001200000035
+#12 BoolProperty bTearOff [Actor] flags=48001000000020
+#13 BoolProperty bForceNetAddressable [Actor] flags=48001000000000
+#14 EnumProperty LevelInstanceType [Actor] flags=48001c40002200
+#15 EnumProperty LevelInstanceFlags [Actor] flags=48001c40002200
+#16 BoolProperty bIsMainWorldOnly [Actor] flags=18041800000001
+#17 BoolProperty bExchangedRoles [Actor] flags=18001000002000
+#18 BoolProperty bNetLoadOnClient [Actor] flags=18001000000001
+#19 BoolProperty bNetUseOwnerRelevancy [Actor] flags=18001000010005
+#20 BoolProperty bRelevantForNetworkReplays [Actor] flags=18001000000000
+#21 BoolProperty bRelevantForLevelBounds [Actor] flags=18041000000001
+#22 BoolProperty bReplayRewindable [Actor] flags=18041000010001
+#23 BoolProperty bAllowTickBeforeBeginPlay [Actor] flags=18001000010001
+#24 BoolProperty bAutoDestroyWhenFinished [Actor] flags=48001000000004
+#25 BoolProperty bCanBeDamaged [Actor] flags=48001001000025
+#26 BoolProperty bBlockInput [Actor] flags=18001000010001
+#27 BoolProperty bCollideWhenPlacing [Actor] flags=18001000000000
+#28 BoolProperty bFindCameraComponentWhenViewTarget [Actor] flags=18041000000005
+#29 BoolProperty bGenerateOverlapEventsDuringLevelStreaming [Actor] flags=18001000000005
+#30 BoolProperty bIgnoresOriginShifting [Actor] flags=18041000000001
+#31 BoolProperty bEnableAutoLODGeneration [Actor] flags=18001000000005
+#32 BoolProperty bIsEditorOnlyActor [Actor] flags=18041000000001
+#33 BoolProperty bReplicates [Actor] flags=28081000010015
+#34 BoolProperty bCanBeInCluster [Actor] flags=280c1000000001
+#35 BoolProperty bAllowReceiveTickEventOnDedicatedServer [Actor] flags=28081000000000
+#36 BoolProperty bReplicateUsingRegisteredSubObjectList [Actor] flags=280c1000014015
+#37 BoolProperty bActorEnableCollision [Actor] flags=48001000000000
+#38 BoolProperty bActorIsBeingDestroyed [Actor] flags=48001000202000
+#39 BoolProperty bAsyncPhysicsTickEnabled [Actor] flags=28081000000001
+#40 EnumProperty UpdateOverlapsMethodDuringLevelStreaming [Actor] flags=28081040000201
+#41 EnumProperty DefaultUpdateOverlapsMethodDuringLevelStreaming [Actor] flags=48001040024201
+#42 ByteProperty RemoteRole [Actor] flags=48001040022a21
+#43 FloatProperty InitialLifeSpan [Actor] flags=18001040000215
+#44 FloatProperty CustomTimeDilation [Actor] flags=18041040000204
+#45 IntProperty RayTracingGroupId [Actor] flags=48001040000200
+#46 EnumProperty GridPlacement [Actor] flags=28081860000200
+#47 NameProperty RuntimeGrid [Actor] flags=280c1840000201
+#48 StructProperty AttachmentReplication [Actor] flags=20089100002020
+#49 StructProperty ReplicatedMovement [Actor] flags=40041100010021
+#50 ObjectProperty Owner [Actor] flags=11c001100000220
+#51 NameProperty NetDriverName [Actor] flags=28081040000200
+#52 ByteProperty Role [Actor] flags=48001040020a21
+#53 ByteProperty NetDormancy [Actor] flags=18001040010215
+#54 EnumProperty SpawnCollisionHandlingMethod [Actor] flags=18001040000205
+#55 ByteProperty AutoReceiveInput [Actor] flags=18001040000201
+#56 IntProperty InputPriority [Actor] flags=18001040000201
+#57 ObjectProperty InputComponent [Actor] flags=11c001000280208
+#58 IntProperty NetTag [Actor] flags=18001040002200
+#59 FloatProperty NetCullDistanceSquared [Actor] flags=18001040010205
+#60 FloatProperty NetUpdateFrequency [Actor] flags=18001040010205
+#61 FloatProperty MinNetUpdateFrequency [Actor] flags=18001040010205
+#62 FloatProperty NetPriority [Actor] flags=18001040010205
+#63 EnumProperty PhysicsReplicationMode [Actor] flags=48001040010201
+#64 ObjectProperty Instigator [Actor] flags=14d001100000224
+#65 ArrayProperty Children [Actor] flags=114000000002200
+#66 ObjectProperty RootComponent [Actor] flags=12c08100008021c
+#67 StructProperty PivotOffset [Actor] flags=280c1840000215
+#68 ObjectProperty HLODLayer [Actor] flags=14c001800000201
+#69 ArrayProperty Layers [Actor] flags=10040000000201
+#70 WeakObjectProperty ParentComponentActor [Actor] flags=4c001860000200
+#71 WeakObjectProperty ParentComponent [Actor] flags=4c001040080208
+#72 StructProperty ActorGuid [Actor] flags=28cc1c40000214
+#73 StructProperty ActorInstanceGuid [Actor] flags=28cc1c40002214
+#74 StructProperty ContentBundleGuid [Actor] flags=284c1c40000214
+#75 ArrayProperty DataLayers [Actor] flags=200c0800020201
+#76 ArrayProperty DataLayerAssets [Actor] flags=240c0800000201
+#77 ObjectProperty ExternalDataLayerAsset [Actor] flags=12c4c1800020201
+#78 ObjectProperty GroupActor [Actor] flags=11c001800002200
+#79 FloatProperty SpriteScale [Actor] flags=18001840000205
+#80 UInt64Property HiddenEditorViews [Actor] flags=18001840002200
+#81 StrProperty ActorLabel [Actor] flags=48000800000200
+#82 NameProperty FolderPath [Actor] flags=48001840000200
+#83 StructProperty FolderGuid [Actor] flags=48401840000200
+#84 BoolProperty bHiddenEd [Actor] flags=18001800000000
+#85 BoolProperty bIsEditorPreviewActor [Actor] flags=18001800002000
+#86 BoolProperty bHiddenEdLayer [Actor] flags=18001800002000
+#87 BoolProperty bHiddenEdLevel [Actor] flags=18001800002000
+#88 BoolProperty bLockLocation [Actor] flags=28081800000000
+#89 BoolProperty bActorLabelEditable [Actor] flags=28081800000000
+#90 BoolProperty bEditable [Actor] flags=28081800000000
+#91 BoolProperty bListedInSceneOutliner [Actor] flags=28081800000000
+#92 BoolProperty bOptimizeBPComponentData [Actor] flags=280c1800010001
+#93 BoolProperty bCanPlayFromHere [Actor] flags=28081800000000
+#94 BoolProperty bIsSpatiallyLoaded [Actor] flags=280c1800000001
+#95 BoolProperty bHiddenEdTemporary [Actor] flags=48001800002000
+#96 BoolProperty bForceExternalActorLevelReferenceForPIE [Actor] flags=48001800002000
+#97 ArrayProperty Tags [Actor] flags=10040000000205
+#98 MulticastSparseDelegateProperty OnTakeAnyDamage [Actor] flags=10001010080000
+#99 MulticastSparseDelegateProperty OnTakePointDamage [Actor] flags=10001010080000
+#100 MulticastSparseDelegateProperty OnTakeRadialDamage [Actor] flags=10001010080000
+#101 MulticastSparseDelegateProperty OnActorBeginOverlap [Actor] flags=10001010080000
+#102 MulticastSparseDelegateProperty OnActorEndOverlap [Actor] flags=10001010080000
+#103 MulticastSparseDelegateProperty OnBeginCursorOver [Actor] flags=10001010080000
+#104 MulticastSparseDelegateProperty OnEndCursorOver [Actor] flags=10001010080000
+#105 MulticastSparseDelegateProperty OnClicked [Actor] flags=10001010080000
+#106 MulticastSparseDelegateProperty OnReleased [Actor] flags=10001010080000
+#107 MulticastSparseDelegateProperty OnInputTouchBegin [Actor] flags=10001010080000
+#108 MulticastSparseDelegateProperty OnInputTouchEnd [Actor] flags=10001010080000
+#109 MulticastSparseDelegateProperty OnInputTouchEnter [Actor] flags=10001010080000
+#110 MulticastSparseDelegateProperty OnInputTouchLeave [Actor] flags=10001010080000
+#111 MulticastSparseDelegateProperty OnActorHit [Actor] flags=10001010080000
+#112 MulticastSparseDelegateProperty OnDestroyed [Actor] flags=10001010080000
+#113 MulticastSparseDelegateProperty OnEndPlay [Actor] flags=10001010080000
+#114 ArrayProperty InstanceComponents [Actor] flags=144008000000208
+#115 ArrayProperty BlueprintCreatedComponents [Actor] flags=114408400000208
+
+[MB] created /Game/GM/Gamemode/GM_BB5 (parent BP_BodycamGameModeAbstract_C)
+[MB]   component BB5BombRule (AC_BB5BombRule_C): BB5BombRule
+[MB] compile GM_BB5 (shell): CLEAN
+[MB] building GM_BB5 events [EventGraph] ...
+[MB] build GM_BB5 events [EventGraph]: graph EventGraph: 19 node(s), 0 link(s), 0 error(s)
+[MB]   override ShouldSpawnBots: ok: K2Node_FunctionEntry[<then(exec) ] K2Node_CallParentFunction[>self(object) <ReturnValue(bool) ] K2Node_FunctionResult[>execute(exec) >ReturnValue(bool) ] 
+[MB]   override MinimalPlayerCountMeetCriteria: ok: K2Node_FunctionEntry[<then(exec) ] K2Node_CallParentFunction[>self(object) <ReturnValue(bool) ] K2Node_FunctionResult[>execute(exec) >ReturnValue(bool) ] 
+[MB]   override PlayerCountIsFull: ok: K2Node_FunctionEntry[<then(exec) ] K2Node_CallParentFunction[>self(object) <ReturnValue(bool) ] K2Node_FunctionResult[>execute(exec) >ReturnValue(bool) ] 
+[MB]   override FindPlayerStart: ok: K2Node_FunctionEntry[<then(exec) <Player(object) <IncomingName(string) ] K2Node_FunctionResult[>execute(exec) >ReturnValue(object) ] 
+[MB]   override ChoosePlayerStart: ok: K2Node_FunctionEntry[<then(exec) <Player(object) ] K2Node_FunctionResult[>execute(exec) >ReturnValue(object) ] 
+[MB] compile GM_BB5 (events): CLEAN
+[MB] building GM_BB5 logic [EventGraph] ...
+[MB] build GM_BB5 logic [EventGraph]: graph EventGraph: 573 node(s), 681 link(s), 0 error(s)
+[MB]     bp: reusing the existing ReceiveBeginPlay event node
+[MB]     final_delegate: CreateEvent bound to OnFinalReply
+[MB]     x_ev: CreateEvent bound to OnMatchOver
+[MB]     x_okd: CreateEvent bound to OnExitOk
+[MB]     x_nod: CreateEvent bound to OnExitFail
+[MB]     rd_ev: CreateEvent bound to OnRoundOver
+[MB] building GM_BB5 ShouldSpawnBots override [ShouldSpawnBots] ...
+[MB] build GM_BB5 ShouldSpawnBots override [ShouldSpawnBots]: graph ShouldSpawnBots: 3 node(s), 1 link(s), 0 error(s)
+[MB] building GM_BB5 minimum-player gate [MinimalPlayerCountMeetCriteria] ...
+[MB] build GM_BB5 minimum-player gate [MinimalPlayerCountMeetCriteria]: graph MinimalPlayerCountMeetCriteria: 34 node(s), 45 link(s), 0 error(s)
+[MB] building GM_BB5 full-lobby gate [PlayerCountIsFull] ...
+[MB] build GM_BB5 full-lobby gate [PlayerCountIsFull]: graph PlayerCountIsFull: 34 node(s), 45 link(s), 0 error(s)
+[MB] building GM_BB5 FindPlayerStart override [FindPlayerStart] ...
+[MB] build GM_BB5 FindPlayerStart override [FindPlayerStart]: graph FindPlayerStart: 5 node(s), 9 link(s), 0 error(s)
+[MB] building GM_BB5 ChoosePlayerStart override [ChoosePlayerStart] ...
+[MB] build GM_BB5 ChoosePlayerStart override [ChoosePlayerStart]: graph ChoosePlayerStart: 5 node(s), 8 link(s), 0 error(s)
+[MB] compile GM_BB5 (logic): CLEAN
+[MB]   GM_BB5 class default ConfigDataAsset -> DA_BB5
+[MB] compile GM_BB5 (final): CLEAN
+[MB] layout of AC_BB5BombRule (AC_BB5BombRule_C):
+#0 StructProperty UberGraphFrame [AC_BB5BombRule_C] flags=202200
+#1 ClassProperty BombClass [AC_BB5BombRule_C] flags=8001000010205
+#2 ObjectProperty Attacker [AC_BB5BombRule_C] flags=8001000010a05
+#3 ObjectProperty CurrentBomb [AC_BB5BombRule_C] flags=8001000010a05
+#4 IntProperty DropTries [AC_BB5BombRule_C] flags=8001040010205
+#5 ArrayProperty TeamPawns [AC_BB5BombRule_C] flags=10805
+#6 ArrayProperty TmpLocs [AC_BB5BombRule_C] flags=10005
+#7 StructProperty SpawnCentre [AC_BB5BombRule_C] flags=8001040010205
+#8 StructProperty AnchorLoc [AC_BB5BombRule_C] flags=8001040010205
+#9 BoolProperty bHaveAnchor [AC_BB5BombRule_C] flags=8001040010205
+#10 ArrayProperty Base1Starts [AC_BB5BombRule_C] flags=10805
+#11 ArrayProperty Base2Starts [AC_BB5BombRule_C] flags=10805
+#12 ArrayProperty SpawnCandidates [AC_BB5BombRule_C] flags=10805
+#13 ObjectProperty ChosenStart [AC_BB5BombRule_C] flags=8001000010a05
+#14 BoolProperty bStartsReady [AC_BB5BombRule_C] flags=8001040010205
+#15 BoolProperty bStartTaken [AC_BB5BombRule_C] flags=8001040010205
+#16 BoolProperty bLatched [AC_BB5BombRule_C] flags=8001040010205
+#17 IntProperty LatchTeam [AC_BB5BombRule_C] flags=8001040010205
+#18 IntProperty LatchSide [AC_BB5BombRule_C] flags=8001040010205
+#19 IntProperty LatchObjectiveTeam [AC_BB5BombRule_C] flags=8001040010205
+#20 IntProperty TeamTally [AC_BB5BombRule_C] flags=8001040010205
+#21 StrProperty StartScratch [AC_BB5BombRule_C] flags=8000000010205
+#22 StrProperty StartApprovedRoster [AC_BB5BombRule_C] flags=8000000010205
+#23 StrProperty StartApprovedMatch [AC_BB5BombRule_C] flags=8000000010205
+#24 StrProperty FinalScratch [AC_BB5BombRule_C] flags=8000000010205
+#25 StrProperty FinalBatch [AC_BB5BombRule_C] flags=8000000010205
+#26 StrProperty FinalMeta [AC_BB5BombRule_C] flags=8000000010205
+#27 StrProperty FinalMatch [AC_BB5BombRule_C] flags=8000000010205
+#28 StrProperty FinalCombat [AC_BB5BombRule_C] flags=8000000010205
+#29 IntProperty StartDeadline [AC_BB5BombRule_C] flags=8001040010205
+#30 BoolProperty FinalPending [AC_BB5BombRule_C] flags=8001040010205
+#31 BoolProperty FinalAcknowledged [AC_BB5BombRule_C] flags=8001040010205
+#32 BoolProperty FinalCaptured [AC_BB5BombRule_C] flags=8001040010205
+#33 BoolProperty CompetitiveStarted [AC_BB5BombRule_C] flags=8001040010205
+#34 ObjectProperty CombatManager [AC_BB5BombRule_C] flags=8001000010a05
+#35 StrProperty GuardSeen [AC_BB5BombRule_C] flags=8000000010205
+#36 StrProperty GuardNext [AC_BB5BombRule_C] flags=8000000010205
+#37 BoolProperty GuardDispatched [AC_BB5BombRule_C] flags=8001040010205
+#38 ObjectProperty ObjectiveActor [ObjectiveRuleSetComponent] flags=28081000000205
+#39 BoolProperty bObjectiveStarted [ObjectiveRuleSetComponent] flags=28081040002205
+#40 StructProperty PrimaryComponentTick [ActorComponent] flags=10000000010001
+#41 ArrayProperty ComponentTags [ActorComponent] flags=10000000000205
+#42 ArrayProperty AssetUserData [ActorComponent] flags=1240c8000000209
+#43 ArrayProperty AssetUserDataEditorOnly [ActorComponent] flags=1240c8800000209
+#44 IntProperty UCSSerializationIndex [ActorComponent] flags=48001040000200
+#45 BoolProperty bNetAddressable [ActorComponent] flags=28081000000000
+#46 BoolProperty bReplicateUsingRegisteredSubObjectList [ActorComponent] flags=280c1000014015
+#47 BoolProperty bReplicates [ActorComponent] flags=48001000010035
+#48 BoolProperty bCreatedByConstructionScript [ActorComponent] flags=18001820000000
+#49 BoolProperty bInstanceComponent [ActorComponent] flags=18001820000000
+#50 BoolProperty bAutoActivate [ActorComponent] flags=18001000000015
+#51 BoolProperty bIsActive [ActorComponent] flags=48001100002020
+#52 BoolProperty bEditableWhenInherited [ActorComponent] flags=18001000010001
+#53 BoolProperty bCanEverAffectNavigation [ActorComponent] flags=280c1000004001
+#54 BoolProperty bIsEditorOnly [ActorComponent] flags=18001000000015
+#55 BoolProperty bIsVisualizationComponent [ActorComponent] flags=48001800000000
+#56 BoolProperty bNeedsUCSSerializationIndexEvaluted [ActorComponent] flags=48001800000000
+#57 EnumProperty CreationMethod [ActorComponent] flags=18001040000200
+#58 MulticastSparseDelegateProperty OnComponentActivated [ActorComponent] flags=10001010080000
+#59 MulticastSparseDelegateProperty OnComponentDeactivated [ActorComponent] flags=10001010080000
+#60 ArrayProperty UCSModifiedProperties [ActorComponent] flags=40000820000200
+
+[MB] layout of GM_BB5 (GM_BB5_C):
+#0 StructProperty UberGraphFrame [GM_BB5_C] flags=202200
+#1 ObjectProperty BB5BombRule [GM_BB5_C] flags=8001400080204
+#2 StructProperty UberGraphFrame [BP_BodycamGameModeAbstract_C] flags=202200
+#3 ObjectProperty BodycamTimeLimitRuleSet [BP_BodycamGameModeAbstract_C] flags=8001400080204
+#4 ObjectProperty DefaultSceneRoot [BP_BodycamGameModeAbstract_C] flags=8001400080204
+#5 ByteProperty GamemodeForCompatibility [BP_BodycamGameModeAbstract_C] flags=8001040010205
+#6 ArrayProperty HUDClassCommonUILevelOverrides [BP_BodycamGameModeAbstract_C] flags=10005
+#7 ClassProperty HUDClassCommonUI [BP_BodycamGameModeAbstract_C] flags=8001000010205
+#8 BoolProperty HMS_bBotsMethod [BP_BodycamGameModeAbstract_C] flags=8001040010205
+#9 BoolProperty bTriggerWeatherTransition [BP_BodycamGameModeAbstract_C] flags=8001040010205
+#10 MulticastInlineDelegateProperty OnPlayerKilled [BodycamGameMode] flags=10000010080205
+#11 MulticastInlineDelegateProperty OnPhaseChanged [BodycamGameMode] flags=10000000080205
+#12 StructProperty GameModeTags [BodycamGameMode] flags=20080000000005
+#13 ObjectProperty ConfigDataAsset [BodycamGameMode] flags=28081000000205
+#14 ClassProperty DefaultDroneClass [BodycamGameMode] flags=28081000000205
+#15 ClassProperty TeamManagementComponentClass [BodycamGameMode] flags=2c081000000205
+#16 ArrayProperty PreventingRules [BodycamGameMode] flags=24088000000209
+#17 FloatProperty HMS_SavedRoundRemainingTime [BodycamGameMode] flags=28081040000205
+#18 ArrayProperty ArrivedPlayers [BodycamGameMode] flags=20080000000205
+#19 ObjectProperty SpawnSystemComponent [BodycamGameMode] flags=2a08100008020d
+#20 ObjectProperty TeamManagementComponent [BodycamGameMode] flags=4a00100008020d
+#21 MapProperty LastDeathLocations [BodycamGameMode] flags=40000000000005
+#22 ArrayProperty EndMatchPersistentEffects [BodycamGameMode] flags=44000000000205
+#23 BoolProperty bIsHMSEnabled [HMS_GameMode] flags=18001040000205
+#24 StructProperty HMS_MigrationSettings [HMS_GameMode] flags=10001000000005
+#25 BoolProperty HMS_IsRunningAsyncCreateGameSaveTask [HMS_GameMode] flags=18001040000205
+#26 BoolProperty HMS_IsRunningGameSaveUpdate [HMS_GameMode] flags=18001040000205
+#27 FloatProperty HMS_CurrentPreviousPlayersReconnectTimeout [HMS_GameMode] flags=18001040000205
+#28 StructProperty HMS_CurrentGameSave [HMS_GameMode] flags=10000000000005
+#29 StructProperty HMS_CurrentGameSaveSourceTransferState [HMS_GameMode] flags=10000000000005
+#30 WeakObjectProperty HMS_CurrentChosenNewHost [HMS_GameMode] flags=1c001040000205
+#31 StrProperty HMS_CurrentChosenNewHostName [HMS_GameMode] flags=18000000000205
+#32 IntProperty HMS_NumPlayersReconnected [HMS_GameMode] flags=18001040000205
+#33 IntProperty HMS_NumPlayersExpectedToReconnect [HMS_GameMode] flags=18001040000205
+#34 ObjectProperty HMS_CustomGameSaveDataObject [HMS_GameMode] flags=18001000000205
+#35 StructProperty HMS_MigrationFlags [HMS_GameMode] flags=10001000000005
+#36 StrProperty OptionsString [GameModeBase] flags=18000000000214
+#37 ClassProperty GameSessionClass [GameModeBase] flags=1c001000000205
+#38 ClassProperty GameStateClass [GameModeBase] flags=1c001002000215
+#39 ClassProperty PlayerControllerClass [GameModeBase] flags=1c001002000215
+#40 ClassProperty PlayerStateClass [GameModeBase] flags=1c001002000215
+#41 ClassProperty HUDClass [GameModeBase] flags=1c001000000205
+#42 ClassProperty DefaultPawnClass [GameModeBase] flags=1c001000000205
+#43 ClassProperty SpectatorClass [GameModeBase] flags=1c001002000215
+#44 ClassProperty ReplaySpectatorPlayerControllerClass [GameModeBase] flags=1c001002000215
+#45 ClassProperty ServerStatReplicatorClass [GameModeBase] flags=1c001002000215
+#46 ObjectProperty GameSession [GameModeBase] flags=11c001000002200
+#47 ObjectProperty GameState [GameModeBase] flags=11c001000002200
+#48 ObjectProperty ServerStatReplicator [GameModeBase] flags=11c001000002200
+#49 TextProperty DefaultPlayerName [GameModeBase] flags=10000000000001
+#50 BoolProperty bUseSeamlessTravel [GameModeBase] flags=18001000000005
+#51 BoolProperty bStartPlayersAsSpectators [GameModeBase] flags=28081000000015
+#52 BoolProperty bPauseable [GameModeBase] flags=28081000000005
+#53 EnumProperty GameNetDriverReplicationSystem [GameModeBase] flags=28081040004205
+#54 ObjectProperty SpriteComponent [Info] flags=14c001800080208
+#55 StructProperty PrimaryActorTick [Actor] flags=10000000010001
+#56 BoolProperty bNetTemporary [Actor] flags=18001000000000
+#57 BoolProperty bOnlyRelevantToOwner [Actor] flags=18001000010015
+#58 BoolProperty bAlwaysRelevant [Actor] flags=18001000010005
+#59 BoolProperty bReplicateMovement [Actor] flags=48001100010021
+#60 BoolProperty bCallPreReplication [Actor] flags=48041000010001
+#61 BoolProperty bCallPreReplicationForReplay [Actor] flags=48041000010001
+#62 BoolProperty bHidden [Actor] flags=48001200000035
+#63 BoolProperty bTearOff [Actor] flags=48001000000020
+#64 BoolProperty bForceNetAddressable [Actor] flags=48001000000000
+#65 EnumProperty LevelInstanceType [Actor] flags=48001c40002200
+#66 EnumProperty LevelInstanceFlags [Actor] flags=48001c40002200
+#67 BoolProperty bIsMainWorldOnly [Actor] flags=18041800000001
+#68 BoolProperty bExchangedRoles [Actor] flags=18001000002000
+#69 BoolProperty bNetLoadOnClient [Actor] flags=18001000000001
+#70 BoolProperty bNetUseOwnerRelevancy [Actor] flags=18001000010005
+#71 BoolProperty bRelevantForNetworkReplays [Actor] flags=18001000000000
+#72 BoolProperty bRelevantForLevelBounds [Actor] flags=18041000000001
+#73 BoolProperty bReplayRewindable [Actor] flags=18041000010001
+#74 BoolProperty bAllowTickBeforeBeginPlay [Actor] flags=18001000010001
+#75 BoolProperty bAutoDestroyWhenFinished [Actor] flags=48001000000004
+#76 BoolProperty bCanBeDamaged [Actor] flags=48001001000025
+#77 BoolProperty bBlockInput [Actor] flags=18001000010001
+#78 BoolProperty bCollideWhenPlacing [Actor] flags=18001000000000
+#79 BoolProperty bFindCameraComponentWhenViewTarget [Actor] flags=18041000000005
+#80 BoolProperty bGenerateOverlapEventsDuringLevelStreaming [Actor] flags=18001000000005
+#81 BoolProperty bIgnoresOriginShifting [Actor] flags=18041000000001
+#82 BoolProperty bEnableAutoLODGeneration [Actor] flags=18001000000005
+#83 BoolProperty bIsEditorOnlyActor [Actor] flags=18041000000001
+#84 BoolProperty bReplicates [Actor] flags=28081000010015
+#85 BoolProperty bCanBeInCluster [Actor] flags=280c1000000001
+#86 BoolProperty bAllowReceiveTickEventOnDedicatedServer [Actor] flags=28081000000000
+#87 BoolProperty bReplicateUsingRegisteredSubObjectList [Actor] flags=280c1000014015
+#88 BoolProperty bActorEnableCollision [Actor] flags=48001000000000
+#89 BoolProperty bActorIsBeingDestroyed [Actor] flags=48001000202000
+#90 BoolProperty bAsyncPhysicsTickEnabled [Actor] flags=28081000000001
+#91 EnumProperty UpdateOverlapsMethodDuringLevelStreaming [Actor] flags=28081040000201
+#92 EnumProperty DefaultUpdateOverlapsMethodDuringLevelStreaming [Actor] flags=48001040024201
+#93 ByteProperty RemoteRole [Actor] flags=48001040022a21
+#94 FloatProperty InitialLifeSpan [Actor] flags=18001040000215
+#95 FloatProperty CustomTimeDilation [Actor] flags=18041040000204
+#96 IntProperty RayTracingGroupId [Actor] flags=48001040000200
+#97 EnumProperty GridPlacement [Actor] flags=28081860000200
+#98 NameProperty RuntimeGrid [Actor] flags=280c1840000201
+#99 StructProperty AttachmentReplication [Actor] flags=20089100002020
+#100 StructProperty ReplicatedMovement [Actor] flags=40041100010021
+#101 ObjectProperty Owner [Actor] flags=11c001100000220
+#102 NameProperty NetDriverName [Actor] flags=28081040000200
+#103 ByteProperty Role [Actor] flags=48001040020a21
+#104 ByteProperty NetDormancy [Actor] flags=18001040010215
+#105 EnumProperty SpawnCollisionHandlingMethod [Actor] flags=18001040000205
+#106 ByteProperty AutoReceiveInput [Actor] flags=18001040000201
+#107 IntProperty InputPriority [Actor] flags=18001040000201
+#108 ObjectProperty InputComponent [Actor] flags=11c001000280208
+#109 IntProperty NetTag [Actor] flags=18001040002200
+#110 FloatProperty NetCullDistanceSquared [Actor] flags=18001040010205
+#111 FloatProperty NetUpdateFrequency [Actor] flags=18001040010205
+#112 FloatProperty MinNetUpdateFrequency [Actor] flags=18001040010205
+#113 FloatProperty NetPriority [Actor] flags=18001040010205
+#114 EnumProperty PhysicsReplicationMode [Actor] flags=48001040010201
+#115 ObjectProperty Instigator [Actor] flags=14d001100000224
+#116 ArrayProperty Children [Actor] flags=114000000002200
+#117 ObjectProperty RootComponent [Actor] flags=12c08100008021c
+#118 StructProperty PivotOffset [Actor] flags=280c1840000215
+#119 ObjectProperty HLODLayer [Actor] flags=14c001800000201
+#120 ArrayProperty Layers [Actor] flags=10040000000201
+#121 WeakObjectProperty ParentComponentActor [Actor] flags=4c001860000200
+#122 WeakObjectProperty ParentComponent [Actor] flags=4c001040080208
+#123 StructProperty ActorGuid [Actor] flags=28cc1c40000214
+#124 StructProperty ActorInstanceGuid [Actor] flags=28cc1c40002214
+#125 StructProperty ContentBundleGuid [Actor] flags=284c1c40000214
+#126 ArrayProperty DataLayers [Actor] flags=200c0800020201
+#127 ArrayProperty DataLayerAssets [Actor] flags=240c0800000201
+#128 ObjectProperty ExternalDataLayerAsset [Actor] flags=12c4c1800020201
+#129 ObjectProperty GroupActor [Actor] flags=11c001800002200
+#130 FloatProperty SpriteScale [Actor] flags=18001840000205
+#131 UInt64Property HiddenEditorViews [Actor] flags=18001840002200
+#132 StrProperty ActorLabel [Actor] flags=48000800000200
+#133 NameProperty FolderPath [Actor] flags=48001840000200
+#134 StructProperty FolderGuid [Actor] flags=48401840000200
+#135 BoolProperty bHiddenEd [Actor] flags=18001800000000
+#136 BoolProperty bIsEditorPreviewActor [Actor] flags=18001800002000
+#137 BoolProperty bHiddenEdLayer [Actor] flags=18001800002000
+#138 BoolProperty bHiddenEdLevel [Actor] flags=18001800002000
+#139 BoolProperty bLockLocation [Actor] flags=28081800000000
+#140 BoolProperty bActorLabelEditable [Actor] flags=28081800000000
+#141 BoolProperty bEditable [Actor] flags=28081800000000
+#142 BoolProperty bListedInSceneOutliner [Actor] flags=28081800000000
+#143 BoolProperty bOptimizeBPComponentData [Actor] flags=280c1800010001
+#144 BoolProperty bCanPlayFromHere [Actor] flags=28081800000000
+#145 BoolProperty bIsSpatiallyLoaded [Actor] flags=280c1800000001
+#146 BoolProperty bHiddenEdTemporary [Actor] flags=48001800002000
+#147 BoolProperty bForceExternalActorLevelReferenceForPIE [Actor] flags=48001800002000
+#148 ArrayProperty Tags [Actor] flags=10040000000205
+#149 MulticastSparseDelegateProperty OnTakeAnyDamage [Actor] flags=10001010080000
+#150 MulticastSparseDelegateProperty OnTakePointDamage [Actor] flags=10001010080000
+#151 MulticastSparseDelegateProperty OnTakeRadialDamage [Actor] flags=10001010080000
+#152 MulticastSparseDelegateProperty OnActorBeginOverlap [Actor] flags=10001010080000
+#153 MulticastSparseDelegateProperty OnActorEndOverlap [Actor] flags=10001010080000
+#154 MulticastSparseDelegateProperty OnBeginCursorOver [Actor] flags=10001010080000
+#155 MulticastSparseDelegateProperty OnEndCursorOver [Actor] flags=10001010080000
+#156 MulticastSparseDelegateProperty OnClicked [Actor] flags=10001010080000
+#157 MulticastSparseDelegateProperty OnReleased [Actor] flags=10001010080000
+#158 MulticastSparseDelegateProperty OnInputTouchBegin [Actor] flags=10001010080000
+#159 MulticastSparseDelegateProperty OnInputTouchEnd [Actor] flags=10001010080000
+#160 MulticastSparseDelegateProperty OnInputTouchEnter [Actor] flags=10001010080000
+#161 MulticastSparseDelegateProperty OnInputTouchLeave [Actor] flags=10001010080000
+#162 MulticastSparseDelegateProperty OnActorHit [Actor] flags=10001010080000
+#163 MulticastSparseDelegateProperty OnDestroyed [Actor] flags=10001010080000
+#164 MulticastSparseDelegateProperty OnEndPlay [Actor] flags=10001010080000
+#165 ArrayProperty InstanceComponents [Actor] flags=144008000000208
+#166 ArrayProperty BlueprintCreatedComponents [Actor] flags=114408400000208
+
+[MB] stage 3 (BB5) done
+[MB] created /Game/GM/Gamemode/DOM/GE_DOM_DroneCooldown (parent GameplayEffect)
+[MB] compile GE_DOM_DroneCooldown: CLEAN
+[MB]   GE default duration_policy = <GameplayEffectDurationType.INFINITE: 1>
+[MB]   GE default stacking_type = <GameplayEffectStackingType.AGGREGATE_BY_TARGET: 2>
+[MB]   GE default stack_limit_count = 1
+[MB]   GE modifier: ok: CharacterAttributeSet.GadgetCooldown Multiply 2.5 (now 1 modifier(s); attribute valid=1)
+[MB] compile GE_DOM_DroneCooldown (final): CLEAN
+[MB] created /Game/GM/DATA/DataAsset/DA_DOM: score limit 200, 10 per team, 20 players, respawn 7 s
+[MB] stub cue already exists: /Game/UI/Sfx/Cues/Simple_Click_Sound_HardPoint_Cue
+[MB] stub cue already exists: /Game/UI/Sfx/Cues/Simple_Click_Sound_HardPointNoPlayers_Cue1
+[MB] stub cue already exists: /Game/Ultimate_SFX/UI_Item_Sounds_HD_Remake/Cues/Error_Sound_2_Cue
+[MB] created /Game/GM/Gamemode/GM_DOM (parent BP_BodycamGameModeAbstract_C)
+[MB]   component BodycamCaptureRuleSet (BodycamCaptureRuleSetComponent): BodycamCaptureRuleSet
+[MB] compile GM_DOM (shell): CLEAN
+[MB] created /Game/GM/Gamemode/DOM/BP_DOM_Point (parent Actor)
+[MB]   component Trigger (SphereComponent): Trigger
+[MB]   component Pad (StaticMeshComponent): Pad
+[MB]   component Dot (BodycamWidgetComponent): Dot
+[MB]   Dot defaults: ok: Dot -> HUD_Dot_C, screen space
+[MB]   var PointIndex (byte): ok
+[MB]   var OwnerTeam (int): ok
+[MB]   var CapTeam (int): ok
+[MB]   var Progress (float): ok
+[MB]   var bContested (bool): ok
+[MB]   var LastEvent (byte): ok
+[MB]   var DotState (byte): ok
+[MB]   var EventTeam (int): ok
+[MB]   var EventSeq (int): ok
+[MB]   var CountA (int): ok
+[MB]   var CountB (int): ok
+[MB]   var PresentTeam (int): ok
+[MB]   var PresentCount (int): ok
+[MB]   var GM (object): ok
+[MB]   var DotLabel (string): ok
+[MB]   var LastLocalPawn (object): ok
+[MB]   replicated PointIndex: ok
+[MB]   replicated CapTeam: ok
+[MB]   replicated Progress: ok
+[MB]   replicated bContested: ok
+[MB]   replicated LastEvent: ok
+[MB]   replicated EventTeam: ok
+[MB]   replicated OwnerTeam (RepNotify OnRep_OwnerTeam): ok
+[MB]   replicated EventSeq (RepNotify OnRep_EventSeq): ok
+[MB]   OnRep_OwnerTeam graph: ok: K2Node_FunctionEntry[<then(exec) ] 
+[MB]   OnRep_EventSeq graph: ok: K2Node_FunctionEntry[<then(exec) ] 
+[MB] compile BP_DOM_Point (vars): CLEAN
+[MB]   var TeamA (int): ok
+[MB]   var TeamB (int): ok
+[MB]   var bTeamsReady (bool): ok
+[MB]   var bSidesReady (bool): ok
+[MB]   var bOccupied (bool): ok
+[MB]   var bPointsPlaced (bool): ok
+[MB]   var Base1Starts (object[]): ok
+[MB]   var Base2Starts (object[]): ok
+[MB]   var AllStarts (object[]): ok
+[MB]   var SpawnCandidates (object[]): ok
+[MB]   var Pawns (object[]): ok
+[MB]   var EnemyPawns (object[]): ok
+[MB]   var KnownTeamIds (int[]): ok
+[MB]   var Center1 (struct): ok
+[MB]   var Center2 (struct): ok
+[MB]   var Axis (struct): ok
+[MB]   var Anchor1 (struct): ok
+[MB]   var Anchor2 (struct): ok
+[MB]   var ZoneHome1 (struct): ok
+[MB]   var ZoneHome2 (struct): ok
+[MB]   var ZoneHome3 (struct): ok
+[MB]   var AxisLenSq (float): ok
+[MB]   var TmpBest (float): ok
+[MB]   var TmpDist (float): ok
+[MB]   var TmpLocs (struct[]): ok
+[MB]   var ChosenStart (object): ok
+[MB]   var TmpBestActor (object): ok
+[MB]   var PickedStart (object): ok
+[MB]   var Point1 (object): ok
+[MB]   var Point2 (object): ok
+[MB]   var Point3 (object): ok
+[MB]   var Points (object[]): ok
+[MB] compile GM_DOM (vars): CLEAN
+[MB] building BP_DOM_Point events [EventGraph] ...
+[MB] build BP_DOM_Point events [EventGraph]: graph EventGraph: 8 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM events [EventGraph] ...
+[MB] build GM_DOM events [EventGraph]: graph EventGraph: 4 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature EnsureTeams [EnsureTeams] ...
+[MB] build GM_DOM function signature EnsureTeams [EnsureTeams]: graph EnsureTeams: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature EnsureSides [EnsureSides] ...
+[MB] build GM_DOM function signature EnsureSides [EnsureSides]: graph EnsureSides: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature AverageLocation [AverageLocation] ...
+[MB] build GM_DOM function signature AverageLocation [AverageLocation]: graph AverageLocation: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature ExtremeStart [ExtremeStart] ...
+[MB] build GM_DOM function signature ExtremeStart [ExtremeStart]: graph ExtremeStart: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature SideT [SideT] ...
+[MB] build GM_DOM function signature SideT [SideT]: graph SideT: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature DeriveSidesFromWaiting [DeriveSidesFromWaiting] ...
+[MB] build GM_DOM function signature DeriveSidesFromWaiting [DeriveSidesFromWaiting]: graph DeriveSidesFromWaiting: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature GatherPawns [GatherPawns] ...
+[MB] build GM_DOM function signature GatherPawns [GatherPawns]: graph GatherPawns: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature IsStartFree [IsStartFree] ...
+[MB] build GM_DOM function signature IsStartFree [IsStartFree]: graph IsStartFree: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature EnemyDistance [EnemyDistance] ...
+[MB] build GM_DOM function signature EnemyDistance [EnemyDistance]: graph EnemyDistance: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature FloorPoint [FloorPoint] ...
+[MB] build GM_DOM function signature FloorPoint [FloorPoint]: graph FloorPoint: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature StartForPlayer [StartForPlayer] ...
+[MB] build GM_DOM function signature StartForPlayer [StartForPlayer]: graph StartForPlayer: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature ApplyTeamIds [ApplyTeamIds] ...
+[MB] build GM_DOM function signature ApplyTeamIds [ApplyTeamIds]: graph ApplyTeamIds: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature MinPointDistance [MinPointDistance] ...
+[MB] build GM_DOM function signature MinPointDistance [MinPointDistance]: graph MinPointDistance: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature PointDistanceForTeam [PointDistanceForTeam] ...
+[MB] build GM_DOM function signature PointDistanceForTeam [PointDistanceForTeam]: graph PointDistanceForTeam: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature PickPointStart [PickPointStart] ...
+[MB] build GM_DOM function signature PickPointStart [PickPointStart]: graph PickPointStart: 2 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature CollectDynamic [CollectDynamic] ...
+[MB] build GM_DOM function signature CollectDynamic [CollectDynamic]: graph CollectDynamic: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature CollectHalf [CollectHalf] ...
+[MB] build GM_DOM function signature CollectHalf [CollectHalf]: graph CollectHalf: 1 node(s), 0 link(s), 0 error(s)
+[MB] building GM_DOM function signature ChooseStart [ChooseStart] ...
+[MB] build GM_DOM function signature ChooseStart [ChooseStart]: graph ChooseStart: 2 node(s), 0 link(s), 0 error(s)
+[MB]   override FindPlayerStart: ok: K2Node_FunctionEntry[<then(exec) <Player(object) <IncomingName(string) ] K2Node_FunctionResult[>execute(exec) >ReturnValue(object) ] 
+[MB]   override ChoosePlayerStart: ok: K2Node_FunctionEntry[<then(exec) <Player(object) ] K2Node_FunctionResult[>execute(exec) >ReturnValue(object) ] 
+[MB] compile BP_DOM_Point (events): CLEAN
+[MB] compile GM_DOM (events): CLEAN
+[MB] building BP_DOM_Point logic [EventGraph] ...
+[MB] build BP_DOM_Point logic [EventGraph]: graph EventGraph: 236 node(s), 286 link(s), 0 error(s)
+[MB]     bp: reusing the existing ReceiveBeginPlay event node
+[MB] building BP_DOM_Point OnRep_OwnerTeam [OnRep_OwnerTeam] ...
+[MB] build BP_DOM_Point OnRep_OwnerTeam [OnRep_OwnerTeam]: graph OnRep_OwnerTeam: 2 node(s), 1 link(s), 0 error(s)
+[MB] building BP_DOM_Point OnRep_EventSeq [OnRep_EventSeq] ...
+[MB] build BP_DOM_Point OnRep_EventSeq [OnRep_EventSeq]: graph OnRep_EventSeq: 2 node(s), 1 link(s), 0 error(s)
+[MB] building GM_DOM logic [EventGraph] ...
+[MB] build GM_DOM logic [EventGraph]: graph EventGraph: 157 node(s), 205 link(s), 0 error(s)
+[MB]     bp: reusing the existing ReceiveBeginPlay event node
+[MB] building GM_DOM function EnsureTeams [EnsureTeams] ...
+[MB] build GM_DOM function EnsureTeams [EnsureTeams]: graph EnsureTeams: 47 node(s), 64 link(s), 0 error(s)
+[MB] building GM_DOM function EnsureSides [EnsureSides] ...
+[MB] build GM_DOM function EnsureSides [EnsureSides]: graph EnsureSides: 55 node(s), 66 link(s), 0 error(s)
+[MB] building GM_DOM function AverageLocation [AverageLocation] ...
+[MB] build GM_DOM function AverageLocation [AverageLocation]: graph AverageLocation: 10 node(s), 11 link(s), 0 error(s)
+[MB] building GM_DOM function ExtremeStart [ExtremeStart] ...
+[MB] build GM_DOM function ExtremeStart [ExtremeStart]: graph ExtremeStart: 19 node(s), 28 link(s), 0 error(s)
+[MB] building GM_DOM function SideT [SideT] ...
+[MB] build GM_DOM function SideT [SideT]: graph SideT: 9 node(s), 9 link(s), 0 error(s)
+[MB] building GM_DOM function DeriveSidesFromWaiting [DeriveSidesFromWaiting] ...
+[MB] build GM_DOM function DeriveSidesFromWaiting [DeriveSidesFromWaiting]: graph DeriveSidesFromWaiting: 30 node(s), 45 link(s), 0 error(s)
+[MB] building GM_DOM function GatherPawns [GatherPawns] ...
+[MB] build GM_DOM function GatherPawns [GatherPawns]: graph GatherPawns: 24 node(s), 29 link(s), 0 error(s)
+[MB] building GM_DOM function IsStartFree [IsStartFree] ...
+[MB] build GM_DOM function IsStartFree [IsStartFree]: graph IsStartFree: 13 node(s), 14 link(s), 0 error(s)
+[MB] building GM_DOM function EnemyDistance [EnemyDistance] ...
+[MB] build GM_DOM function EnemyDistance [EnemyDistance]: graph EnemyDistance: 13 node(s), 15 link(s), 0 error(s)
+[MB] building GM_DOM function FloorPoint [FloorPoint] ...
+[MB] build GM_DOM function FloorPoint [FloorPoint]: graph FloorPoint: 15 node(s), 22 link(s), 0 error(s)
+[MB] building GM_DOM function StartForPlayer [StartForPlayer] ...
+[MB] build GM_DOM function StartForPlayer [StartForPlayer]: graph StartForPlayer: 18 node(s), 21 link(s), 0 error(s)
+[MB] building GM_DOM function ApplyTeamIds [ApplyTeamIds] ...
+[MB] build GM_DOM function ApplyTeamIds [ApplyTeamIds]: graph ApplyTeamIds: 6 node(s), 7 link(s), 0 error(s)
+[MB] building GM_DOM function MinPointDistance [MinPointDistance] ...
+[MB] build GM_DOM function MinPointDistance [MinPointDistance]: graph MinPointDistance: 14 node(s), 17 link(s), 0 error(s)
+[MB] building GM_DOM function PointDistanceForTeam [PointDistanceForTeam] ...
+[MB] build GM_DOM function PointDistanceForTeam [PointDistanceForTeam]: graph PointDistanceForTeam: 17 node(s), 22 link(s), 0 error(s)
+[MB] building GM_DOM function PickPointStart [PickPointStart] ...
+[MB] build GM_DOM function PickPointStart [PickPointStart]: graph PickPointStart: 20 node(s), 29 link(s), 0 error(s)
+[MB] building GM_DOM function CollectDynamic [CollectDynamic] ...
+[MB] build GM_DOM function CollectDynamic [CollectDynamic]: graph CollectDynamic: 37 node(s), 55 link(s), 0 error(s)
+[MB] building GM_DOM function CollectHalf [CollectHalf] ...
+[MB] build GM_DOM function CollectHalf [CollectHalf]: graph CollectHalf: 36 node(s), 55 link(s), 0 error(s)
+[MB] building GM_DOM function ChooseStart [ChooseStart] ...
+[MB] build GM_DOM function ChooseStart [ChooseStart]: graph ChooseStart: 30 node(s), 39 link(s), 0 error(s)
+[MB] building GM_DOM FindPlayerStart override [FindPlayerStart] ...
+[MB] build GM_DOM FindPlayerStart override [FindPlayerStart]: graph FindPlayerStart: 9 node(s), 15 link(s), 0 error(s)
+[MB] building GM_DOM ChoosePlayerStart override [ChoosePlayerStart] ...
+[MB] build GM_DOM ChoosePlayerStart override [ChoosePlayerStart]: graph ChoosePlayerStart: 9 node(s), 14 link(s), 0 error(s)
+[MB] compile BP_DOM_Point (logic): CLEAN
+[MB] compile GM_DOM (logic): CLEAN
+[MB]   BP_DOM_Point default replicates = True
+[MB]   BP_DOM_Point default replicate_movement = True
+[MB]   BP_DOM_Point default always_relevant = True
+[MB] WARNING   BP_DOM_Point: could not set owner_team: Actor: Failed to find property 'owner_team' for attribute 'owner_team' on 'BP_DOM_Point_C'
+[MB] WARNING   BP_DOM_Point: could not set cap_team: Actor: Failed to find property 'cap_team' for attribute 'cap_team' on 'BP_DOM_Point_C'
+[MB]   GM_DOM class default ConfigDataAsset -> DA_DOM
+[MB] compile BP_DOM_Point (final): CLEAN
+[MB] compile GM_DOM (final): CLEAN
+[MB] layout of BP_DOM_Point (BP_DOM_Point_C):
+#0 StructProperty UberGraphFrame [BP_DOM_Point_C] flags=202200
+#1 ObjectProperty Dot [BP_DOM_Point_C] flags=8001400080204
+#2 ObjectProperty Pad [BP_DOM_Point_C] flags=8001400080204
+#3 ObjectProperty Trigger [BP_DOM_Point_C] flags=8001400080204
+#4 ObjectProperty DefaultSceneRoot [BP_DOM_Point_C] flags=8001400080204
+#5 ByteProperty PointIndex [BP_DOM_Point_C] flags=8001040010225
+#6 IntProperty OwnerTeam [BP_DOM_Point_C] flags=8001140010225
+#7 IntProperty CapTeam [BP_DOM_Point_C] flags=8001040010225
+#8 DoubleProperty Progress [BP_DOM_Point_C] flags=8001040010225
+#9 BoolProperty bContested [BP_DOM_Point_C] flags=8001040010225
+#10 ByteProperty LastEvent [BP_DOM_Point_C] flags=8001040010225
+#11 ByteProperty DotState [BP_DOM_Point_C] flags=8001040010205
+#12 IntProperty EventTeam [BP_DOM_Point_C] flags=8001040010225
+#13 IntProperty EventSeq [BP_DOM_Point_C] flags=8001140010225
+#14 IntProperty CountA [BP_DOM_Point_C] flags=8001040010205
+#15 IntProperty CountB [BP_DOM_Point_C] flags=8001040010205
+#16 IntProperty PresentTeam [BP_DOM_Point_C] flags=8001040010205
+#17 IntProperty PresentCount [BP_DOM_Point_C] flags=8001040010205
+#18 ObjectProperty GM [BP_DOM_Point_C] flags=8001000010a05
+#19 StrProperty DotLabel [BP_DOM_Point_C] flags=8000000010205
+#20 ObjectProperty LastLocalPawn [BP_DOM_Point_C] flags=8001000010a05
+#21 StructProperty PrimaryActorTick [Actor] flags=10000000010001
+#22 BoolProperty bNetTemporary [Actor] flags=18001000000000
+#23 BoolProperty bOnlyRelevantToOwner [Actor] flags=18001000010015
+#24 BoolProperty bAlwaysRelevant [Actor] flags=18001000010005
+#25 BoolProperty bReplicateMovement [Actor] flags=48001100010021
+#26 BoolProperty bCallPreReplication [Actor] flags=48041000010001
+#27 BoolProperty bCallPreReplicationForReplay [Actor] flags=48041000010001
+#28 BoolProperty bHidden [Actor] flags=48001200000035
+#29 BoolProperty bTearOff [Actor] flags=48001000000020
+#30 BoolProperty bForceNetAddressable [Actor] flags=48001000000000
+#31 EnumProperty LevelInstanceType [Actor] flags=48001c40002200
+#32 EnumProperty LevelInstanceFlags [Actor] flags=48001c40002200
+#33 BoolProperty bIsMainWorldOnly [Actor] flags=18041800000001
+#34 BoolProperty bExchangedRoles [Actor] flags=18001000002000
+#35 BoolProperty bNetLoadOnClient [Actor] flags=18001000000001
+#36 BoolProperty bNetUseOwnerRelevancy [Actor] flags=18001000010005
+#37 BoolProperty bRelevantForNetworkReplays [Actor] flags=18001000000000
+#38 BoolProperty bRelevantForLevelBounds [Actor] flags=18041000000001
+#39 BoolProperty bReplayRewindable [Actor] flags=18041000010001
+#40 BoolProperty bAllowTickBeforeBeginPlay [Actor] flags=18001000010001
+#41 BoolProperty bAutoDestroyWhenFinished [Actor] flags=48001000000004
+#42 BoolProperty bCanBeDamaged [Actor] flags=48001001000025
+#43 BoolProperty bBlockInput [Actor] flags=18001000010001
+#44 BoolProperty bCollideWhenPlacing [Actor] flags=18001000000000
+#45 BoolProperty bFindCameraComponentWhenViewTarget [Actor] flags=18041000000005
+#46 BoolProperty bGenerateOverlapEventsDuringLevelStreaming [Actor] flags=18001000000005
+#47 BoolProperty bIgnoresOriginShifting [Actor] flags=18041000000001
+#48 BoolProperty bEnableAutoLODGeneration [Actor] flags=18001000000005
+#49 BoolProperty bIsEditorOnlyActor [Actor] flags=18041000000001
+#50 BoolProperty bReplicates [Actor] flags=28081000010015
+#51 BoolProperty bCanBeInCluster [Actor] flags=280c1000000001
+#52 BoolProperty bAllowReceiveTickEventOnDedicatedServer [Actor] flags=28081000000000
+#53 BoolProperty bReplicateUsingRegisteredSubObjectList [Actor] flags=280c1000014015
+#54 BoolProperty bActorEnableCollision [Actor] flags=48001000000000
+#55 BoolProperty bActorIsBeingDestroyed [Actor] flags=48001000202000
+#56 BoolProperty bAsyncPhysicsTickEnabled [Actor] flags=28081000000001
+#57 EnumProperty UpdateOverlapsMethodDuringLevelStreaming [Actor] flags=28081040000201
+#58 EnumProperty DefaultUpdateOverlapsMethodDuringLevelStreaming [Actor] flags=48001040024201
+#59 ByteProperty RemoteRole [Actor] flags=48001040022a21
+#60 FloatProperty InitialLifeSpan [Actor] flags=18001040000215
+#61 FloatProperty CustomTimeDilation [Actor] flags=18041040000204
+#62 IntProperty RayTracingGroupId [Actor] flags=48001040000200
+#63 EnumProperty GridPlacement [Actor] flags=28081860000200
+#64 NameProperty RuntimeGrid [Actor] flags=280c1840000201
+#65 StructProperty AttachmentReplication [Actor] flags=20089100002020
+#66 StructProperty ReplicatedMovement [Actor] flags=40041100010021
+#67 ObjectProperty Owner [Actor] flags=11c001100000220
+#68 NameProperty NetDriverName [Actor] flags=28081040000200
+#69 ByteProperty Role [Actor] flags=48001040020a21
+#70 ByteProperty NetDormancy [Actor] flags=18001040010215
+#71 EnumProperty SpawnCollisionHandlingMethod [Actor] flags=18001040000205
+#72 ByteProperty AutoReceiveInput [Actor] flags=18001040000201
+#73 IntProperty InputPriority [Actor] flags=18001040000201
+#74 ObjectProperty InputComponent [Actor] flags=11c001000280208
+#75 IntProperty NetTag [Actor] flags=18001040002200
+#76 FloatProperty NetCullDistanceSquared [Actor] flags=18001040010205
+#77 FloatProperty NetUpdateFrequency [Actor] flags=18001040010205
+#78 FloatProperty MinNetUpdateFrequency [Actor] flags=18001040010205
+#79 FloatProperty NetPriority [Actor] flags=18001040010205
+#80 EnumProperty PhysicsReplicationMode [Actor] flags=48001040010201
+#81 ObjectProperty Instigator [Actor] flags=14d001100000224
+#82 ArrayProperty Children [Actor] flags=114000000002200
+#83 ObjectProperty RootComponent [Actor] flags=12c08100008021c
+#84 StructProperty PivotOffset [Actor] flags=280c1840000215
+#85 ObjectProperty HLODLayer [Actor] flags=14c001800000201
+#86 ArrayProperty Layers [Actor] flags=10040000000201
+#87 WeakObjectProperty ParentComponentActor [Actor] flags=4c001860000200
+#88 WeakObjectProperty ParentComponent [Actor] flags=4c001040080208
+#89 StructProperty ActorGuid [Actor] flags=28cc1c40000214
+#90 StructProperty ActorInstanceGuid [Actor] flags=28cc1c40002214
+#91 StructProperty ContentBundleGuid [Actor] flags=284c1c40000214
+#92 ArrayProperty DataLayers [Actor] flags=200c0800020201
+#93 ArrayProperty DataLayerAssets [Actor] flags=240c0800000201
+#94 ObjectProperty ExternalDataLayerAsset [Actor] flags=12c4c1800020201
+#95 ObjectProperty GroupActor [Actor] flags=11c001800002200
+#96 FloatProperty SpriteScale [Actor] flags=18001840000205
+#97 UInt64Property HiddenEditorViews [Actor] flags=18001840002200
+#98 StrProperty ActorLabel [Actor] flags=48000800000200
+#99 NameProperty FolderPath [Actor] flags=48001840000200
+#100 StructProperty FolderGuid [Actor] flags=48401840000200
+#101 BoolProperty bHiddenEd [Actor] flags=18001800000000
+#102 BoolProperty bIsEditorPreviewActor [Actor] flags=18001800002000
+#103 BoolProperty bHiddenEdLayer [Actor] flags=18001800002000
+#104 BoolProperty bHiddenEdLevel [Actor] flags=18001800002000
+#105 BoolProperty bLockLocation [Actor] flags=28081800000000
+#106 BoolProperty bActorLabelEditable [Actor] flags=28081800000000
+#107 BoolProperty bEditable [Actor] flags=28081800000000
+#108 BoolProperty bListedInSceneOutliner [Actor] flags=28081800000000
+#109 BoolProperty bOptimizeBPComponentData [Actor] flags=280c1800010001
+#110 BoolProperty bCanPlayFromHere [Actor] flags=28081800000000
+#111 BoolProperty bIsSpatiallyLoaded [Actor] flags=280c1800000001
+#112 BoolProperty bHiddenEdTemporary [Actor] flags=48001800002000
+#113 BoolProperty bForceExternalActorLevelReferenceForPIE [Actor] flags=48001800002000
+#114 ArrayProperty Tags [Actor] flags=10040000000205
+#115 MulticastSparseDelegateProperty OnTakeAnyDamage [Actor] flags=10001010080000
+#116 MulticastSparseDelegateProperty OnTakePointDamage [Actor] flags=10001010080000
+#117 MulticastSparseDelegateProperty OnTakeRadialDamage [Actor] flags=10001010080000
+#118 MulticastSparseDelegateProperty OnActorBeginOverlap [Actor] flags=10001010080000
+#119 MulticastSparseDelegateProperty OnActorEndOverlap [Actor] flags=10001010080000
+#120 MulticastSparseDelegateProperty OnBeginCursorOver [Actor] flags=10001010080000
+#121 MulticastSparseDelegateProperty OnEndCursorOver [Actor] flags=10001010080000
+#122 MulticastSparseDelegateProperty OnClicked [Actor] flags=10001010080000
+#123 MulticastSparseDelegateProperty OnReleased [Actor] flags=10001010080000
+#124 MulticastSparseDelegateProperty OnInputTouchBegin [Actor] flags=10001010080000
+#125 MulticastSparseDelegateProperty OnInputTouchEnd [Actor] flags=10001010080000
+#126 MulticastSparseDelegateProperty OnInputTouchEnter [Actor] flags=10001010080000
+#127 MulticastSparseDelegateProperty OnInputTouchLeave [Actor] flags=10001010080000
+#128 MulticastSparseDelegateProperty OnActorHit [Actor] flags=10001010080000
+#129 MulticastSparseDelegateProperty OnDestroyed [Actor] flags=10001010080000
+#130 MulticastSparseDelegateProperty OnEndPlay [Actor] flags=10001010080000
+#131 ArrayProperty InstanceComponents [Actor] flags=144008000000208
+#132 ArrayProperty BlueprintCreatedComponents [Actor] flags=114408400000208
+
+[MB] layout of GM_DOM (GM_DOM_C):
+#0 StructProperty UberGraphFrame [GM_DOM_C] flags=202200
+#1 ObjectProperty BodycamCaptureRuleSet [GM_DOM_C] flags=8001400080204
+#2 IntProperty TeamA [GM_DOM_C] flags=8001040010205
+#3 IntProperty TeamB [GM_DOM_C] flags=8001040010205
+#4 BoolProperty bTeamsReady [GM_DOM_C] flags=8001040010205
+#5 BoolProperty bSidesReady [GM_DOM_C] flags=8001040010205
+#6 BoolProperty bOccupied [GM_DOM_C] flags=8001040010205
+#7 BoolProperty bPointsPlaced [GM_DOM_C] flags=8001040010205
+#8 ArrayProperty Base1Starts [GM_DOM_C] flags=10805
+#9 ArrayProperty Base2Starts [GM_DOM_C] flags=10805
+#10 ArrayProperty AllStarts [GM_DOM_C] flags=10805
+#11 ArrayProperty SpawnCandidates [GM_DOM_C] flags=10805
+#12 ArrayProperty Pawns [GM_DOM_C] flags=10805
+#13 ArrayProperty EnemyPawns [GM_DOM_C] flags=10805
+#14 ArrayProperty KnownTeamIds [GM_DOM_C] flags=10005
+#15 StructProperty Center1 [GM_DOM_C] flags=8001040010205
+#16 StructProperty Center2 [GM_DOM_C] flags=8001040010205
+#17 StructProperty Axis [GM_DOM_C] flags=8001040010205
+#18 StructProperty Anchor1 [GM_DOM_C] flags=8001040010205
+#19 StructProperty Anchor2 [GM_DOM_C] flags=8001040010205
+#20 StructProperty ZoneHome1 [GM_DOM_C] flags=8001040010205
+#21 StructProperty ZoneHome2 [GM_DOM_C] flags=8001040010205
+#22 StructProperty ZoneHome3 [GM_DOM_C] flags=8001040010205
+#23 DoubleProperty AxisLenSq [GM_DOM_C] flags=8001040010205
+#24 DoubleProperty TmpBest [GM_DOM_C] flags=8001040010205
+#25 DoubleProperty TmpDist [GM_DOM_C] flags=8001040010205
+#26 ArrayProperty TmpLocs [GM_DOM_C] flags=10005
+#27 ObjectProperty ChosenStart [GM_DOM_C] flags=8001000010a05
+#28 ObjectProperty TmpBestActor [GM_DOM_C] flags=8001000010a05
+#29 ObjectProperty PickedStart [GM_DOM_C] flags=8001000010a05
+#30 ObjectProperty Point1 [GM_DOM_C] flags=8001000010a05
+#31 ObjectProperty Point2 [GM_DOM_C] flags=8001000010a05
+#32 ObjectProperty Point3 [GM_DOM_C] flags=8001000010a05
+#33 ArrayProperty Points [GM_DOM_C] flags=10805
+#34 StructProperty UberGraphFrame [BP_BodycamGameModeAbstract_C] flags=202200
+#35 ObjectProperty BodycamTimeLimitRuleSet [BP_BodycamGameModeAbstract_C] flags=8001400080204
+#36 ObjectProperty DefaultSceneRoot [BP_BodycamGameModeAbstract_C] flags=8001400080204
+#37 ByteProperty GamemodeForCompatibility [BP_BodycamGameModeAbstract_C] flags=8001040010205
+#38 ArrayProperty HUDClassCommonUILevelOverrides [BP_BodycamGameModeAbstract_C] flags=10005
+#39 ClassProperty HUDClassCommonUI [BP_BodycamGameModeAbstract_C] flags=8001000010205
+#40 BoolProperty HMS_bBotsMethod [BP_BodycamGameModeAbstract_C] flags=8001040010205
+#41 BoolProperty bTriggerWeatherTransition [BP_BodycamGameModeAbstract_C] flags=8001040010205
+#42 MulticastInlineDelegateProperty OnPlayerKilled [BodycamGameMode] flags=10000010080205
+#43 MulticastInlineDelegateProperty OnPhaseChanged [BodycamGameMode] flags=10000000080205
+#44 StructProperty GameModeTags [BodycamGameMode] flags=20080000000005
+#45 ObjectProperty ConfigDataAsset [BodycamGameMode] flags=28081000000205
+#46 ClassProperty DefaultDroneClass [BodycamGameMode] flags=28081000000205
+#47 ClassProperty TeamManagementComponentClass [BodycamGameMode] flags=2c081000000205
+#48 ArrayProperty PreventingRules [BodycamGameMode] flags=24088000000209
+#49 FloatProperty HMS_SavedRoundRemainingTime [BodycamGameMode] flags=28081040000205
+#50 ArrayProperty ArrivedPlayers [BodycamGameMode] flags=20080000000205
+#51 ObjectProperty SpawnSystemComponent [BodycamGameMode] flags=2a08100008020d
+#52 ObjectProperty TeamManagementComponent [BodycamGameMode] flags=4a00100008020d
+#53 MapProperty LastDeathLocations [BodycamGameMode] flags=40000000000005
+#54 ArrayProperty EndMatchPersistentEffects [BodycamGameMode] flags=44000000000205
+#55 BoolProperty bIsHMSEnabled [HMS_GameMode] flags=18001040000205
+#56 StructProperty HMS_MigrationSettings [HMS_GameMode] flags=10001000000005
+#57 BoolProperty HMS_IsRunningAsyncCreateGameSaveTask [HMS_GameMode] flags=18001040000205
+#58 BoolProperty HMS_IsRunningGameSaveUpdate [HMS_GameMode] flags=18001040000205
+#59 FloatProperty HMS_CurrentPreviousPlayersReconnectTimeout [HMS_GameMode] flags=18001040000205
+#60 StructProperty HMS_CurrentGameSave [HMS_GameMode] flags=10000000000005
+#61 StructProperty HMS_CurrentGameSaveSourceTransferState [HMS_GameMode] flags=10000000000005
+#62 WeakObjectProperty HMS_CurrentChosenNewHost [HMS_GameMode] flags=1c001040000205
+#63 StrProperty HMS_CurrentChosenNewHostName [HMS_GameMode] flags=18000000000205
+#64 IntProperty HMS_NumPlayersReconnected [HMS_GameMode] flags=18001040000205
+#65 IntProperty HMS_NumPlayersExpectedToReconnect [HMS_GameMode] flags=18001040000205
+#66 ObjectProperty HMS_CustomGameSaveDataObject [HMS_GameMode] flags=18001000000205
+#67 StructProperty HMS_MigrationFlags [HMS_GameMode] flags=10001000000005
+#68 StrProperty OptionsString [GameModeBase] flags=18000000000214
+#69 ClassProperty GameSessionClass [GameModeBase] flags=1c001000000205
+#70 ClassProperty GameStateClass [GameModeBase] flags=1c001002000215
+#71 ClassProperty PlayerControllerClass [GameModeBase] flags=1c001002000215
+#72 ClassProperty PlayerStateClass [GameModeBase] flags=1c001002000215
+#73 ClassProperty HUDClass [GameModeBase] flags=1c001000000205
+#74 ClassProperty DefaultPawnClass [GameModeBase] flags=1c001000000205
+#75 ClassProperty SpectatorClass [GameModeBase] flags=1c001002000215
+#76 ClassProperty ReplaySpectatorPlayerControllerClass [GameModeBase] flags=1c001002000215
+#77 ClassProperty ServerStatReplicatorClass [GameModeBase] flags=1c001002000215
+#78 ObjectProperty GameSession [GameModeBase] flags=11c001000002200
+#79 ObjectProperty GameState [GameModeBase] flags=11c001000002200
+#80 ObjectProperty ServerStatReplicator [GameModeBase] flags=11c001000002200
+#81 TextProperty DefaultPlayerName [GameModeBase] flags=10000000000001
+#82 BoolProperty bUseSeamlessTravel [GameModeBase] flags=18001000000005
+#83 BoolProperty bStartPlayersAsSpectators [GameModeBase] flags=28081000000015
+#84 BoolProperty bPauseable [GameModeBase] flags=28081000000005
+#85 EnumProperty GameNetDriverReplicationSystem [GameModeBase] flags=28081040004205
+#86 ObjectProperty SpriteComponent [Info] flags=14c001800080208
+#87 StructProperty PrimaryActorTick [Actor] flags=10000000010001
+#88 BoolProperty bNetTemporary [Actor] flags=18001000000000
+#89 BoolProperty bOnlyRelevantToOwner [Actor] flags=18001000010015
+#90 BoolProperty bAlwaysRelevant [Actor] flags=18001000010005
+#91 BoolProperty bReplicateMovement [Actor] flags=48001100010021
+#92 BoolProperty bCallPreReplication [Actor] flags=48041000010001
+#93 BoolProperty bCallPreReplicationForReplay [Actor] flags=48041000010001
+#94 BoolProperty bHidden [Actor] flags=48001200000035
+#95 BoolProperty bTearOff [Actor] flags=48001000000020
+#96 BoolProperty bForceNetAddressable [Actor] flags=48001000000000
+#97 EnumProperty LevelInstanceType [Actor] flags=48001c40002200
+#98 EnumProperty LevelInstanceFlags [Actor] flags=48001c40002200
+#99 BoolProperty bIsMainWorldOnly [Actor] flags=18041800000001
+#100 BoolProperty bExchangedRoles [Actor] flags=18001000002000
+#101 BoolProperty bNetLoadOnClient [Actor] flags=18001000000001
+#102 BoolProperty bNetUseOwnerRelevancy [Actor] flags=18001000010005
+#103 BoolProperty bRelevantForNetworkReplays [Actor] flags=18001000000000
+#104 BoolProperty bRelevantForLevelBounds [Actor] flags=18041000000001
+#105 BoolProperty bReplayRewindable [Actor] flags=18041000010001
+#106 BoolProperty bAllowTickBeforeBeginPlay [Actor] flags=18001000010001
+#107 BoolProperty bAutoDestroyWhenFinished [Actor] flags=48001000000004
+#108 BoolProperty bCanBeDamaged [Actor] flags=48001001000025
+#109 BoolProperty bBlockInput [Actor] flags=18001000010001
+#110 BoolProperty bCollideWhenPlacing [Actor] flags=18001000000000
+#111 BoolProperty bFindCameraComponentWhenViewTarget [Actor] flags=18041000000005
+#112 BoolProperty bGenerateOverlapEventsDuringLevelStreaming [Actor] flags=18001000000005
+#113 BoolProperty bIgnoresOriginShifting [Actor] flags=18041000000001
+#114 BoolProperty bEnableAutoLODGeneration [Actor] flags=18001000000005
+#115 BoolProperty bIsEditorOnlyActor [Actor] flags=18041000000001
+#116 BoolProperty bReplicates [Actor] flags=28081000010015
+#117 BoolProperty bCanBeInCluster [Actor] flags=280c1000000001
+#118 BoolProperty bAllowReceiveTickEventOnDedicatedServer [Actor] flags=28081000000000
+#119 BoolProperty bReplicateUsingRegisteredSubObjectList [Actor] flags=280c1000014015
+#120 BoolProperty bActorEnableCollision [Actor] flags=48001000000000
+#121 BoolProperty bActorIsBeingDestroyed [Actor] flags=48001000202000
+#122 BoolProperty bAsyncPhysicsTickEnabled [Actor] flags=28081000000001
+#123 EnumProperty UpdateOverlapsMethodDuringLevelStreaming [Actor] flags=28081040000201
+#124 EnumProperty DefaultUpdateOverlapsMethodDuringLevelStreaming [Actor] flags=48001040024201
+#125 ByteProperty RemoteRole [Actor] flags=48001040022a21
+#126 FloatProperty InitialLifeSpan [Actor] flags=18001040000215
+#127 FloatProperty CustomTimeDilation [Actor] flags=18041040000204
+#128 IntProperty RayTracingGroupId [Actor] flags=48001040000200
+#129 EnumProperty GridPlacement [Actor] flags=28081860000200
+#130 NameProperty RuntimeGrid [Actor] flags=280c1840000201
+#131 StructProperty AttachmentReplication [Actor] flags=20089100002020
+#132 StructProperty ReplicatedMovement [Actor] flags=40041100010021
+#133 ObjectProperty Owner [Actor] flags=11c001100000220
+#134 NameProperty NetDriverName [Actor] flags=28081040000200
+#135 ByteProperty Role [Actor] flags=48001040020a21
+#136 ByteProperty NetDormancy [Actor] flags=18001040010215
+#137 EnumProperty SpawnCollisionHandlingMethod [Actor] flags=18001040000205
+#138 ByteProperty AutoReceiveInput [Actor] flags=18001040000201
+#139 IntProperty InputPriority [Actor] flags=18001040000201
+#140 ObjectProperty InputComponent [Actor] flags=11c001000280208
+#141 IntProperty NetTag [Actor] flags=18001040002200
+#142 FloatProperty NetCullDistanceSquared [Actor] flags=18001040010205
+#143 FloatProperty NetUpdateFrequency [Actor] flags=18001040010205
+#144 FloatProperty MinNetUpdateFrequency [Actor] flags=18001040010205
+#145 FloatProperty NetPriority [Actor] flags=18001040010205
+#146 EnumProperty PhysicsReplicationMode [Actor] flags=48001040010201
+#147 ObjectProperty Instigator [Actor] flags=14d001100000224
+#148 ArrayProperty Children [Actor] flags=114000000002200
+#149 ObjectProperty RootComponent [Actor] flags=12c08100008021c
+#150 StructProperty PivotOffset [Actor] flags=280c1840000215
+#151 ObjectProperty HLODLayer [Actor] flags=14c001800000201
+#152 ArrayProperty Layers [Actor] flags=10040000000201
+#153 WeakObjectProperty ParentComponentActor [Actor] flags=4c001860000200
+#154 WeakObjectProperty ParentComponent [Actor] flags=4c001040080208
+#155 StructProperty ActorGuid [Actor] flags=28cc1c40000214
+#156 StructProperty ActorInstanceGuid [Actor] flags=28cc1c40002214
+#157 StructProperty ContentBundleGuid [Actor] flags=284c1c40000214
+#158 ArrayProperty DataLayers [Actor] flags=200c0800020201
+#159 ArrayProperty DataLayerAssets [Actor] flags=240c0800000201
+#160 ObjectProperty ExternalDataLayerAsset [Actor] flags=12c4c1800020201
+#161 ObjectProperty GroupActor [Actor] flags=11c001800002200
+#162 FloatProperty SpriteScale [Actor] flags=18001840000205
+#163 UInt64Property HiddenEditorViews [Actor] flags=18001840002200
+#164 StrProperty ActorLabel [Actor] flags=48000800000200
+#165 NameProperty FolderPath [Actor] flags=48001840000200
+#166 StructProperty FolderGuid [Actor] flags=48401840000200
+#167 BoolProperty bHiddenEd [Actor] flags=18001800000000
+#168 BoolProperty bIsEditorPreviewActor [Actor] flags=18001800002000
+#169 BoolProperty bHiddenEdLayer [Actor] flags=18001800002000
+#170 BoolProperty bHiddenEdLevel [Actor] flags=18001800002000
+#171 BoolProperty bLockLocation [Actor] flags=28081800000000
+#172 BoolProperty bActorLabelEditable [Actor] flags=28081800000000
+#173 BoolProperty bEditable [Actor] flags=28081800000000
+#174 BoolProperty bListedInSceneOutliner [Actor] flags=28081800000000
+#175 BoolProperty bOptimizeBPComponentData [Actor] flags=280c1800010001
+#176 BoolProperty bCanPlayFromHere [Actor] flags=28081800000000
+#177 BoolProperty bIsSpatiallyLoaded [Actor] flags=280c1800000001
+#178 BoolProperty bHiddenEdTemporary [Actor] flags=48001800002000
+#179 BoolProperty bForceExternalActorLevelReferenceForPIE [Actor] flags=48001800002000
+#180 ArrayProperty Tags [Actor] flags=10040000000205
+#181 MulticastSparseDelegateProperty OnTakeAnyDamage [Actor] flags=10001010080000
+#182 MulticastSparseDelegateProperty OnTakePointDamage [Actor] flags=10001010080000
+#183 MulticastSparseDelegateProperty OnTakeRadialDamage [Actor] flags=10001010080000
+#184 MulticastSparseDelegateProperty OnActorBeginOverlap [Actor] flags=10001010080000
+#185 MulticastSparseDelegateProperty OnActorEndOverlap [Actor] flags=10001010080000
+#186 MulticastSparseDelegateProperty OnBeginCursorOver [Actor] flags=10001010080000
+#187 MulticastSparseDelegateProperty OnEndCursorOver [Actor] flags=10001010080000
+#188 MulticastSparseDelegateProperty OnClicked [Actor] flags=10001010080000
+#189 MulticastSparseDelegateProperty OnReleased [Actor] flags=10001010080000
+#190 MulticastSparseDelegateProperty OnInputTouchBegin [Actor] flags=10001010080000
+#191 MulticastSparseDelegateProperty OnInputTouchEnd [Actor] flags=10001010080000
+#192 MulticastSparseDelegateProperty OnInputTouchEnter [Actor] flags=10001010080000
+#193 MulticastSparseDelegateProperty OnInputTouchLeave [Actor] flags=10001010080000
+#194 MulticastSparseDelegateProperty OnActorHit [Actor] flags=10001010080000
+#195 MulticastSparseDelegateProperty OnDestroyed [Actor] flags=10001010080000
+#196 MulticastSparseDelegateProperty OnEndPlay [Actor] flags=10001010080000
+#197 ArrayProperty InstanceComponents [Actor] flags=144008000000208
+#198 ArrayProperty BlueprintCreatedComponents [Actor] flags=114408400000208
+
+[MB] stage 4 (Domination) done
+[MB] created /Game/GM/GM_Host (parent GameModeBase)
+[MB] building GM_Host stand-in ReceiveBeginPlay [EventGraph] ...
+[MB] build GM_Host stand-in ReceiveBeginPlay [EventGraph]: graph EventGraph: 1 node(s), 0 link(s), 0 error(s)
+[MB]     bp: reusing the existing ReceiveBeginPlay event node
+[MB] compile GM_Host stand-in: CLEAN
+[MB] created /Game/GM/Gamemode/GM_CHLobby (parent GM_Host_C)
+[MB] compile GM_CHLobby (shell): CLEAN
+[MB] building GM_CHLobby response events [EventGraph] ...
+[MB] build GM_CHLobby response events [EventGraph]: graph EventGraph: 20 node(s), 0 link(s), 0 error(s)
+[MB] compile GM_CHLobby (events): CLEAN
+[MB] building GM_CHLobby BeginPlay probe [EventGraph] ...
+[MB] build GM_CHLobby BeginPlay probe [EventGraph]: graph EventGraph: 86 node(s), 88 link(s), 0 error(s)
+[MB]     bp: reusing the existing ReceiveBeginPlay event node
+[MB]     hdlyd: CreateEvent bound to OnHostDelay
+[MB]     mkd: CreateEvent bound to OnLobbyMade
+[MB]     mkfd: CreateEvent bound to OnLobbyFailed
+[MB] compile GM_CHLobby (logic): 
+WARNING: Get Current Level Name  was pruned because its Exec pin is not connected, the connected value is not available and will instead be read as default
+
+[MB] layout of GM_CHLobby (GM_CHLobby_C):
+#0 StructProperty UberGraphFrame [GM_CHLobby_C] flags=202200
+#1 StructProperty UberGraphFrame [GM_Host_C] flags=202200
+#2 ObjectProperty DefaultSceneRoot [GM_Host_C] flags=8001400080204
+#3 StrProperty OptionsString [GameModeBase] flags=18000000000214
+#4 ClassProperty GameSessionClass [GameModeBase] flags=1c001000000205
+#5 ClassProperty GameStateClass [GameModeBase] flags=1c001002000215
+#6 ClassProperty PlayerControllerClass [GameModeBase] flags=1c001002000215
+#7 ClassProperty PlayerStateClass [GameModeBase] flags=1c001002000215
+#8 ClassProperty HUDClass [GameModeBase] flags=1c001000000205
+#9 ClassProperty DefaultPawnClass [GameModeBase] flags=1c001000000205
+#10 ClassProperty SpectatorClass [GameModeBase] flags=1c001002000215
+#11 ClassProperty ReplaySpectatorPlayerControllerClass [GameModeBase] flags=1c001002000215
+#12 ClassProperty ServerStatReplicatorClass [GameModeBase] flags=1c001002000215
+#13 ObjectProperty GameSession [GameModeBase] flags=11c001000002200
+#14 ObjectProperty GameState [GameModeBase] flags=11c001000002200
+#15 ObjectProperty ServerStatReplicator [GameModeBase] flags=11c001000002200
+#16 TextProperty DefaultPlayerName [GameModeBase] flags=10000000000001
+#17 BoolProperty bUseSeamlessTravel [GameModeBase] flags=18001000000005
+#18 BoolProperty bStartPlayersAsSpectators [GameModeBase] flags=28081000000015
+#19 BoolProperty bPauseable [GameModeBase] flags=28081000000005
+#20 EnumProperty GameNetDriverReplicationSystem [GameModeBase] flags=28081040004205
+#21 ObjectProperty SpriteComponent [Info] flags=14c001800080208
+#22 StructProperty PrimaryActorTick [Actor] flags=10000000010001
+#23 BoolProperty bNetTemporary [Actor] flags=18001000000000
+#24 BoolProperty bOnlyRelevantToOwner [Actor] flags=18001000010015
+#25 BoolProperty bAlwaysRelevant [Actor] flags=18001000010005
+#26 BoolProperty bReplicateMovement [Actor] flags=48001100010021
+#27 BoolProperty bCallPreReplication [Actor] flags=48041000010001
+#28 BoolProperty bCallPreReplicationForReplay [Actor] flags=48041000010001
+#29 BoolProperty bHidden [Actor] flags=48001200000035
+#30 BoolProperty bTearOff [Actor] flags=48001000000020
+#31 BoolProperty bForceNetAddressable [Actor] flags=48001000000000
+#32 EnumProperty LevelInstanceType [Actor] flags=48001c40002200
+#33 EnumProperty LevelInstanceFlags [Actor] flags=48001c40002200
+#34 BoolProperty bIsMainWorldOnly [Actor] flags=18041800000001
+#35 BoolProperty bExchangedRoles [Actor] flags=18001000002000
+#36 BoolProperty bNetLoadOnClient [Actor] flags=18001000000001
+#37 BoolProperty bNetUseOwnerRelevancy [Actor] flags=18001000010005
+#38 BoolProperty bRelevantForNetworkReplays [Actor] flags=18001000000000
+#39 BoolProperty bRelevantForLevelBounds [Actor] flags=18041000000001
+#40 BoolProperty bReplayRewindable [Actor] flags=18041000010001
+#41 BoolProperty bAllowTickBeforeBeginPlay [Actor] flags=18001000010001
+#42 BoolProperty bAutoDestroyWhenFinished [Actor] flags=48001000000004
+#43 BoolProperty bCanBeDamaged [Actor] flags=48001001000025
+#44 BoolProperty bBlockInput [Actor] flags=18001000010001
+#45 BoolProperty bCollideWhenPlacing [Actor] flags=18001000000000
+#46 BoolProperty bFindCameraComponentWhenViewTarget [Actor] flags=18041000000005
+#47 BoolProperty bGenerateOverlapEventsDuringLevelStreaming [Actor] flags=18001000000005
+#48 BoolProperty bIgnoresOriginShifting [Actor] flags=18041000000001
+#49 BoolProperty bEnableAutoLODGeneration [Actor] flags=18001000000005
+#50 BoolProperty bIsEditorOnlyActor [Actor] flags=18041000000001
+#51 BoolProperty bReplicates [Actor] flags=28081000010015
+#52 BoolProperty bCanBeInCluster [Actor] flags=280c1000000001
+#53 BoolProperty bAllowReceiveTickEventOnDedicatedServer [Actor] flags=28081000000000
+#54 BoolProperty bReplicateUsingRegisteredSubObjectList [Actor] flags=280c1000014015
+#55 BoolProperty bActorEnableCollision [Actor] flags=48001000000000
+#56 BoolProperty bActorIsBeingDestroyed [Actor] flags=48001000202000
+#57 BoolProperty bAsyncPhysicsTickEnabled [Actor] flags=28081000000001
+#58 EnumProperty UpdateOverlapsMethodDuringLevelStreaming [Actor] flags=28081040000201
+#59 EnumProperty DefaultUpdateOverlapsMethodDuringLevelStreaming [Actor] flags=48001040024201
+#60 ByteProperty RemoteRole [Actor] flags=48001040022a21
+#61 FloatProperty InitialLifeSpan [Actor] flags=18001040000215
+#62 FloatProperty CustomTimeDilation [Actor] flags=18041040000204
+#63 IntProperty RayTracingGroupId [Actor] flags=48001040000200
+#64 EnumProperty GridPlacement [Actor] flags=28081860000200
+#65 NameProperty RuntimeGrid [Actor] flags=280c1840000201
+#66 StructProperty AttachmentReplication [Actor] flags=20089100002020
+#67 StructProperty ReplicatedMovement [Actor] flags=40041100010021
+#68 ObjectProperty Owner [Actor] flags=11c001100000220
+#69 NameProperty NetDriverName [Actor] flags=28081040000200
+#70 ByteProperty Role [Actor] flags=48001040020a21
+#71 ByteProperty NetDormancy [Actor] flags=18001040010215
+#72 EnumProperty SpawnCollisionHandlingMethod [Actor] flags=18001040000205
+#73 ByteProperty AutoReceiveInput [Actor] flags=18001040000201
+#74 IntProperty InputPriority [Actor] flags=18001040000201
+#75 ObjectProperty InputComponent [Actor] flags=11c001000280208
+#76 IntProperty NetTag [Actor] flags=18001040002200
+#77 FloatProperty NetCullDistanceSquared [Actor] flags=18001040010205
+#78 FloatProperty NetUpdateFrequency [Actor] flags=18001040010205
+#79 FloatProperty MinNetUpdateFrequency [Actor] flags=18001040010205
+#80 FloatProperty NetPriority [Actor] flags=18001040010205
+#81 EnumProperty PhysicsReplicationMode [Actor] flags=48001040010201
+#82 ObjectProperty Instigator [Actor] flags=14d001100000224
+#83 ArrayProperty Children [Actor] flags=114000000002200
+#84 ObjectProperty RootComponent [Actor] flags=12c08100008021c
+#85 StructProperty PivotOffset [Actor] flags=280c1840000215
+#86 ObjectProperty HLODLayer [Actor] flags=14c001800000201
+#87 ArrayProperty Layers [Actor] flags=10040000000201
+#88 WeakObjectProperty ParentComponentActor [Actor] flags=4c001860000200
+#89 WeakObjectProperty ParentComponent [Actor] flags=4c001040080208
+#90 StructProperty ActorGuid [Actor] flags=28cc1c40000214
+#91 StructProperty ActorInstanceGuid [Actor] flags=28cc1c40002214
+#92 StructProperty ContentBundleGuid [Actor] flags=284c1c40000214
+#93 ArrayProperty DataLayers [Actor] flags=200c0800020201
+#94 ArrayProperty DataLayerAssets [Actor] flags=240c0800000201
+#95 ObjectProperty ExternalDataLayerAsset [Actor] flags=12c4c1800020201
+#96 ObjectProperty GroupActor [Actor] flags=11c001800002200
+#97 FloatProperty SpriteScale [Actor] flags=18001840000205
+#98 UInt64Property HiddenEditorViews [Actor] flags=18001840002200
+#99 StrProperty ActorLabel [Actor] flags=48000800000200
+#100 NameProperty FolderPath [Actor] flags=48001840000200
+#101 StructProperty FolderGuid [Actor] flags=48401840000200
+#102 BoolProperty bHiddenEd [Actor] flags=18001800000000
+#103 BoolProperty bIsEditorPreviewActor [Actor] flags=18001800002000
+#104 BoolProperty bHiddenEdLayer [Actor] flags=18001800002000
+#105 BoolProperty bHiddenEdLevel [Actor] flags=18001800002000
+#106 BoolProperty bLockLocation [Actor] flags=28081800000000
+#107 BoolProperty bActorLabelEditable [Actor] flags=28081800000000
+#108 BoolProperty bEditable [Actor] flags=28081800000000
+#109 BoolProperty bListedInSceneOutliner [Actor] flags=28081800000000
+#110 BoolProperty bOptimizeBPComponentData [Actor] flags=280c1800010001
+#111 BoolProperty bCanPlayFromHere [Actor] flags=28081800000000
+#112 BoolProperty bIsSpatiallyLoaded [Actor] flags=280c1800000001
+#113 BoolProperty bHiddenEdTemporary [Actor] flags=48001800002000
+#114 BoolProperty bForceExternalActorLevelReferenceForPIE [Actor] flags=48001800002000
+#115 ArrayProperty Tags [Actor] flags=10040000000205
+#116 MulticastSparseDelegateProperty OnTakeAnyDamage [Actor] flags=10001010080000
+#117 MulticastSparseDelegateProperty OnTakePointDamage [Actor] flags=10001010080000
+#118 MulticastSparseDelegateProperty OnTakeRadialDamage [Actor] flags=10001010080000
+#119 MulticastSparseDelegateProperty OnActorBeginOverlap [Actor] flags=10001010080000
+#120 MulticastSparseDelegateProperty OnActorEndOverlap [Actor] flags=10001010080000
+#121 MulticastSparseDelegateProperty OnBeginCursorOver [Actor] flags=10001010080000
+#122 MulticastSparseDelegateProperty OnEndCursorOver [Actor] flags=10001010080000
+#123 MulticastSparseDelegateProperty OnClicked [Actor] flags=10001010080000
+#124 MulticastSparseDelegateProperty OnReleased [Actor] flags=10001010080000
+#125 MulticastSparseDelegateProperty OnInputTouchBegin [Actor] flags=10001010080000
+#126 MulticastSparseDelegateProperty OnInputTouchEnd [Actor] flags=10001010080000
+#127 MulticastSparseDelegateProperty OnInputTouchEnter [Actor] flags=10001010080000
+#128 MulticastSparseDelegateProperty OnInputTouchLeave [Actor] flags=10001010080000
+#129 MulticastSparseDelegateProperty OnActorHit [Actor] flags=10001010080000
+#130 MulticastSparseDelegateProperty OnDestroyed [Actor] flags=10001010080000
+#131 MulticastSparseDelegateProperty OnEndPlay [Actor] flags=10001010080000
+#132 ArrayProperty InstanceComponents [Actor] flags=144008000000208
+#133 ArrayProperty BlueprintCreatedComponents [Actor] flags=114408400000208
+
+[MB] delete existing /Game/GM/Gamemode/GM_CHPeek
+[MB] created /Game/GM/Gamemode/GM_CHPeek (parent GM_Host_C)
+[MB] compile GM_CHPeek (shell): CLEAN
+[MB] building GM_CHPeek response events [EventGraph] ...
+[MB] build GM_CHPeek response events [EventGraph]: graph EventGraph: 87 node(s), 0 link(s), 0 error(s)
+[MB] compile GM_CHPeek (events): CLEAN
+[MB] building GM_CHPeek BeginPlay peek [EventGraph] ...
+[MB] build GM_CHPeek BeginPlay peek [EventGraph]: graph EventGraph: 522 node(s), 472 link(s), 0 error(s)
+[MB]     bp: reusing the existing ReceiveBeginPlay event node
+[MB]     h0d: CreateEvent bound to OnPeekHop0
+[MB]     heldd: CreateEvent bound to OnPeekHeld
+[MB]     h1d: CreateEvent bound to OnPeekHop1
+[MB]     h2d: CreateEvent bound to OnPeekHop2
+[MB]     h3d: CreateEvent bound to OnPeekHop3
+[MB]     h4d: CreateEvent bound to OnPeekHop4
+[MB]     h5d: CreateEvent bound to OnPeekHop5
+[MB]     h6d: CreateEvent bound to OnPeekHop6
+[MB]     h7d: CreateEvent bound to OnPeekHop7
+[MB]     h8d: CreateEvent bound to OnPeekHop8
+[MB]     h9d: CreateEvent bound to OnPeekHop9
+[MB]     h10d: CreateEvent bound to OnPeekHop10
+[MB]     s9fd: CreateEvent bound to OnPeekFound
+[MB]     s9fl: CreateEvent bound to OnPeekFail9
+[MB]     h11d: CreateEvent bound to OnPeekHop11
+[MB]     h12d: CreateEvent bound to OnPeekHop12
+[MB]     h13d: CreateEvent bound to OnPeekHop13
+[MB]     h14d: CreateEvent bound to OnPeekHop14
+[MB]     h15d: CreateEvent bound to OnPeekHop15
+[MB]     h16d: CreateEvent bound to OnPeekHop16
+[MB]     h17d: CreateEvent bound to OnPeekHop17
+[MB]     h18d: CreateEvent bound to OnPeekHop18
+[MB]     h19d: CreateEvent bound to OnPeekHop19
+[MB]     h20d: CreateEvent bound to OnPeekHop20
+[MB]     s19fd: CreateEvent bound to OnPeekFound
+[MB]     s19fl: CreateEvent bound to OnPeekFail19
+[MB]     h21d: CreateEvent bound to OnPeekHop21
+[MB]     h22d: CreateEvent bound to OnPeekHop22
+[MB]     h23d: CreateEvent bound to OnPeekHop23
+[MB]     h24d: CreateEvent bound to OnPeekHop24
+[MB]     h25d: CreateEvent bound to OnPeekHop25
+[MB]     h26d: CreateEvent bound to OnPeekHop26
+[MB]     h27d: CreateEvent bound to OnPeekHop27
+[MB]     h28d: CreateEvent bound to OnPeekHop28
+[MB]     h29d: CreateEvent bound to OnPeekHop29
+[MB]     h30d: CreateEvent bound to OnPeekHop30
+[MB]     h31d: CreateEvent bound to OnPeekHop31
+[MB]     h32d: CreateEvent bound to OnPeekHop32
+[MB]     h33d: CreateEvent bound to OnPeekHop33
+[MB]     h34d: CreateEvent bound to OnPeekHop34
+[MB]     h35d: CreateEvent bound to OnPeekHop35
+[MB]     h36d: CreateEvent bound to OnPeekHop36
+[MB]     h37d: CreateEvent bound to OnPeekHop37
+[MB]     h38d: CreateEvent bound to OnPeekHop38
+[MB]     h39d: CreateEvent bound to OnPeekHop39
+[MB]     h40d: CreateEvent bound to OnPeekHop40
+[MB]     s39fd: CreateEvent bound to OnPeekFound
+[MB]     s39fl: CreateEvent bound to OnPeekFail39
+[MB]     h41d: CreateEvent bound to OnPeekHop41
+[MB]     h42d: CreateEvent bound to OnPeekHop42
+[MB]     h43d: CreateEvent bound to OnPeekHop43
+[MB]     h44d: CreateEvent bound to OnPeekHop44
+[MB]     h45d: CreateEvent bound to OnPeekHop45
+[MB]     h46d: CreateEvent bound to OnPeekHop46
+[MB]     h47d: CreateEvent bound to OnPeekHop47
+[MB]     h48d: CreateEvent bound to OnPeekHop48
+[MB]     h49d: CreateEvent bound to OnPeekHop49
+[MB]     h50d: CreateEvent bound to OnPeekHop50
+[MB]     h51d: CreateEvent bound to OnPeekHop51
+[MB]     h52d: CreateEvent bound to OnPeekHop52
+[MB]     h53d: CreateEvent bound to OnPeekHop53
+[MB]     h54d: CreateEvent bound to OnPeekHop54
+[MB]     h55d: CreateEvent bound to OnPeekHop55
+[MB]     h56d: CreateEvent bound to OnPeekHop56
+[MB]     h57d: CreateEvent bound to OnPeekHop57
+[MB]     h58d: CreateEvent bound to OnPeekHop58
+[MB]     h59d: CreateEvent bound to OnPeekHop59
+[MB]     h60d: CreateEvent bound to OnPeekHop60
+[MB]     s59fd: CreateEvent bound to OnPeekFound
+[MB]     s59fl: CreateEvent bound to OnPeekFail59
+[MB]     h61d: CreateEvent bound to OnPeekHop61
+[MB]     h62d: CreateEvent bound to OnPeekHop62
+[MB]     h63d: CreateEvent bound to OnPeekHop63
+[MB]     h64d: CreateEvent bound to OnPeekHop64
+[MB]     h65d: CreateEvent bound to OnPeekHop65
+[MB]     h66d: CreateEvent bound to OnPeekHop66
+[MB]     h67d: CreateEvent bound to OnPeekHop67
+[MB]     h68d: CreateEvent bound to OnPeekHop68
+[MB]     h69d: CreateEvent bound to OnPeekHop69
+[MB]     h70d: CreateEvent bound to OnPeekHop70
+[MB]     h71d: CreateEvent bound to OnPeekHop71
+[MB]     h72d: CreateEvent bound to OnPeekHop72
+[MB]     h73d: CreateEvent bound to OnPeekHop73
+[MB]     h74d: CreateEvent bound to OnPeekHop74
+[MB]     h75d: CreateEvent bound to OnPeekHop75
+[MB]     h76d: CreateEvent bound to OnPeekHop76
+[MB]     h77d: CreateEvent bound to OnPeekHop77
+[MB]     h78d: CreateEvent bound to OnPeekHop78
+[MB]     h79d: CreateEvent bound to OnPeekHop79
+[MB]     s79fd: CreateEvent bound to OnPeekFound
+[MB]     s79fl: CreateEvent bound to OnPeekFail79
+[MB] compile GM_CHPeek (logic): CLEAN
+[MB] layout of GM_CHPeek (GM_CHPeek_C):
+#0 StructProperty UberGraphFrame [GM_CHPeek_C] flags=202200
+#1 StructProperty UberGraphFrame [GM_Host_C] flags=202200
+#2 ObjectProperty DefaultSceneRoot [GM_Host_C] flags=8001400080204
+#3 StrProperty OptionsString [GameModeBase] flags=18000000000214
+#4 ClassProperty GameSessionClass [GameModeBase] flags=1c001000000205
+#5 ClassProperty GameStateClass [GameModeBase] flags=1c001002000215
+#6 ClassProperty PlayerControllerClass [GameModeBase] flags=1c001002000215
+#7 ClassProperty PlayerStateClass [GameModeBase] flags=1c001002000215
+#8 ClassProperty HUDClass [GameModeBase] flags=1c001000000205
+#9 ClassProperty DefaultPawnClass [GameModeBase] flags=1c001000000205
+#10 ClassProperty SpectatorClass [GameModeBase] flags=1c001002000215
+#11 ClassProperty ReplaySpectatorPlayerControllerClass [GameModeBase] flags=1c001002000215
+#12 ClassProperty ServerStatReplicatorClass [GameModeBase] flags=1c001002000215
+#13 ObjectProperty GameSession [GameModeBase] flags=11c001000002200
+#14 ObjectProperty GameState [GameModeBase] flags=11c001000002200
+#15 ObjectProperty ServerStatReplicator [GameModeBase] flags=11c001000002200
+#16 TextProperty DefaultPlayerName [GameModeBase] flags=10000000000001
+#17 BoolProperty bUseSeamlessTravel [GameModeBase] flags=18001000000005
+#18 BoolProperty bStartPlayersAsSpectators [GameModeBase] flags=28081000000015
+#19 BoolProperty bPauseable [GameModeBase] flags=28081000000005
+#20 EnumProperty GameNetDriverReplicationSystem [GameModeBase] flags=28081040004205
+#21 ObjectProperty SpriteComponent [Info] flags=14c001800080208
+#22 StructProperty PrimaryActorTick [Actor] flags=10000000010001
+#23 BoolProperty bNetTemporary [Actor] flags=18001000000000
+#24 BoolProperty bOnlyRelevantToOwner [Actor] flags=18001000010015
+#25 BoolProperty bAlwaysRelevant [Actor] flags=18001000010005
+#26 BoolProperty bReplicateMovement [Actor] flags=48001100010021
+#27 BoolProperty bCallPreReplication [Actor] flags=48041000010001
+#28 BoolProperty bCallPreReplicationForReplay [Actor] flags=48041000010001
+#29 BoolProperty bHidden [Actor] flags=48001200000035
+#30 BoolProperty bTearOff [Actor] flags=48001000000020
+#31 BoolProperty bForceNetAddressable [Actor] flags=48001000000000
+#32 EnumProperty LevelInstanceType [Actor] flags=48001c40002200
+#33 EnumProperty LevelInstanceFlags [Actor] flags=48001c40002200
+#34 BoolProperty bIsMainWorldOnly [Actor] flags=18041800000001
+#35 BoolProperty bExchangedRoles [Actor] flags=18001000002000
+#36 BoolProperty bNetLoadOnClient [Actor] flags=18001000000001
+#37 BoolProperty bNetUseOwnerRelevancy [Actor] flags=18001000010005
+#38 BoolProperty bRelevantForNetworkReplays [Actor] flags=18001000000000
+#39 BoolProperty bRelevantForLevelBounds [Actor] flags=18041000000001
+#40 BoolProperty bReplayRewindable [Actor] flags=18041000010001
+#41 BoolProperty bAllowTickBeforeBeginPlay [Actor] flags=18001000010001
+#42 BoolProperty bAutoDestroyWhenFinished [Actor] flags=48001000000004
+#43 BoolProperty bCanBeDamaged [Actor] flags=48001001000025
+#44 BoolProperty bBlockInput [Actor] flags=18001000010001
+#45 BoolProperty bCollideWhenPlacing [Actor] flags=18001000000000
+#46 BoolProperty bFindCameraComponentWhenViewTarget [Actor] flags=18041000000005
+#47 BoolProperty bGenerateOverlapEventsDuringLevelStreaming [Actor] flags=18001000000005
+#48 BoolProperty bIgnoresOriginShifting [Actor] flags=18041000000001
+#49 BoolProperty bEnableAutoLODGeneration [Actor] flags=18001000000005
+#50 BoolProperty bIsEditorOnlyActor [Actor] flags=18041000000001
+#51 BoolProperty bReplicates [Actor] flags=28081000010015
+#52 BoolProperty bCanBeInCluster [Actor] flags=280c1000000001
+#53 BoolProperty bAllowReceiveTickEventOnDedicatedServer [Actor] flags=28081000000000
+#54 BoolProperty bReplicateUsingRegisteredSubObjectList [Actor] flags=280c1000014015
+#55 BoolProperty bActorEnableCollision [Actor] flags=48001000000000
+#56 BoolProperty bActorIsBeingDestroyed [Actor] flags=48001000202000
+#57 BoolProperty bAsyncPhysicsTickEnabled [Actor] flags=28081000000001
+#58 EnumProperty UpdateOverlapsMethodDuringLevelStreaming [Actor] flags=28081040000201
+#59 EnumProperty DefaultUpdateOverlapsMethodDuringLevelStreaming [Actor] flags=48001040024201
+#60 ByteProperty RemoteRole [Actor] flags=48001040022a21
+#61 FloatProperty InitialLifeSpan [Actor] flags=18001040000215
+#62 FloatProperty CustomTimeDilation [Actor] flags=18041040000204
+#63 IntProperty RayTracingGroupId [Actor] flags=48001040000200
+#64 EnumProperty GridPlacement [Actor] flags=28081860000200
+#65 NameProperty RuntimeGrid [Actor] flags=280c1840000201
+#66 StructProperty AttachmentReplication [Actor] flags=20089100002020
+#67 StructProperty ReplicatedMovement [Actor] flags=40041100010021
+#68 ObjectProperty Owner [Actor] flags=11c001100000220
+#69 NameProperty NetDriverName [Actor] flags=28081040000200
+#70 ByteProperty Role [Actor] flags=48001040020a21
+#71 ByteProperty NetDormancy [Actor] flags=18001040010215
+#72 EnumProperty SpawnCollisionHandlingMethod [Actor] flags=18001040000205
+#73 ByteProperty AutoReceiveInput [Actor] flags=18001040000201
+#74 IntProperty InputPriority [Actor] flags=18001040000201
+#75 ObjectProperty InputComponent [Actor] flags=11c001000280208
+#76 IntProperty NetTag [Actor] flags=18001040002200
+#77 FloatProperty NetCullDistanceSquared [Actor] flags=18001040010205
+#78 FloatProperty NetUpdateFrequency [Actor] flags=18001040010205
+#79 FloatProperty MinNetUpdateFrequency [Actor] flags=18001040010205
+#80 FloatProperty NetPriority [Actor] flags=18001040010205
+#81 EnumProperty PhysicsReplicationMode [Actor] flags=48001040010201
+#82 ObjectProperty Instigator [Actor] flags=14d001100000224
+#83 ArrayProperty Children [Actor] flags=114000000002200
+#84 ObjectProperty RootComponent [Actor] flags=12c08100008021c
+#85 StructProperty PivotOffset [Actor] flags=280c1840000215
+#86 ObjectProperty HLODLayer [Actor] flags=14c001800000201
+#87 ArrayProperty Layers [Actor] flags=10040000000201
+#88 WeakObjectProperty ParentComponentActor [Actor] flags=4c001860000200
+#89 WeakObjectProperty ParentComponent [Actor] flags=4c001040080208
+#90 StructProperty ActorGuid [Actor] flags=28cc1c40000214
+#91 StructProperty ActorInstanceGuid [Actor] flags=28cc1c40002214
+#92 StructProperty ContentBundleGuid [Actor] flags=284c1c40000214
+#93 ArrayProperty DataLayers [Actor] flags=200c0800020201
+#94 ArrayProperty DataLayerAssets [Actor] flags=240c0800000201
+#95 ObjectProperty ExternalDataLayerAsset [Actor] flags=12c4c1800020201
+#96 ObjectProperty GroupActor [Actor] flags=11c001800002200
+#97 FloatProperty SpriteScale [Actor] flags=18001840000205
+#98 UInt64Property HiddenEditorViews [Actor] flags=18001840002200
+#99 StrProperty ActorLabel [Actor] flags=48000800000200
+#100 NameProperty FolderPath [Actor] flags=48001840000200
+#101 StructProperty FolderGuid [Actor] flags=48401840000200
+#102 BoolProperty bHiddenEd [Actor] flags=18001800000000
+#103 BoolProperty bIsEditorPreviewActor [Actor] flags=18001800002000
+#104 BoolProperty bHiddenEdLayer [Actor] flags=18001800002000
+#105 BoolProperty bHiddenEdLevel [Actor] flags=18001800002000
+#106 BoolProperty bLockLocation [Actor] flags=28081800000000
+#107 BoolProperty bActorLabelEditable [Actor] flags=28081800000000
+#108 BoolProperty bEditable [Actor] flags=28081800000000
+#109 BoolProperty bListedInSceneOutliner [Actor] flags=28081800000000
+#110 BoolProperty bOptimizeBPComponentData [Actor] flags=280c1800010001
+#111 BoolProperty bCanPlayFromHere [Actor] flags=28081800000000
+#112 BoolProperty bIsSpatiallyLoaded [Actor] flags=280c1800000001
+#113 BoolProperty bHiddenEdTemporary [Actor] flags=48001800002000
+#114 BoolProperty bForceExternalActorLevelReferenceForPIE [Actor] flags=48001800002000
+#115 ArrayProperty Tags [Actor] flags=10040000000205
+#116 MulticastSparseDelegateProperty OnTakeAnyDamage [Actor] flags=10001010080000
+#117 MulticastSparseDelegateProperty OnTakePointDamage [Actor] flags=10001010080000
+#118 MulticastSparseDelegateProperty OnTakeRadialDamage [Actor] flags=10001010080000
+#119 MulticastSparseDelegateProperty OnActorBeginOverlap [Actor] flags=10001010080000
+#120 MulticastSparseDelegateProperty OnActorEndOverlap [Actor] flags=10001010080000
+#121 MulticastSparseDelegateProperty OnBeginCursorOver [Actor] flags=10001010080000
+#122 MulticastSparseDelegateProperty OnEndCursorOver [Actor] flags=10001010080000
+#123 MulticastSparseDelegateProperty OnClicked [Actor] flags=10001010080000
+#124 MulticastSparseDelegateProperty OnReleased [Actor] flags=10001010080000
+#125 MulticastSparseDelegateProperty OnInputTouchBegin [Actor] flags=10001010080000
+#126 MulticastSparseDelegateProperty OnInputTouchEnd [Actor] flags=10001010080000
+#127 MulticastSparseDelegateProperty OnInputTouchEnter [Actor] flags=10001010080000
+#128 MulticastSparseDelegateProperty OnInputTouchLeave [Actor] flags=10001010080000
+#129 MulticastSparseDelegateProperty OnActorHit [Actor] flags=10001010080000
+#130 MulticastSparseDelegateProperty OnDestroyed [Actor] flags=10001010080000
+#131 MulticastSparseDelegateProperty OnEndPlay [Actor] flags=10001010080000
+#132 ArrayProperty InstanceComponents [Actor] flags=144008000000208
+#133 ArrayProperty BlueprintCreatedComponents [Actor] flags=114408400000208
+
+[MB] delete existing /Game/GM/Gamemode/GM_CHJoin
+[MB] created /Game/GM/Gamemode/GM_CHJoin (parent GM_Host_C)
+[MB] compile GM_CHJoin (shell): CLEAN
+[MB] building GM_CHJoin response events [EventGraph] ...
+[MB] build GM_CHJoin response events [EventGraph]: graph EventGraph: 0 node(s), 0 link(s), 0 error(s)
+[MB] compile GM_CHJoin (events): CLEAN
+[MB] building GM_CHJoin BeginPlay join [EventGraph] ...
+[MB] build GM_CHJoin BeginPlay join [EventGraph]: graph EventGraph: 39 node(s), 61 link(s), 0 error(s)
+[MB]     bp: reusing the existing ReceiveBeginPlay event node
+[MB] compile GM_CHJoin (logic): CLEAN
+[MB] layout of GM_CHJoin (GM_CHJoin_C):
+#0 StructProperty UberGraphFrame [GM_CHJoin_C] flags=202200
+#1 StructProperty UberGraphFrame [GM_Host_C] flags=202200
+#2 ObjectProperty DefaultSceneRoot [GM_Host_C] flags=8001400080204
+#3 StrProperty OptionsString [GameModeBase] flags=18000000000214
+#4 ClassProperty GameSessionClass [GameModeBase] flags=1c001000000205
+#5 ClassProperty GameStateClass [GameModeBase] flags=1c001002000215
+#6 ClassProperty PlayerControllerClass [GameModeBase] flags=1c001002000215
+#7 ClassProperty PlayerStateClass [GameModeBase] flags=1c001002000215
+#8 ClassProperty HUDClass [GameModeBase] flags=1c001000000205
+#9 ClassProperty DefaultPawnClass [GameModeBase] flags=1c001000000205
+#10 ClassProperty SpectatorClass [GameModeBase] flags=1c001002000215
+#11 ClassProperty ReplaySpectatorPlayerControllerClass [GameModeBase] flags=1c001002000215
+#12 ClassProperty ServerStatReplicatorClass [GameModeBase] flags=1c001002000215
+#13 ObjectProperty GameSession [GameModeBase] flags=11c001000002200
+#14 ObjectProperty GameState [GameModeBase] flags=11c001000002200
+#15 ObjectProperty ServerStatReplicator [GameModeBase] flags=11c001000002200
+#16 TextProperty DefaultPlayerName [GameModeBase] flags=10000000000001
+#17 BoolProperty bUseSeamlessTravel [GameModeBase] flags=18001000000005
+#18 BoolProperty bStartPlayersAsSpectators [GameModeBase] flags=28081000000015
+#19 BoolProperty bPauseable [GameModeBase] flags=28081000000005
+#20 EnumProperty GameNetDriverReplicationSystem [GameModeBase] flags=28081040004205
+#21 ObjectProperty SpriteComponent [Info] flags=14c001800080208
+#22 StructProperty PrimaryActorTick [Actor] flags=10000000010001
+#23 BoolProperty bNetTemporary [Actor] flags=18001000000000
+#24 BoolProperty bOnlyRelevantToOwner [Actor] flags=18001000010015
+#25 BoolProperty bAlwaysRelevant [Actor] flags=18001000010005
+#26 BoolProperty bReplicateMovement [Actor] flags=48001100010021
+#27 BoolProperty bCallPreReplication [Actor] flags=48041000010001
+#28 BoolProperty bCallPreReplicationForReplay [Actor] flags=48041000010001
+#29 BoolProperty bHidden [Actor] flags=48001200000035
+#30 BoolProperty bTearOff [Actor] flags=48001000000020
+#31 BoolProperty bForceNetAddressable [Actor] flags=48001000000000
+#32 EnumProperty LevelInstanceType [Actor] flags=48001c40002200
+#33 EnumProperty LevelInstanceFlags [Actor] flags=48001c40002200
+#34 BoolProperty bIsMainWorldOnly [Actor] flags=18041800000001
+#35 BoolProperty bExchangedRoles [Actor] flags=18001000002000
+#36 BoolProperty bNetLoadOnClient [Actor] flags=18001000000001
+#37 BoolProperty bNetUseOwnerRelevancy [Actor] flags=18001000010005
+#38 BoolProperty bRelevantForNetworkReplays [Actor] flags=18001000000000
+#39 BoolProperty bRelevantForLevelBounds [Actor] flags=18041000000001
+#40 BoolProperty bReplayRewindable [Actor] flags=18041000010001
+#41 BoolProperty bAllowTickBeforeBeginPlay [Actor] flags=18001000010001
+#42 BoolProperty bAutoDestroyWhenFinished [Actor] flags=48001000000004
+#43 BoolProperty bCanBeDamaged [Actor] flags=48001001000025
+#44 BoolProperty bBlockInput [Actor] flags=18001000010001
+#45 BoolProperty bCollideWhenPlacing [Actor] flags=18001000000000
+#46 BoolProperty bFindCameraComponentWhenViewTarget [Actor] flags=18041000000005
+#47 BoolProperty bGenerateOverlapEventsDuringLevelStreaming [Actor] flags=18001000000005
+#48 BoolProperty bIgnoresOriginShifting [Actor] flags=18041000000001
+#49 BoolProperty bEnableAutoLODGeneration [Actor] flags=18001000000005
+#50 BoolProperty bIsEditorOnlyActor [Actor] flags=18041000000001
+#51 BoolProperty bReplicates [Actor] flags=28081000010015
+#52 BoolProperty bCanBeInCluster [Actor] flags=280c1000000001
+#53 BoolProperty bAllowReceiveTickEventOnDedicatedServer [Actor] flags=28081000000000
+#54 BoolProperty bReplicateUsingRegisteredSubObjectList [Actor] flags=280c1000014015
+#55 BoolProperty bActorEnableCollision [Actor] flags=48001000000000
+#56 BoolProperty bActorIsBeingDestroyed [Actor] flags=48001000202000
+#57 BoolProperty bAsyncPhysicsTickEnabled [Actor] flags=28081000000001
+#58 EnumProperty UpdateOverlapsMethodDuringLevelStreaming [Actor] flags=28081040000201
+#59 EnumProperty DefaultUpdateOverlapsMethodDuringLevelStreaming [Actor] flags=48001040024201
+#60 ByteProperty RemoteRole [Actor] flags=48001040022a21
+#61 FloatProperty InitialLifeSpan [Actor] flags=18001040000215
+#62 FloatProperty CustomTimeDilation [Actor] flags=18041040000204
+#63 IntProperty RayTracingGroupId [Actor] flags=48001040000200
+#64 EnumProperty GridPlacement [Actor] flags=28081860000200
+#65 NameProperty RuntimeGrid [Actor] flags=280c1840000201
+#66 StructProperty AttachmentReplication [Actor] flags=20089100002020
+#67 StructProperty ReplicatedMovement [Actor] flags=40041100010021
+#68 ObjectProperty Owner [Actor] flags=11c001100000220
+#69 NameProperty NetDriverName [Actor] flags=28081040000200
+#70 ByteProperty Role [Actor] flags=48001040020a21
+#71 ByteProperty NetDormancy [Actor] flags=18001040010215
+#72 EnumProperty SpawnCollisionHandlingMethod [Actor] flags=18001040000205
+#73 ByteProperty AutoReceiveInput [Actor] flags=18001040000201
+#74 IntProperty InputPriority [Actor] flags=18001040000201
+#75 ObjectProperty InputComponent [Actor] flags=11c001000280208
+#76 IntProperty NetTag [Actor] flags=18001040002200
+#77 FloatProperty NetCullDistanceSquared [Actor] flags=18001040010205
+#78 FloatProperty NetUpdateFrequency [Actor] flags=18001040010205
+#79 FloatProperty MinNetUpdateFrequency [Actor] flags=18001040010205
+#80 FloatProperty NetPriority [Actor] flags=18001040010205
+#81 EnumProperty PhysicsReplicationMode [Actor] flags=48001040010201
+#82 ObjectProperty Instigator [Actor] flags=14d001100000224
+#83 ArrayProperty Children [Actor] flags=114000000002200
+#84 ObjectProperty RootComponent [Actor] flags=12c08100008021c
+#85 StructProperty PivotOffset [Actor] flags=280c1840000215
+#86 ObjectProperty HLODLayer [Actor] flags=14c001800000201
+#87 ArrayProperty Layers [Actor] flags=10040000000201
+#88 WeakObjectProperty ParentComponentActor [Actor] flags=4c001860000200
+#89 WeakObjectProperty ParentComponent [Actor] flags=4c001040080208
+#90 StructProperty ActorGuid [Actor] flags=28cc1c40000214
+#91 StructProperty ActorInstanceGuid [Actor] flags=28cc1c40002214
+#92 StructProperty ContentBundleGuid [Actor] flags=284c1c40000214
+#93 ArrayProperty DataLayers [Actor] flags=200c0800020201
+#94 ArrayProperty DataLayerAssets [Actor] flags=240c0800000201
+#95 ObjectProperty ExternalDataLayerAsset [Actor] flags=12c4c1800020201
+#96 ObjectProperty GroupActor [Actor] flags=11c001800002200
+#97 FloatProperty SpriteScale [Actor] flags=18001840000205
+#98 UInt64Property HiddenEditorViews [Actor] flags=18001840002200
+#99 StrProperty ActorLabel [Actor] flags=48000800000200
+#100 NameProperty FolderPath [Actor] flags=48001840000200
+#101 StructProperty FolderGuid [Actor] flags=48401840000200
+#102 BoolProperty bHiddenEd [Actor] flags=18001800000000
+#103 BoolProperty bIsEditorPreviewActor [Actor] flags=18001800002000
+#104 BoolProperty bHiddenEdLayer [Actor] flags=18001800002000
+#105 BoolProperty bHiddenEdLevel [Actor] flags=18001800002000
+#106 BoolProperty bLockLocation [Actor] flags=28081800000000
+#107 BoolProperty bActorLabelEditable [Actor] flags=28081800000000
+#108 BoolProperty bEditable [Actor] flags=28081800000000
+#109 BoolProperty bListedInSceneOutliner [Actor] flags=28081800000000
+#110 BoolProperty bOptimizeBPComponentData [Actor] flags=280c1800010001
+#111 BoolProperty bCanPlayFromHere [Actor] flags=28081800000000
+#112 BoolProperty bIsSpatiallyLoaded [Actor] flags=280c1800000001
+#113 BoolProperty bHiddenEdTemporary [Actor] flags=48001800002000
+#114 BoolProperty bForceExternalActorLevelReferenceForPIE [Actor] flags=48001800002000
+#115 ArrayProperty Tags [Actor] flags=10040000000205
+#116 MulticastSparseDelegateProperty OnTakeAnyDamage [Actor] flags=10001010080000
+#117 MulticastSparseDelegateProperty OnTakePointDamage [Actor] flags=10001010080000
+#118 MulticastSparseDelegateProperty OnTakeRadialDamage [Actor] flags=10001010080000
+#119 MulticastSparseDelegateProperty OnActorBeginOverlap [Actor] flags=10001010080000
+#120 MulticastSparseDelegateProperty OnActorEndOverlap [Actor] flags=10001010080000
+#121 MulticastSparseDelegateProperty OnBeginCursorOver [Actor] flags=10001010080000
+#122 MulticastSparseDelegateProperty OnEndCursorOver [Actor] flags=10001010080000
+#123 MulticastSparseDelegateProperty OnClicked [Actor] flags=10001010080000
+#124 MulticastSparseDelegateProperty OnReleased [Actor] flags=10001010080000
+#125 MulticastSparseDelegateProperty OnInputTouchBegin [Actor] flags=10001010080000
+#126 MulticastSparseDelegateProperty OnInputTouchEnd [Actor] flags=10001010080000
+#127 MulticastSparseDelegateProperty OnInputTouchEnter [Actor] flags=10001010080000
+#128 MulticastSparseDelegateProperty OnInputTouchLeave [Actor] flags=10001010080000
+#129 MulticastSparseDelegateProperty OnActorHit [Actor] flags=10001010080000
+#130 MulticastSparseDelegateProperty OnDestroyed [Actor] flags=10001010080000
+#131 MulticastSparseDelegateProperty OnEndPlay [Actor] flags=10001010080000
+#132 ArrayProperty InstanceComponents [Actor] flags=144008000000208
+#133 ArrayProperty BlueprintCreatedComponents [Actor] flags=114408400000208
+
+[MB] delete existing /Game/GM/Gamemode/GM_CHTJoin
+[MB] created /Game/GM/Gamemode/GM_CHTJoin (parent GM_Host_C)
+[MB] compile GM_CHTJoin (shell): CLEAN
+[MB] building GM_CHTJoin response events [EventGraph] ...
+[MB] build GM_CHTJoin response events [EventGraph]: graph EventGraph: 80 node(s), 0 link(s), 0 error(s)
+[MB] compile GM_CHTJoin (events): CLEAN
+[MB] building GM_CHTJoin BeginPlay join [EventGraph] ...
+[MB] build GM_CHTJoin BeginPlay join [EventGraph]: graph EventGraph: 458 node(s), 451 link(s), 0 error(s)
+[MB]     bp: reusing the existing ReceiveBeginPlay event node
+[MB]     rdyev: CreateEvent bound to OnTJReady
+[MB]     th0d: CreateEvent bound to OnTJHop0
+[MB]     th1d: CreateEvent bound to OnTJHop1
+[MB]     th2d: CreateEvent bound to OnTJHop2
+[MB]     th3d: CreateEvent bound to OnTJHop3
+[MB]     th4d: CreateEvent bound to OnTJHop4
+[MB]     th5d: CreateEvent bound to OnTJHop5
+[MB]     th6d: CreateEvent bound to OnTJHop6
+[MB]     th7d: CreateEvent bound to OnTJHop7
+[MB]     th8d: CreateEvent bound to OnTJHop8
+[MB]     th9d: CreateEvent bound to OnTJHop9
+[MB]     th10d: CreateEvent bound to OnTJHop10
+[MB]     th11d: CreateEvent bound to OnTJHop11
+[MB]     th12d: CreateEvent bound to OnTJHop12
+[MB]     th13d: CreateEvent bound to OnTJHop13
+[MB]     th14d: CreateEvent bound to OnTJHop14
+[MB]     th15d: CreateEvent bound to OnTJHop15
+[MB]     th16d: CreateEvent bound to OnTJHop16
+[MB]     th17d: CreateEvent bound to OnTJHop17
+[MB]     th18d: CreateEvent bound to OnTJHop18
+[MB]     th19d: CreateEvent bound to OnTJHop19
+[MB]     th20d: CreateEvent bound to OnTJHop20
+[MB]     tsfd: CreateEvent bound to OnTJFound
+[MB]     tsfl: CreateEvent bound to OnTJFailed
+[MB]     th21d: CreateEvent bound to OnTJHop21
+[MB]     th22d: CreateEvent bound to OnTJHop22
+[MB]     th23d: CreateEvent bound to OnTJHop23
+[MB]     th24d: CreateEvent bound to OnTJHop24
+[MB]     th25d: CreateEvent bound to OnTJHop25
+[MB]     th26d: CreateEvent bound to OnTJHop26
+[MB]     th27d: CreateEvent bound to OnTJHop27
+[MB]     th28d: CreateEvent bound to OnTJHop28
+[MB]     th29d: CreateEvent bound to OnTJHop29
+[MB]     th30d: CreateEvent bound to OnTJHop30
+[MB]     th31d: CreateEvent bound to OnTJHop31
+[MB]     th32d: CreateEvent bound to OnTJHop32
+[MB]     th33d: CreateEvent bound to OnTJHop33
+[MB]     th34d: CreateEvent bound to OnTJHop34
+[MB]     th35d: CreateEvent bound to OnTJHop35
+[MB]     th36d: CreateEvent bound to OnTJHop36
+[MB]     th37d: CreateEvent bound to OnTJHop37
+[MB]     th38d: CreateEvent bound to OnTJHop38
+[MB]     th39d: CreateEvent bound to OnTJHop39
+[MB]     th40d: CreateEvent bound to OnTJHop40
+[MB]     th41d: CreateEvent bound to OnTJHop41
+[MB]     th42d: CreateEvent bound to OnTJHop42
+[MB]     th43d: CreateEvent bound to OnTJHop43
+[MB]     th44d: CreateEvent bound to OnTJHop44
+[MB]     th45d: CreateEvent bound to OnTJHop45
+[MB]     th46d: CreateEvent bound to OnTJHop46
+[MB]     th47d: CreateEvent bound to OnTJHop47
+[MB]     th48d: CreateEvent bound to OnTJHop48
+[MB]     th49d: CreateEvent bound to OnTJHop49
+[MB]     th50d: CreateEvent bound to OnTJHop50
+[MB]     th51d: CreateEvent bound to OnTJHop51
+[MB]     th52d: CreateEvent bound to OnTJHop52
+[MB]     th53d: CreateEvent bound to OnTJHop53
+[MB]     th54d: CreateEvent bound to OnTJHop54
+[MB]     th55d: CreateEvent bound to OnTJHop55
+[MB]     th56d: CreateEvent bound to OnTJHop56
+[MB]     th57d: CreateEvent bound to OnTJHop57
+[MB]     th58d: CreateEvent bound to OnTJHop58
+[MB]     th59d: CreateEvent bound to OnTJHop59
+[MB]     th60d: CreateEvent bound to OnTJHop60
+[MB]     th61d: CreateEvent bound to OnTJHop61
+[MB]     th62d: CreateEvent bound to OnTJHop62
+[MB]     th63d: CreateEvent bound to OnTJHop63
+[MB]     th64d: CreateEvent bound to OnTJHop64
+[MB]     th65d: CreateEvent bound to OnTJHop65
+[MB]     th66d: CreateEvent bound to OnTJHop66
+[MB]     th67d: CreateEvent bound to OnTJHop67
+[MB]     th68d: CreateEvent bound to OnTJHop68
+[MB]     th69d: CreateEvent bound to OnTJHop69
+[MB]     th70d: CreateEvent bound to OnTJHop70
+[MB]     th71d: CreateEvent bound to OnTJHop71
+[MB]     th72d: CreateEvent bound to OnTJHop72
+[MB]     th73d: CreateEvent bound to OnTJHop73
+[MB]     th74d: CreateEvent bound to OnTJHop74
+[MB] compile GM_CHTJoin (logic): CLEAN
+[MB] layout of GM_CHTJoin (GM_CHTJoin_C):
+#0 StructProperty UberGraphFrame [GM_CHTJoin_C] flags=202200
+#1 StructProperty UberGraphFrame [GM_Host_C] flags=202200
+#2 ObjectProperty DefaultSceneRoot [GM_Host_C] flags=8001400080204
+#3 StrProperty OptionsString [GameModeBase] flags=18000000000214
+#4 ClassProperty GameSessionClass [GameModeBase] flags=1c001000000205
+#5 ClassProperty GameStateClass [GameModeBase] flags=1c001002000215
+#6 ClassProperty PlayerControllerClass [GameModeBase] flags=1c001002000215
+#7 ClassProperty PlayerStateClass [GameModeBase] flags=1c001002000215
+#8 ClassProperty HUDClass [GameModeBase] flags=1c001000000205
+#9 ClassProperty DefaultPawnClass [GameModeBase] flags=1c001000000205
+#10 ClassProperty SpectatorClass [GameModeBase] flags=1c001002000215
+#11 ClassProperty ReplaySpectatorPlayerControllerClass [GameModeBase] flags=1c001002000215
+#12 ClassProperty ServerStatReplicatorClass [GameModeBase] flags=1c001002000215
+#13 ObjectProperty GameSession [GameModeBase] flags=11c001000002200
+#14 ObjectProperty GameState [GameModeBase] flags=11c001000002200
+#15 ObjectProperty ServerStatReplicator [GameModeBase] flags=11c001000002200
+#16 TextProperty DefaultPlayerName [GameModeBase] flags=10000000000001
+#17 BoolProperty bUseSeamlessTravel [GameModeBase] flags=18001000000005
+#18 BoolProperty bStartPlayersAsSpectators [GameModeBase] flags=28081000000015
+#19 BoolProperty bPauseable [GameModeBase] flags=28081000000005
+#20 EnumProperty GameNetDriverReplicationSystem [GameModeBase] flags=28081040004205
+#21 ObjectProperty SpriteComponent [Info] flags=14c001800080208
+#22 StructProperty PrimaryActorTick [Actor] flags=10000000010001
+#23 BoolProperty bNetTemporary [Actor] flags=18001000000000
+#24 BoolProperty bOnlyRelevantToOwner [Actor] flags=18001000010015
+#25 BoolProperty bAlwaysRelevant [Actor] flags=18001000010005
+#26 BoolProperty bReplicateMovement [Actor] flags=48001100010021
+#27 BoolProperty bCallPreReplication [Actor] flags=48041000010001
+#28 BoolProperty bCallPreReplicationForReplay [Actor] flags=48041000010001
+#29 BoolProperty bHidden [Actor] flags=48001200000035
+#30 BoolProperty bTearOff [Actor] flags=48001000000020
+#31 BoolProperty bForceNetAddressable [Actor] flags=48001000000000
+#32 EnumProperty LevelInstanceType [Actor] flags=48001c40002200
+#33 EnumProperty LevelInstanceFlags [Actor] flags=48001c40002200
+#34 BoolProperty bIsMainWorldOnly [Actor] flags=18041800000001
+#35 BoolProperty bExchangedRoles [Actor] flags=18001000002000
+#36 BoolProperty bNetLoadOnClient [Actor] flags=18001000000001
+#37 BoolProperty bNetUseOwnerRelevancy [Actor] flags=18001000010005
+#38 BoolProperty bRelevantForNetworkReplays [Actor] flags=18001000000000
+#39 BoolProperty bRelevantForLevelBounds [Actor] flags=18041000000001
+#40 BoolProperty bReplayRewindable [Actor] flags=18041000010001
+#41 BoolProperty bAllowTickBeforeBeginPlay [Actor] flags=18001000010001
+#42 BoolProperty bAutoDestroyWhenFinished [Actor] flags=48001000000004
+#43 BoolProperty bCanBeDamaged [Actor] flags=48001001000025
+#44 BoolProperty bBlockInput [Actor] flags=18001000010001
+#45 BoolProperty bCollideWhenPlacing [Actor] flags=18001000000000
+#46 BoolProperty bFindCameraComponentWhenViewTarget [Actor] flags=18041000000005
+#47 BoolProperty bGenerateOverlapEventsDuringLevelStreaming [Actor] flags=18001000000005
+#48 BoolProperty bIgnoresOriginShifting [Actor] flags=18041000000001
+#49 BoolProperty bEnableAutoLODGeneration [Actor] flags=18001000000005
+#50 BoolProperty bIsEditorOnlyActor [Actor] flags=18041000000001
+#51 BoolProperty bReplicates [Actor] flags=28081000010015
+#52 BoolProperty bCanBeInCluster [Actor] flags=280c1000000001
+#53 BoolProperty bAllowReceiveTickEventOnDedicatedServer [Actor] flags=28081000000000
+#54 BoolProperty bReplicateUsingRegisteredSubObjectList [Actor] flags=280c1000014015
+#55 BoolProperty bActorEnableCollision [Actor] flags=48001000000000
+#56 BoolProperty bActorIsBeingDestroyed [Actor] flags=48001000202000
+#57 BoolProperty bAsyncPhysicsTickEnabled [Actor] flags=28081000000001
+#58 EnumProperty UpdateOverlapsMethodDuringLevelStreaming [Actor] flags=28081040000201
+#59 EnumProperty DefaultUpdateOverlapsMethodDuringLevelStreaming [Actor] flags=48001040024201
+#60 ByteProperty RemoteRole [Actor] flags=48001040022a21
+#61 FloatProperty InitialLifeSpan [Actor] flags=18001040000215
+#62 FloatProperty CustomTimeDilation [Actor] flags=18041040000204
+#63 IntProperty RayTracingGroupId [Actor] flags=48001040000200
+#64 EnumProperty GridPlacement [Actor] flags=28081860000200
+#65 NameProperty RuntimeGrid [Actor] flags=280c1840000201
+#66 StructProperty AttachmentReplication [Actor] flags=20089100002020
+#67 StructProperty ReplicatedMovement [Actor] flags=40041100010021
+#68 ObjectProperty Owner [Actor] flags=11c001100000220
+#69 NameProperty NetDriverName [Actor] flags=28081040000200
+#70 ByteProperty Role [Actor] flags=48001040020a21
+#71 ByteProperty NetDormancy [Actor] flags=18001040010215
+#72 EnumProperty SpawnCollisionHandlingMethod [Actor] flags=18001040000205
+#73 ByteProperty AutoReceiveInput [Actor] flags=18001040000201
+#74 IntProperty InputPriority [Actor] flags=18001040000201
+#75 ObjectProperty InputComponent [Actor] flags=11c001000280208
+#76 IntProperty NetTag [Actor] flags=18001040002200
+#77 FloatProperty NetCullDistanceSquared [Actor] flags=18001040010205
+#78 FloatProperty NetUpdateFrequency [Actor] flags=18001040010205
+#79 FloatProperty MinNetUpdateFrequency [Actor] flags=18001040010205
+#80 FloatProperty NetPriority [Actor] flags=18001040010205
+#81 EnumProperty PhysicsReplicationMode [Actor] flags=48001040010201
+#82 ObjectProperty Instigator [Actor] flags=14d001100000224
+#83 ArrayProperty Children [Actor] flags=114000000002200
+#84 ObjectProperty RootComponent [Actor] flags=12c08100008021c
+#85 StructProperty PivotOffset [Actor] flags=280c1840000215
+#86 ObjectProperty HLODLayer [Actor] flags=14c001800000201
+#87 ArrayProperty Layers [Actor] flags=10040000000201
+#88 WeakObjectProperty ParentComponentActor [Actor] flags=4c001860000200
+#89 WeakObjectProperty ParentComponent [Actor] flags=4c001040080208
+#90 StructProperty ActorGuid [Actor] flags=28cc1c40000214
+#91 StructProperty ActorInstanceGuid [Actor] flags=28cc1c40002214
+#92 StructProperty ContentBundleGuid [Actor] flags=284c1c40000214
+#93 ArrayProperty DataLayers [Actor] flags=200c0800020201
+#94 ArrayProperty DataLayerAssets [Actor] flags=240c0800000201
+#95 ObjectProperty ExternalDataLayerAsset [Actor] flags=12c4c1800020201
+#96 ObjectProperty GroupActor [Actor] flags=11c001800002200
+#97 FloatProperty SpriteScale [Actor] flags=18001840000205
+#98 UInt64Property HiddenEditorViews [Actor] flags=18001840002200
+#99 StrProperty ActorLabel [Actor] flags=48000800000200
+#100 NameProperty FolderPath [Actor] flags=48001840000200
+#101 StructProperty FolderGuid [Actor] flags=48401840000200
+#102 BoolProperty bHiddenEd [Actor] flags=18001800000000
+#103 BoolProperty bIsEditorPreviewActor [Actor] flags=18001800002000
+#104 BoolProperty bHiddenEdLayer [Actor] flags=18001800002000
+#105 BoolProperty bHiddenEdLevel [Actor] flags=18001800002000
+#106 BoolProperty bLockLocation [Actor] flags=28081800000000
+#107 BoolProperty bActorLabelEditable [Actor] flags=28081800000000
+#108 BoolProperty bEditable [Actor] flags=28081800000000
+#109 BoolProperty bListedInSceneOutliner [Actor] flags=28081800000000
+#110 BoolProperty bOptimizeBPComponentData [Actor] flags=280c1800010001
+#111 BoolProperty bCanPlayFromHere [Actor] flags=28081800000000
+#112 BoolProperty bIsSpatiallyLoaded [Actor] flags=280c1800000001
+#113 BoolProperty bHiddenEdTemporary [Actor] flags=48001800002000
+#114 BoolProperty bForceExternalActorLevelReferenceForPIE [Actor] flags=48001800002000
+#115 ArrayProperty Tags [Actor] flags=10040000000205
+#116 MulticastSparseDelegateProperty OnTakeAnyDamage [Actor] flags=10001010080000
+#117 MulticastSparseDelegateProperty OnTakePointDamage [Actor] flags=10001010080000
+#118 MulticastSparseDelegateProperty OnTakeRadialDamage [Actor] flags=10001010080000
+#119 MulticastSparseDelegateProperty OnActorBeginOverlap [Actor] flags=10001010080000
+#120 MulticastSparseDelegateProperty OnActorEndOverlap [Actor] flags=10001010080000
+#121 MulticastSparseDelegateProperty OnBeginCursorOver [Actor] flags=10001010080000
+#122 MulticastSparseDelegateProperty OnEndCursorOver [Actor] flags=10001010080000
+#123 MulticastSparseDelegateProperty OnClicked [Actor] flags=10001010080000
+#124 MulticastSparseDelegateProperty OnReleased [Actor] flags=10001010080000
+#125 MulticastSparseDelegateProperty OnInputTouchBegin [Actor] flags=10001010080000
+#126 MulticastSparseDelegateProperty OnInputTouchEnd [Actor] flags=10001010080000
+#127 MulticastSparseDelegateProperty OnInputTouchEnter [Actor] flags=10001010080000
+#128 MulticastSparseDelegateProperty OnInputTouchLeave [Actor] flags=10001010080000
+#129 MulticastSparseDelegateProperty OnActorHit [Actor] flags=10001010080000
+#130 MulticastSparseDelegateProperty OnDestroyed [Actor] flags=10001010080000
+#131 MulticastSparseDelegateProperty OnEndPlay [Actor] flags=10001010080000
+#132 ArrayProperty InstanceComponents [Actor] flags=144008000000208
+#133 ArrayProperty BlueprintCreatedComponents [Actor] flags=114408400000208
+
+[MB] stage 5 (lobby) done
+[MB] summary written to blueprints_summary.txt
+RESULT: OK

@@ -1,0 +1,635 @@
+/* Competitive screen (Find match + Party) — OWNED BY THE COMPETITIVE SCREEN.
+ *
+ * This is the ONLY CSS file the competitive screen agent edits. It uses the shared tokens
+ * (tokens.css) and never redefines colors/fonts/spacing as one-off values. Class names here are
+ * local to this screen; shared, reusable component styles live in ui.css (ui-*). Ported verbatim
+ * from the pre-modular app.css so the screen renders identically. */
+
+/* ---------------------------------------------------------------- competitive split */
+.split {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 460px 1fr;
+  min-height: 0;
+}
+@media (max-width: 900px) { .split { grid-template-columns: 380px 1fr; } }
+
+/* hero (left, red) */
+.hero {
+  background: var(--accent);
+  color: #fff;
+  padding: 44px 40px 32px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+.hero .ghost {
+  position: absolute; right: -30px; bottom: -70px;
+  font-family: var(--font-display); font-weight: 700; font-size: 320px; line-height: 1;
+  color: rgba(0,0,0,.14); letter-spacing: -.04em; pointer-events: none;
+}
+/* The scroll failsafe. The page is zoomed to fit the window (ui.css), but the zoom bottoms out
+ * at a scale that is still readable, so an extreme window can still be shorter than the hero's
+ * content. The scroll goes on hero-inner rather than on .hero because .hero must keep clipping
+ * the signed-out decoration, which hangs off the bottom-right corner and would otherwise
+ * give the hero a permanent scrollbar with nothing in it. flex:1 + min-height:0 is what lets it
+ * be the thing that scrolls; it also finally gives .hero-spacer a height to push against, so
+ * the action block sits at the bottom of a tall window instead of under the stats. */
+.hero-inner { position: relative; display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.hero-id { display: flex; align-items: center; gap: 12px; }
+.hero-badge {
+  width: 48px; height: 48px;
+  background: repeating-linear-gradient(135deg, #a80c26 0 4px, #8f0a20 4px 8px);
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 700; font-size: 20px;
+}
+.hero-kicker { font-family: var(--font-display); font-weight: 600; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; opacity: .82; }
+.hero-sub { font-size: 12px; opacity: .82; }
+/* First in the hero now (the rank block moved below it), so there is nothing above to clear. */
+.hero-name { font-family: var(--font-display); font-weight: 700; font-size: 58px; line-height: 1; letter-spacing: -.01em; text-transform: uppercase; word-break: break-word; }
+.hero-tier { font-family: var(--font-display); font-weight: 600; font-size: 14px; letter-spacing: .12em; text-transform: uppercase; opacity: .9; margin-top: 6px; }
+.hero-spacer { flex: 1; }
+.hero-action { position: relative; display: flex; flex-direction: column; gap: 16px; }
+
+.btn-find {
+  background: #fff; color: var(--ground);
+  font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: .14em; text-transform: uppercase;
+  padding: 20px; text-align: center; border: none; width: 100%; cursor: pointer;
+  transition: transform .06s ease;
+}
+.btn-find:hover { transform: translateY(-1px); }
+.btn-find:disabled { opacity: .5; cursor: default; transform: none; }
+.hero-ready { font-size: 12.5px; line-height: 1.5; color: #fff; opacity: .92; }
+.hero-link { font-size: 12px; text-decoration: underline; cursor: pointer; opacity: .95; }
+.hero-error { background: rgba(0,0,0,.28); padding: 10px 12px; font-size: 12.5px; line-height: 1.4; }
+
+/* searching / found overlays inside the hero action area */
+.search-box { display: flex; flex-direction: column; gap: 13px; }
+.search-head { display: flex; align-items: baseline; justify-content: space-between; }
+.search-head .lbl { font-family: var(--font-display); font-weight: 600; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
+.search-head .timer { font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1; }
+.search-bar { height: 4px; background: rgba(255,255,255,.25); overflow: hidden; }
+.search-bar > i { display: block; width: 40%; height: 100%; background: #fff; animation: hubslide 1.4s linear infinite; }
+.search-reminder { background: rgba(0,0,0,.28); border-left: 2px solid currentColor; padding: 10px 12px; font-size: 13px; font-weight: 600; line-height: 1.5; }
+.search-meta { display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 12px; opacity: .9; }
+.btn-ghost-light {
+  border: 1px solid rgba(255,255,255,.55); background: transparent; color: #fff;
+  font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: .16em; text-transform: uppercase;
+  padding: 14px; text-align: center; cursor: pointer; width: 100%;
+}
+.btn-ghost-light:hover { background: rgba(0,0,0,.25); }
+
+.found-box { display: flex; flex-direction: column; gap: 14px; text-align: center; background: rgba(0,0,0,.32); padding: 22px; }
+.found-title { font-family: var(--font-display); font-weight: 700; font-size: 24px; letter-spacing: .14em; text-transform: uppercase; }
+.found-timer { font-family: var(--font-display); font-weight: 700; font-size: 40px; line-height: 1; }
+.found-count { font-size: 12.5px; opacity: .9; }
+.btn-accept {
+  background: #fff; color: var(--ground);
+  font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: .12em; text-transform: uppercase;
+  padding: 16px; border: none; cursor: pointer; width: 100%;
+}
+.btn-accept:disabled { opacity: .6; cursor: default; }
+
+/* right pane */
+.pane { padding: 40px 44px 26px; display: flex; flex-direction: column; gap: 28px; min-height: 0; overflow-y: auto; }
+/* The lobby is the one phase that does NOT scroll as a whole: it splits into a scrolling top
+ * half and a chat pair held against the bottom edge (see .lobby-pane below). */
+.pane.pane-lobby { overflow: hidden; }
+.section-head { display: flex; justify-content: space-between; align-items: baseline; }
+.section-title { font-family: var(--font-display); font-weight: 600; font-size: 14px; letter-spacing: .14em; text-transform: uppercase; }
+.section-title .dim { color: var(--muted); }
+.link-muted { font-size: 12px; color: var(--muted); cursor: pointer; }
+.link-muted:hover { color: var(--text); }
+
+/* party */
+.party { display: flex; flex-direction: column; gap: 16px; }
+.code-row { display: flex; align-items: center; gap: 10px; background: var(--panel); padding: 14px 18px; }
+.code { font-family: var(--font-display); font-weight: 700; font-size: 26px; letter-spacing: .16em; flex: 1; }
+.chip { border: 1px solid var(--line); background: transparent; color: var(--text); padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: var(--font-body); }
+.chip:hover { border-color: var(--accent); }
+.party-note { font-size: 12px; line-height: 1.5; color: var(--muted); }
+.party-error { font-size: 12.5px; color: var(--accent); }
+.members { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.member { background: var(--panel); padding: 16px 12px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; border-top: 3px solid var(--line); }
+.member.leader { border-top-color: var(--accent); }
+.member .av { width: 32px; height: 32px; display: grid; place-items: center; font-family: var(--font-display); font-weight: 700; font-size: 16px; background: var(--accent); color: #fff; }
+.member.you .av { background: #fff; color: var(--ground); }
+.member .nm { font-weight: 600; font-size: 13px; word-break: break-word; }
+.member .role { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; min-height: 13px; }
+.slot { border: 1px dashed var(--line-2); padding: 16px 12px; display: flex; flex-direction: column; gap: 10px; color: #4a4a52; font-size: 12px; }
+.slot .box { width: 32px; height: 32px; border: 1px dashed var(--line-2); }
+
+.solo-actions { display: flex; gap: 12px; }
+
+/* party invites: the picker (my friends, with the reason an un-pressable row cannot be pressed)
+ * and the inbox (somebody else's empty seat). Same flat language as the friends screen - square,
+ * thin borders, accent on hover - because it is the same list seen from the other side. */
+.invite-actions { display: flex; gap: 12px; }
+.invite-picker { border: 1px solid var(--line); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.invite-title { font-family: var(--font-display); font-weight: 600; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+.invite-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.invite-row:last-child { border-bottom: none; }
+.invite-who { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.invite-name { font-size: 13px; word-break: break-word; }
+.invite-state { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.invite-dot { width: 7px; height: 7px; flex: none; background: var(--muted); opacity: .5; }
+.invite-dot.on { background: var(--ok, #4caf72); opacity: 1; }
+.invite-acts { display: flex; gap: 8px; flex: none; }
+/* The inbox is a card of its own above the party, and it is the one thing on this screen that is
+ * allowed to shout: an invite expires, so it has to be seen on the way past. */
+.invite-inbox { border-left: 3px solid var(--accent); background: var(--panel); padding: 14px 16px; gap: 8px; }
+.chip.solid { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chip.solid:hover { opacity: .9; }
+.btn-solid { background: var(--accent); color: #fff; border: none; padding: 12px 20px; font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+.btn-solid:hover { background: var(--accent-dark); }
+.join-row { display: flex; gap: 10px; }
+.join-row input {
+  flex: 1; background: var(--panel); border: 1px solid var(--line); color: var(--text);
+  padding: 12px 14px; font-family: var(--font-display); font-size: 16px; letter-spacing: .12em; text-transform: uppercase;
+}
+.join-row input:focus { outline: none; border-color: var(--accent); }
+
+/* A quiet pre-queue strip above the party controls. Values wrap for translations. */
+.comp-readiness { border-bottom: 1px solid var(--line); padding-bottom: 14px; }
+.comp-readiness-title { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+.comp-readiness-items { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.comp-readiness-item { min-width: 0; border-left: 2px solid var(--green); padding-left: 9px; }
+.comp-readiness-item.warn { border-left-color: var(--gold); }
+.comp-readiness-item.bad { border-left-color: var(--accent); }
+.comp-readiness-label { display: block; font-size: 11px; color: var(--muted); }
+.comp-readiness-value { display: block; margin-top: 3px; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.comp-readiness-item.warn .comp-readiness-value { color: var(--gold); }
+.comp-readiness-item.bad .comp-readiness-value { color: var(--accent); }
+
+/* sign in */
+.signin { display: flex; flex-direction: column; gap: 18px; }
+.signin h1 { font-family: var(--font-display); font-weight: 700; font-size: 30px; text-transform: uppercase; margin: 0; }
+.signin p { font-size: 13px; line-height: 1.55; opacity: .92; margin: 0; max-width: 340px; }
+.signin .code-lg { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: .18em; }
+
+.preview-note { font-size: 12px; color: var(--gold); line-height: 1.5; }
+.info-line { font-size: 12px; color: var(--muted); }
+
+/* ================================================================ match flow
+ * The live match path beyond "found": lobby (coin flip / side-first-ban choice / map veto),
+ * the connect window, the live/vote panel and the result. The hero (left, red) holds the
+ * per-phase action; the pane (right) holds the teams / veto list / chat / vote detail. */
+
+/* paired hero buttons (Heads/Tails, Side/Ban, vote Yes/No) sit side by side, not stacked */
+.action-row { display: flex; gap: 10px; }
+.action-row > * { flex: 1; }
+
+.found-count.strong { color: #fff; font-weight: 700; opacity: 1; }
+.found-map { font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1; letter-spacing: .02em; text-transform: uppercase; }
+.found-timer.urgent { color: #ffd7d7; }
+
+/* the toss-winner takes side or first ban — white buttons like accept, but paired */
+.btn-choice {
+  background: #fff; color: var(--ground);
+  font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: .1em; text-transform: uppercase;
+  padding: 14px 8px; border: none; cursor: pointer; touch-action: manipulation;
+}
+.btn-choice:hover { transform: translateY(-1px); }
+.btn-choice:active { transform: scale(.98); }
+
+/* THE COIN. Everything else in this UI has hard edges, flat fills and two colours; the coin was a
+ * gold cartoon token with a soft radial highlight, from no design language we use anywhere. The
+ * disc stays - it has to read as a coin - and the FINISH is now made of the same things the rest
+ * of the app is made of:
+ *
+ *   * a white face and ground-dark ink, exactly like .btn-find, which is the other big round-trip
+ *     object on this red panel;
+ *   * a MILLED RIM drawn as a repeating conic gradient - the same striped-metal idiom .hero-badge
+ *     uses, wrapped around the edge the way a real coin is knurled;
+ *   * the accent as a thin struck ring inside the rim, so the coin carries the app's one colour;
+ *   * the display face for the letter, letterspaced like every other headline here.
+ *
+ * .coin is only the box and the axis. Each FACE is a child, so the coin has a back: the flip turns
+ * end over end (rotateX, not the old rotateY spin) and the other side comes round mid-turn instead
+ * of the same letter mirrored. `perspective` on the parent is what makes that read as a toss
+ * rather than as a squashing ellipse; hubflip's duration MUST stay in step with FLIP_MS in
+ * competitive.js (tests/test_screen_matchflow.py checks the two against each other). */
+.coin {
+  position: relative;
+  width: 88px; height: 88px; margin: 6px auto;
+  transform-style: preserve-3d;
+}
+.found-box .coin { perspective: 620px; }
+.coin-face {
+  position: absolute; inset: 0; border-radius: 50%;
+  display: grid; place-items: center;
+  backface-visibility: hidden;
+  color: var(--ground);
+  font-family: var(--font-display); font-weight: 700; font-size: 34px; letter-spacing: .04em;
+  /* CLOSEST-SIDE, and that one word is what makes the rim exist. A radial-gradient sizes itself
+   * to the farthest CORNER by default, so "white out to 82%" covered 116% of the radius on a
+   * square box - the face painted straight over the milling underneath it and the coin came out
+   * plain white. closest-side makes 100% the radius, so the last band is the edge. */
+  background:
+    radial-gradient(circle closest-side at 50% 50%, #fff 0 87%, rgba(255,255,255,0) 87.5%),
+    repeating-conic-gradient(#fff 0 2.5deg, #a49e99 2.5deg 5deg);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.22), 0 8px 20px rgba(0,0,0,.38);
+}
+/* the struck ring: inside the milled edge, in the accent, like a mint mark */
+.coin-face::after {
+  content: ""; position: absolute; inset: 11px; border-radius: 50%;
+  border: 2px solid var(--accent); opacity: .9;
+}
+.coin-face.back { transform: rotateX(180deg); }
+.coin.flip { animation: hubflip .7s linear infinite; }
+/* The landing. A short settle rather than a hard stop, so the coin reads as having come DOWN on a
+ * face instead of the animation simply being switched off mid-turn. It ends at 360deg - the front
+ * face, square on - which is the face the server already decided on the way up. */
+.coin.landed { animation: hubland .45s cubic-bezier(.2, 1.4, .4, 1) 1 both; }
+.found-count.auto-note { color: #ffd79a; font-size: 12px; }
+
+/* connect roster pips: one per player, filling green as people report in */
+.pips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.pip { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(255,255,255,.55); }
+.pip.on { background: var(--green); border-color: var(--green); }
+
+.connect-warn { background: rgba(0,0,0,.28); color: #ffe08a; padding: 10px 12px; font-size: 12px; line-height: 1.45; text-align: left; }
+
+/* pane layouts */
+.lobby-pane, .connect-pane, .live-pane { display: flex; flex-direction: column; gap: 24px; }
+/* Map choices never participate in the roster's scrolling or chat's flex shrink. */
+.lobby-pane { flex: 1; min-height: 0; gap: 12px; }
+.pane.pane-lobby { padding: 20px 24px 18px; }
+.lobby-top { flex: 1 1 240px; min-height: 64px; overflow-y: auto; overscroll-behavior: contain; }
+.lobby-pane .team-member { padding: 5px 8px; gap: 6px; }
+.lobby-pane .tm-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lobby-pane .team-head { padding: 7px 8px; }
+.lobby-pane .team-anon-note { padding: 4px 8px; }
+.lobby-pane .veto { flex: 0 0 auto; gap: 6px; }
+.lobby-pane .veto-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.lobby-pane .veto-map { min-width: 0; min-height: 48px; padding: 7px 10px; font-size: 12px; flex-wrap: wrap; gap: 2px 6px; }
+.lobby-pane .vm-name { overflow-wrap: anywhere; }
+.lobby-pane .veto-clock { font-size: 12px; }
+.tm-mute { flex: 0 0 26px; width: 26px; height: 28px; padding: 4px; color: var(--muted); border: 1px solid transparent; background: transparent; cursor: pointer; }
+.tm-mute svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tm-mute:hover, .tm-mute.muted { color: var(--accent); border-color: var(--line); }
+.tm-mute:focus-visible, .chat-channel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.connect-info { display: flex; flex-direction: column; gap: 6px; }
+.ci-map { font-family: var(--font-display); font-weight: 700; font-size: 22px; text-transform: uppercase; }
+.ci-host { font-size: 13px; color: var(--muted); }
+
+/* teams (both sides, captains, and the picked side once the veto is under way) */
+.teams { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.team-col { background: var(--panel); border-top: 3px solid var(--line); display: flex; flex-direction: column; }
+.team-head { font-family: var(--font-display); font-weight: 600; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; padding: 10px 12px; color: var(--text); border-bottom: 1px solid var(--line); }
+.team-member { display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
+.team-member.you .tm-name { font-weight: 700; }
+.tm-name { flex: 1; font-size: 13px; word-break: break-word; }
+.tm-cap { font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
+/* an anonymised enemy: a call sign in the display face, so it reads as a label rather than as
+ * somebody whose name happens to be Bravo */
+.team-member.anon .tm-name { font-family: var(--font-display); font-weight: 600; letter-spacing: .06em; color: var(--muted); }
+.team-anon-note { font-size: 11px; line-height: 1.45; color: var(--muted); padding: 2px 12px 10px; }
+
+/* the map veto list — rows are clickable only on my captain's turn */
+.veto { display: flex; flex-direction: column; gap: 10px; }
+.veto-turn { font-size: 13px; color: var(--muted); }
+.veto-turn.strong {
+  color: var(--ground); background: var(--gold);
+  padding: var(--sp-2) var(--sp-3); font-family: var(--font-display);
+  font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: .06em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.veto-list { display: flex; flex-direction: column; gap: 4px; }
+.veto-map {
+  position: relative; isolation: isolate; overflow: hidden;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--panel); border: 1px solid var(--line); border-left: 3px solid transparent;
+  color: var(--text); padding: 11px 14px; font-family: var(--font-body); font-size: 14px; text-align: left; width: 100%;
+}
+button.veto-map { cursor: pointer; touch-action: manipulation; }
+button.veto-map:hover { border-left-color: var(--accent); background: var(--panel-2); }
+.veto-map.banned { color: var(--muted); }
+.veto-map.banned .vm-name { text-decoration: line-through; }
+.veto-map.final { border-left-color: var(--green); color: var(--text); font-family: var(--font-display); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.vm-by { font-size: 11px; color: var(--muted); }
+.vm-image { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; object-position: center 45%; opacity: .58; transition: opacity .18s ease; pointer-events: none; }
+.veto-map::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(12,12,16,.82), rgba(12,12,16,.3)); pointer-events: none; }
+.vm-name, .vm-by { text-shadow: 0 1px 3px #000; }
+button.veto-map:hover .vm-image, button.veto-map:focus-visible .vm-image { opacity: .72; }
+button.veto-map:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.veto-map.banned .vm-image { filter: grayscale(1); opacity: .18; }
+.veto-map.final .vm-image { opacity: .62; }
+.veto-map.final::after { background: linear-gradient(90deg, rgba(12,26,20,.85), rgba(12,26,20,.3)); }
+@media (prefers-reduced-motion: reduce) { .vm-image { transition: none; } }
+
+/* One compact log, with one composer; message count never controls its height. */
+.chat { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 0 1 170px; min-height: 112px; max-height: 210px; }
+.chat-audience { color: var(--muted); font-size: 11px; }
+.chat-channels { display: flex; flex: 0 0 auto; }
+.chat-channel { border: 1px solid var(--line); color: var(--muted); background: var(--panel); padding: 6px 8px; font-family: var(--font-body); font-size: 12px; cursor: pointer; }
+.chat-channel[aria-pressed="true"] { color: var(--text); border-color: var(--accent); background: var(--panel-2); }
+/* flex: 1 1 0 - the log is the part of the column that takes the leftover height, and again
+ * nothing about it is measured from its own content. */
+.chat-log { background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 4px; }
+/* Lines sit on the BOTTOM of the log, where the newest one is, so a tall log fills downwards
+ * from the input instead of hanging three messages at the top of an empty box. margin-top on
+ * the first line rather than justify-content: flex-end, which clips the oldest line out of
+ * reach once the log overflows. */
+.chat-log > .chat-line:first-child { margin-top: auto; }
+.chat-line { font-size: 13px; line-height: 1.4; word-break: break-word; }
+.chat-name { color: var(--accent); font-weight: 600; }
+.chat-row { display: flex; gap: 6px; flex: 0 0 auto; }
+.chat-row input { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line); color: var(--text); padding: 10px 12px; font-family: var(--font-body); font-size: 14px; }
+.chat-row input:focus { outline: none; border-color: var(--accent); }
+
+@media (max-height: 650px) {
+  .pane.pane-lobby { padding: 12px 18px; }
+  .lobby-pane { gap: 8px; }
+  .lobby-pane .veto-map { padding: 5px 7px; }
+  .chat { flex-basis: 130px; }
+}
+
+/* live: vote-to-cancel */
+.vote-card { background: var(--panel); border-top: 3px solid var(--gold); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.vote-body { font-size: 13px; line-height: 1.5; color: var(--muted); }
+.vote-count { font-family: var(--font-display); font-weight: 700; font-size: 16px; }
+.btn-solid.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
+.btn-solid.ghost:hover { border-color: var(--accent); background: transparent; }
+.link-report { align-self: flex-start; background: none; border: none; color: var(--accent); font-size: 12px; cursor: pointer; text-decoration: underline; touch-action: manipulation; }
+
+/* result */
+.result-action { gap: 10px; }
+.result-headline { font-family: var(--font-display); font-weight: 700; font-size: 34px; letter-spacing: .06em; text-transform: uppercase; }
+.result-headline.win { color: #d7ffe4; }
+.result-headline.loss { color: #ffd7d7; }
+.result-headline.void { color: #ffe08a; }
+.result-score { font-family: var(--font-display); font-weight: 700; font-size: 24px; }
+.result-delta { align-self: center; font-family: var(--font-display); font-weight: 700; font-size: 14px; letter-spacing: .06em; padding: 4px 10px; }
+.result-delta.up { background: rgba(255,255,255,.2); color: #d7ffe4; }
+.result-delta.down { background: rgba(0,0,0,.28); color: #ffd7d7; }
+/* what became of the player's Bodycam: a quiet line under the score, amber only when we could
+   not close it and they have to do it themselves before they can queue again */
+.result-close { font-size: 12px; line-height: 1.4; text-align: center; max-width: 34ch; }
+.result-close.muted { color: rgba(255,255,255,.72); }
+.result-close.warn { color: #ffd79a; }
+
+/* keyboard focus for the new interactive elements (the shared ui-* handle their own) */
+.btn-choice:focus-visible, button.veto-map:focus-visible, .link-report:focus-visible,
+.chat-row input:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+button.veto-map:focus-visible { outline-color: var(--accent); }
+
+@keyframes hubslide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+/* End over end, the way a coin is actually tossed - rotateX. It was rotateY, which spins a coin
+ * on the spot like a shop sign. Same duration, so FLIP_MS is unchanged. */
+@keyframes hubflip { 0% { transform: rotateX(0deg); } 100% { transform: rotateX(360deg); } }
+@keyframes hubland {
+  0%   { transform: rotateX(200deg) scale(1.1); }
+  100% { transform: rotateX(360deg) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coin.flip, .coin.landed { animation: none; }
+  .search-bar > i { animation: none; }
+  .btn-choice:hover, .btn-find:hover { transform: none; }
+}
+
+
+/* COMPETITIVE INFO ------------------------------------------------------- */
+/* The button lives in a row of its own under the nav. Same shape as the action buttons, one step
+ * smaller and ghosted, because it is a reference the player opens occasionally and not a thing
+ * they came here to press. */
+/* IN THE HERO'S TOP CORNER, not in a row of its own above the split. The row was a full-width
+ * strip holding one small button, and its padding was a band of empty page between the window
+ * chrome and the red panel - the gap Sam asked to be rid of. Absolutely placed, so it takes no
+ * height from the hero either: the rank block starts at the very top, as it did before the
+ * explainer existed. On the red ground it is ghosted white, like .btn-ghost-light. */
+/* THE HERO'S TOP-RIGHT STRIP: Penalties, then Competitive info. The position moved off the
+ * button and onto this row when the second button arrived - two things both pinned to
+ * `right: 16px` would sit on top of each other, and giving the left one a hard-coded offset
+ * would make it the translations' problem (Wettkampf-Info is half again as wide as Competitive
+ * info). `row-reverse` is deliberately NOT used: the DOM order is the reading order and the
+ * tab order, and Penalties is first in both. */
+.hero-tools {
+  position: absolute; top: 14px; right: 16px; z-index: 2;
+  display: flex; align-items: center; gap: 8px;
+}
+.rank-info-btn {
+  font-family: var(--font-display);
+  font-weight: 600; font-size: 10.5px;
+  letter-spacing: .14em; text-transform: uppercase;
+  padding: 6px 11px;
+  border: 1px solid rgba(255,255,255,.45);
+  background: transparent;
+  color: #fff; opacity: .85;
+  cursor: pointer;
+  transition: background-color .15s ease, opacity .15s ease;
+}
+.rank-info-btn:hover { background: rgba(0,0,0,.25); opacity: 1; }
+.rank-info-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+.rank-overlay .ui-modal { max-width: 620px; gap: var(--sp-5); }
+.rank-overlay .ui-modal:focus { outline: none; }
+.rank-kicker {
+  font-family: var(--font-display);
+  font-weight: 600; font-size: 10.5px;
+  letter-spacing: .18em; text-transform: uppercase;
+  color: var(--accent);
+  margin-top: calc(var(--sp-2) * -1);
+}
+.rank-block { margin-top: 4px; }
+.rank-h {
+  font-family: var(--font-display);
+  font-weight: 600; font-size: 11px;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.rank-note { font-size: 12.5px; line-height: 1.6; color: var(--muted, #8a8a90); margin-top: 6px; }
+
+.rank-list { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }
+.rank-rank { display: grid; grid-template-columns: minmax(0, 110px) max-content; align-items: center; gap: 12px; padding: 5px 8px; }
+/* the player's own rank, so the ladder answers "where am I" without being read end to end */
+.rank-rank.mine { background: rgba(255, 255, 255, .06); }
+.rank-name { font-size: 12.5px; color: var(--text); }
+.rank-divs { display: flex; align-items: center; gap: 6px; }
+/* Each chip holds one of the 25 badges, so it carries no border and no numeral of its own: the
+ * art already says which division it is, and a box drawn round it would fight the plate's own
+ * silhouette. The numeral is still the fallback if the sprite is missing, which is why the type
+ * rules stay. */
+.rank-chip {
+  width: 36px; height: 42px;
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-size: 10.5px;
+  color: var(--muted, #8a8a90);
+}
+.rank-chip .rank-badge { display: block; width: 100%; height: 100%; }
+/* The player's own division. An underline rather than a box, for the same reason as above - and
+ * it sits under the badge where it cannot be read as part of the art. */
+.rank-chip.here {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 2px;
+}
+.rank-foot { display: flex; justify-content: flex-end; margin-top: 4px; }
+
+/* The ban ladder. Its own list rather than .rank-list: that one is built for a rank name and a
+ * row of badge chips, and this is a label and a duration. The times are right-aligned and
+ * tabular so "5 min" and "30 min" line up on their units and the climb is visible down the
+ * column without reading a single row. */
+.pen-list {
+  display: flex; flex-direction: column; gap: 1px;
+  margin: 10px 0 4px;
+}
+.pen-rung {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--sp-4);
+  padding: 5px 8px;
+}
+.pen-rung:nth-child(odd) { background: rgba(255, 255, 255, .04); }
+.pen-rung-n { font-size: 12.5px; color: var(--text); }
+.pen-rung-t {
+  font-family: var(--font-display); font-weight: 600; font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+
+/* THE RANK BLOCK (hero) --------------------------------------------------- */
+/* THE BIG ONE, under the name. It was a small centred emblem above it; Sam, 2026-09-16: "move
+ * where it shows your rank to where the matches, wins, losses, winrate is and make it big. thats
+ * what people care about the most." Those figures are off this page now, so the rank is not
+ * sharing the space with anything - it IS the middle of the hero.
+ *
+ * A ROW, not a column: at this size a stacked badge and word would eat half the panel's height,
+ * and beside the name the badge reads as a mark struck against it. Left-aligned with the name and
+ * the button, so the whole hero shares one edge - the old block was centred, which is why it
+ * carried its own alignment rules. */
+.hero-rank {
+  display: flex; flex-direction: row; align-items: center; gap: 18px;
+  text-align: left; align-self: stretch;
+  margin-top: 24px;
+}
+.hero-rank-text { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1; }
+
+/* The emblem: one of the 25 badges out of ranksprite.js, at the 56x62 the CSS shield used to
+ * occupy - nothing around it moves. The shield, its inset punch-out and the three division pips
+ * are all gone: the art carries the rank in its plate and the division in its silhouette, and
+ * pips over the top of that would be the same fact told twice.
+ *
+ * The badge is deliberately NOT tinted to the hero's white ink. The ladder darkens as it climbs
+ * (docs/ranks.md), and that only reads if each badge keeps its own colour - which is also why
+ * this box stays transparent behind it. */
+.rank-emblem { position: relative; width: 92px; height: 102px; flex: none; }
+.rank-guide-open { padding: 0; border: 0; background: transparent; cursor: pointer; }
+.rank-guide-open:hover { filter: brightness(1.12); }
+.rank-guide-open:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+/* Scoped to the emblem on purpose. `.rank-badge` is the class every badge in the app carries, so
+ * a bare rule here would size the ones on the leaderboard and the profile too - from a stylesheet
+ * those screens do not own. Each surface sizes its own. */
+.rank-emblem .rank-badge { display: block; width: 100%; height: 100%; }
+
+.hero-rankname {
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 34px; line-height: 1;
+  letter-spacing: .04em; text-transform: uppercase;
+  color: #fff;
+  word-break: break-word;
+}
+/* 0-100 through the division. Square, flat, no rounding - like every other bar in the app. It
+ * stretches with the block now instead of sitting at a fixed 168px: the block is a row, and the
+ * column it lives in is what decides the width. */
+.rr-bar {
+  width: 100%; max-width: 240px; height: 7px;
+  background: rgba(255, 255, 255, .22);
+}
+.rr-fill { height: 100%; background: #fff; transition: width .3s ease; }
+.hero-rr { font-size: 12.5px; letter-spacing: .08em; color: rgba(255, 255, 255, .8); }
+/* The placement count is a headline in its own right: it is the only rank a player who is still
+ * placing has, and it is the thing they are counting down. */
+.hero-placements {
+  font-family: var(--font-display); font-weight: 600; font-size: 14px;
+  letter-spacing: .07em; color: rgba(255, 255, 255, .92);
+}
+
+
+/* REPORTS ----------------------------------------------------------------- */
+/* Quiet by default: reporting is rare and serious, and a control that competes with the buttons
+ * people press every match gets pressed by accident. It only colours on hover. */
+.tm-report {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: 9.5px; font-weight: 600;
+  letter-spacing: .12em; text-transform: uppercase;
+  padding: 3px 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted, #8a8a90);
+  opacity: .45;
+  cursor: pointer;
+  transition: opacity .15s ease, color .15s ease, border-color .15s ease;
+}
+.team-member:hover .tm-report, .res-player:hover .tm-report { opacity: 1; }
+.tm-report:hover { color: var(--accent); border-color: var(--accent); opacity: 1; }
+.tm-report:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; opacity: 1; }
+
+.rep-overlay .ui-modal { max-width: 420px; }
+.rep-overlay .ui-modal:focus { outline: none; }
+.rep-who { font-size: 14px; color: var(--text); }
+.rep-reasons { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.rep-reason {
+  text-align: left;
+  font-size: 12.5px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease;
+}
+.rep-reason:hover { border-color: var(--accent); color: var(--accent); }
+.rep-reason:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rep-note { font-size: 11.5px; line-height: 1.5; color: var(--muted, #8a8a90); margin-top: 4px; }
+.rep-error { color: var(--accent); font-size: 12px; }
+.rep-custom:not([hidden]) { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.rep-custom label { color: var(--text); font-size: 12px; }
+.rep-details { box-sizing: border-box; width: 100%; min-height: 96px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); font: inherit; resize: vertical; }
+.rep-details:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.res-roster { margin-top: 16px; }
+.res-player {
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+}
+.res-player.you .res-name { color: var(--accent); }
+.res-name { font-size: 13px; color: var(--text); }
+
+/* ---------------------------------------------------------------- the version gate */
+/* Shown inside .hero-action, directly UNDER Find match and above "you do not need Bodycam open"
+ * (Sam, 2026-09-16), when this hub is behind the release the service is publishing - so the
+ * disabled button has its reason right beneath it.
+ *
+ * Small bold BLACK, with no panel behind it. It was a bordered amber card above the button, which
+ * pushed Find match down the panel every time it appeared; black on the red ground is the one ink
+ * that reads as a note on the button rather than as another thing to press, and it is the same
+ * ink .btn-find uses for its own label. */
+.outdated-box { color: #000; }
+.outdated-box .outdated-line { font-size: 11.5px; line-height: 1.45; font-weight: 700; }
+.outdated-box .outdated-safe { font-size: 11px; line-height: 1.45; font-weight: 600; opacity: .72; margin-top: 3px; }
+.outdated-box .outdated-actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 5px; }
+.outdated-link {
+  font-family: var(--font-body); font-size: 11px; font-weight: 700;
+  color: #000; text-decoration: underline; cursor: pointer;
+}
+.outdated-link:hover { opacity: .7; }
+
+/* Compact queue preferences: wrap naturally on narrow windows or longer translations. */
+.comp-network { font-size: 12px; line-height: 1.4; }
+.comp-network-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.comp-region, .comp-cross-region { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.comp-region select { max-width: 170px; min-height: 30px; padding: 4px 7px; border: 1px solid rgba(255,255,255,.5); border-radius: 3px; background: rgba(0,0,0,.14); color: #fff; font: inherit; cursor: pointer; }
+.comp-region option { background: var(--ground); color: #fff; }
+.comp-cross-region { cursor: pointer; }
+.comp-cross-region input { margin: 0; width: 15px; height: 15px; accent-color: var(--ground); cursor: inherit; }
+.comp-network :focus-visible { outline: 2px solid white; outline-offset: 3px; }
+.comp-network :disabled { opacity: .6; cursor: not-allowed; }
+.comp-network-status { margin-top: 6px; opacity: .82; font-size: 11px; }

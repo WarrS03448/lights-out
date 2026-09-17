@@ -1,0 +1,412 @@
+/* Match history screen — OWNED BY THE HISTORY SCREEN AGENT. The only CSS file this screen edits.
+ * Consumes the shared tokens (tokens.css) and shared components (ui.css, ui-* classes); everything
+ * below is screen-local. Direction 1c: dark split, Oswald display, sharp/tactical (radii ~0). */
+
+.history {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding: var(--sp-8) var(--sp-11) var(--sp-6);
+}
+
+/* ---------------------------------------------------------------- header */
+.hist-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  flex-wrap: wrap;
+  flex: none;
+}
+.hist-titles { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.hist-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: .01em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.hist-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.hist-controls { display: flex; align-items: center; gap: var(--sp-3); flex: none; }
+
+/* ---------------------------------------------------------------- notices */
+.hist-error {
+  flex: none;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  border-left: 3px solid var(--accent);
+  color: var(--text);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.hist-note {
+  flex: none;
+  color: var(--gold);
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-wrap: pretty;
+  max-width: 68ch;
+}
+
+/* ---------------------------------------------------------------- the list */
+.hist-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.hist-scroll .ui-table { gap: var(--sp-2); }
+
+/* A row is the shared .ui-listrow with a coloured left accent per result. */
+.hist-row {
+  border-left: 3px solid var(--line);
+  padding: var(--sp-3) var(--sp-4);
+}
+.hist-row + .hist-row { border-top: none; }        /* the gap separates rows, not a hairline */
+.hist-row.res-win       { border-left-color: var(--green); }
+.hist-row.res-loss      { border-left-color: var(--accent); }
+.hist-row.res-fault     { border-left-color: var(--accent); }
+.hist-row.res-cancelled { border-left-color: var(--gold); }
+.hist-row.res-played    { border-left-color: var(--line); }
+
+/* result cell (leading) */
+.hist-result {
+  width: 96px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hist-res-word {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.res-win .hist-res-word       { color: var(--green); }
+.res-loss .hist-res-word,
+.res-fault .hist-res-word     { color: var(--accent); }
+.res-cancelled .hist-res-word { color: var(--gold); }
+.res-played .hist-res-word    { color: var(--text); }
+.hist-res-reason { font-size: 11px; color: var(--muted); }
+
+/* the metric grid (fills the listRow's .grow) */
+.hist-metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 118px 92px 108px;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.hist-map { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.hist-map-art {
+  width: 64px;
+  height: 40px;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: repeating-linear-gradient(135deg, #242429 0 5px, #1c1c21 5px 10px);
+}
+.hist-map-image { display: block; width: 100%; height: 100%; object-fit: cover; }
+.hist-map-text { min-width: 0; }
+.hist-map-name { font-weight: 600; font-size: 14px; }
+.hist-map-name,
+.hist-map-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-map-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+
+.hist-score { font-variant-numeric: tabular-nums; }
+.hist-score-num { font-family: var(--font-display); font-weight: 700; font-size: 20px; }
+.hist-score.pending { color: var(--muted); font-size: 12px; }
+
+.hist-kda { display: flex; flex-direction: column; gap: 2px; }
+.hist-kda-num { font-family: var(--font-display); font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+.hist-kda.pending .hist-kda-num { color: var(--muted); }
+.hist-kda-lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+.hist-rr {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.hist-rr.up      { color: var(--green); }
+.hist-rr.down    { color: var(--accent); }
+.hist-rr.flat    { color: var(--text); }
+.hist-rr.pending { color: var(--muted); font-family: var(--font-body); font-weight: 400; }
+
+.hist-when {
+  width: 100px;
+  flex: none;
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- loading skeleton */
+.hist-skeleton { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-2); overflow: hidden; }
+.hist-skel-row {
+  height: 58px;
+  background: linear-gradient(90deg, var(--panel) 0%, var(--panel-2) 50%, var(--panel) 100%);
+  background-size: 200% 100%;
+  animation: hist-shimmer 1.4s ease-in-out infinite;
+  border-left: 3px solid var(--line-2);
+}
+
+@keyframes hist-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* accessible label helper for the loading status */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------------------------------------------------------------- responsive */
+/* The window is resizable; below ~980px the K/D/A and score columns are the first to fold away so
+   the map, result, RR delta and time — the honest, load-bearing fields — always stay legible. */
+@media (max-width: 980px) {
+  .history { padding: var(--sp-6) var(--sp-6) var(--sp-5); }
+  .hist-metrics { grid-template-columns: minmax(0, 1fr) 108px; }
+  .hist-kda, .hist-score { display: none; }
+}
+@media (max-width: 620px) {
+  .hist-result { width: 72px; }
+  .hist-metrics { grid-template-columns: minmax(0, 1fr); }
+  .hist-when { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hist-skel-row { animation: none; }
+}
+
+
+/* MATCH DETAIL ------------------------------------------------------------ */
+.hist-open { cursor: pointer; }
+.hist-open:hover { border-color: var(--accent); }
+.hist-open:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.md-overlay { top: var(--topbar-h); }
+.md-overlay .ui-modal { max-width: 720px; gap: var(--sp-4); background: var(--panel); }
+.md-overlay .ui-modal > * { flex-shrink: 0; }
+.md-overlay .ui-modal-title { font-size: 13px; letter-spacing: .14em; color: var(--muted); }
+.md-overlay .ui-modal:focus { outline: none; }
+.md-head { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--sp-4); padding: var(--sp-4); background: var(--panel-2); border: 1px solid var(--line); }
+.md-map {
+  font-family: var(--font-display);
+  font-size: 22px; letter-spacing: .04em; text-transform: uppercase; color: var(--text);
+  min-width: 0; overflow-wrap: anywhere;
+}
+.md-head.no-score .md-map { grid-column: 1 / -1; }
+.md-score { grid-column: 2; justify-self: center; white-space: nowrap; font-family: var(--font-display); font-size: 38px; line-height: 1.1; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.md-h {
+  font-family: var(--font-display);
+  font-weight: 600; font-size: 10.5px;
+  letter-spacing: .16em; text-transform: uppercase;
+  color: var(--muted, #8a8a90);
+  margin-top: 6px;
+}
+
+/* One block per round, numbered, coloured by the side that took it. A 7-0 and a 7-6 look
+ * different at a glance, which a score line cannot do. */
+.md-strip { display: flex; gap: 3px; flex-wrap: wrap; }
+.md-round {
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  font-size: 9.5px;
+  background: var(--line); color: var(--text);
+}
+.md-round.t1 { background: var(--accent); color: var(--on-accent, #fff); }
+.md-round.t2 { background: var(--muted, #8a8a90); color: #fff; }
+
+.md-teams { display: grid; grid-template-columns: 1fr; gap: var(--sp-4); }
+.md-team { min-width: 0; border: 1px solid var(--line); background: var(--panel-2); }
+.md-team-h {
+  font-family: var(--font-display);
+  font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text); padding: var(--sp-3); background: var(--ground); line-height: 1.5;
+}
+.md-player {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 38px; padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--line-2);
+  font-size: 12.5px; color: var(--text);
+}
+.md-player.you { background: color-mix(in srgb, var(--accent) 9%, var(--panel-2)); box-shadow: inset 2px 0 var(--accent); }
+.md-player.you .md-pname { color: var(--text); font-weight: 600; }
+.md-player.left .md-pname { text-decoration: line-through; opacity: .6; }
+.md-pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.md-elo { font-size: 11px; color: var(--accent); }
+
+/* THE SCOREBOARD.
+ *
+ * The two sides STACK once there is a board: a name, four numbers and a Report button do not fit
+ * in half a 660px modal, and a scoreboard that ellipsises every name is not a scoreboard. Without
+ * a board `.md-teams` stays the two-column roster above.
+ *
+ * The header strip and the rows share one grid template - declared once on `.md-team.sb > *` - so
+ * the numbers cannot drift out from under their column heads. `no-tk` drops the TK column when no
+ * kill feed reached us; it is the only column that ever varies. */
+.md-teams.sb { grid-template-columns: 1fr; gap: var(--sp-4); }
+.md-team.sb .md-cols,
+.md-team.sb .md-player.sb {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 34px 46px 34px 64px;
+  align-items: center; gap: 6px;
+}
+.md-team.sb .md-cols.no-tk,
+.md-team.sb .md-player.sb.no-tk {
+  grid-template-columns: minmax(0, 1fr) 34px 34px 46px 64px;
+}
+.md-cols {
+  font-family: var(--font-display);
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted, #8a8a90);
+  padding: var(--sp-2) var(--sp-3);
+}
+.md-cols .md-n { font-size: 10px; color: var(--muted); }
+.md-n { font-variant-numeric: tabular-nums; text-align: right; font-size: 12.5px; }
+.md-cols .md-n { text-align: right; }
+.md-n.pending { color: var(--muted, #8a8a90); opacity: .7; }
+/* A team kill is the one number here somebody is answerable for. --accent is the palette's
+ * only red; there is no --danger token, and inventing one here would be a second red. */
+.md-n.bad { color: var(--accent); }
+.md-act { display: flex; justify-content: flex-end; }
+/* Nothing was reported about this player. The row is still drawn - the board has to match the
+ * two teams - but it recedes, so an all-dashes line does not read as a bad performance. */
+.md-player.unreported .md-pname { opacity: .55; }
+
+/* Combat evidence expands under one player row. The K/D/TK line stays glanceable; opening this
+ * block adds the five comparable headline metrics and, only when present, a weapon table. */
+.md-pidentity {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name toggle" "status toggle";
+  align-items: center;
+  column-gap: 6px;
+}
+.md-pidentity .md-pname { grid-area: name; }
+.md-pidentity .combat-status { grid-area: status; justify-self: start; }
+.md-pidentity .combat-toggle { grid-area: toggle; }
+.combat-status {
+  display: inline-flex;
+  width: fit-content;
+  font-size: 9px;
+  line-height: 1.3;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.combat-status.status-complete { color: var(--green); }
+.combat-status.status-partial { color: var(--gold); }
+.combat-toggle {
+  border: 1px solid var(--line);
+  background: var(--ground);
+  color: var(--muted);
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 9px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.combat-toggle:hover,
+.combat-toggle:focus-visible { border-color: var(--accent); color: var(--text); }
+.combat-toggle:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.combat-panel[hidden] { display: none; }
+.md-combat {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-top: 1px solid var(--line-2);
+  background: var(--ground);
+}
+.combat-note { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.combat-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.combat-metric {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 7px;
+  border: 1px solid var(--line-2);
+  background: var(--panel-2);
+}
+.combat-label,
+.combat-weapons-title {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.25;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.combat-value { color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; }
+.combat-value.pending { color: var(--muted); }
+.combat-weapons-section { min-width: 0; display: grid; gap: 5px; }
+.combat-weapons-scroll { max-width: 100%; overflow-x: auto; }
+.combat-weapons {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.combat-player-damage { min-width: 280px; }
+.combat-weapons th,
+.combat-weapons td {
+  padding: 5px 7px;
+  border-top: 1px solid var(--line-2);
+  text-align: right;
+  white-space: nowrap;
+}
+.combat-weapons th { color: var(--muted); font-size: 9px; font-weight: 500; text-transform: uppercase; }
+.combat-weapons th:first-child,
+.combat-weapons td:first-child { text-align: left; }
+.combat-weapon-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.combat-weapons td.pending { color: var(--muted); }
+
+.md-sub { font-size: 11.5px; color: var(--muted, #8a8a90); margin-top: -6px; }
+.md-foot { font-size: 11px; color: var(--muted, #8a8a90); line-height: 1.45; }
+
+.md-veto { display: flex; gap: 6px; flex-wrap: wrap; }
+.md-ban {
+  font-size: 11px; padding: 3px 8px;
+  border: 1px solid var(--line); color: var(--muted, #8a8a90);
+  text-decoration: line-through;
+}
+/* An auto-ban is marked: "the clock banned it" and "they banned it" are different facts. */
+.md-ban.auto { border-style: dashed; }
+
+@media (max-width: 900px) { .md-teams { grid-template-columns: 1fr; } }
+/* Narrow: the Report button and the names give up their width first, never the numbers. */
+@media (max-width: 560px) {
+  .md-overlay .ui-modal { padding: var(--sp-4); }
+  .md-head { padding: var(--sp-3); }
+  .md-map { font-size: 18px; }
+  .md-score { font-size: 30px; }
+  .md-team.sb .md-cols,
+  .md-team.sb .md-player.sb { grid-template-columns: minmax(0, 1fr) 28px 28px 40px 28px 44px; }
+  .md-team.sb .md-cols.no-tk,
+  .md-team.sb .md-player.sb.no-tk { grid-template-columns: minmax(0, 1fr) 28px 28px 40px 44px; }
+  .combat-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .combat-toggle { max-width: 58px; overflow: hidden; text-overflow: ellipsis; }
+}

@@ -1,0 +1,116 @@
+/* The hub's own title bar: window buttons and the drag strip.
+ *
+ * #topbar (ui.css) is the caption now — the window is frameless on Windows. This file only adds
+ * the controls on its right-hand end; the bar's own background, height and border stay where they
+ * were, so the caption and the nav are visibly one strip rather than a dark app wearing a light
+ * grey Windows hat.
+ *
+ * Sizes are in the Windows caption's own idiom (46 x 32 hit targets, a 10px glyph) rather than the
+ * app's spacing scale, because that is the muscle memory people bring to the top right corner of
+ * a window. They are deliberately NOT scaled by --ui-scale: shrinking the close button on a small
+ * window would make it harder to hit exactly when the window is most cramped.
+ */
+
+.wincontrols {
+  display: flex;
+  align-self: stretch;
+  /* Never the thing that gives. The bar's other flex item (.brand-wrap) is allowed to shrink
+   * instead, because a squeezed nav is a nuisance and a close button pushed off the edge of the
+   * window is a hub you cannot shut. */
+  flex: none;
+  margin-right: calc(-1 * var(--sp-4));  /* the buttons run to the window edge, as Windows' do */
+  margin-left: var(--sp-3);
+}
+
+.winbtn {
+  width: 46px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: default;                       /* a caption button is not a link */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color .12s ease, color .12s ease;
+}
+
+.winbtn svg {
+  width: 10px;
+  height: 10px;
+  overflow: visible;
+}
+
+.winbtn svg path,
+.winbtn svg rect {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;     /* 1px hairlines, whatever the display scale */
+}
+
+.winbtn:hover { background: var(--panel-2); color: var(--text); }
+.winbtn:active { background: var(--line-2); }
+
+/* Close is the one destructive control in the bar, so it gets the accent on hover the way every
+   Windows app gives it red — but the hub's own red, not Windows'. */
+.winbtn-close:hover { background: var(--accent); color: var(--on-accent); }
+.winbtn-close:active { background: var(--accent-dark); color: var(--on-accent); }
+
+/* The maximise glyph is two squares: a single box when the window is restored (the back square is
+   hidden), and the offset pair when it is maximised, which is the standard "restore down" mark. */
+.win-restore-back { display: none; }
+#topbar.is-maximized .win-restore-back { display: inline; }
+#topbar.is-maximized .win-box { transform: translate(-1px, 1px); }
+
+/* The drag strip. #topbar is the handle, so nothing in it should look or behave like text — but
+   the nav items inside it keep their own pointer cursor from ui.css. */
+#topbar {
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------- the border grips
+   The window has no native frame, so these ARE the resize border: four edges, and four corners
+   laid over them. 5px is the thickness Windows itself uses for a borderless window's grab area;
+   the corners are 12px so the diagonal is catchable without precision aiming.
+
+   Fixed, not absolute: they must track the viewport, not the scroll height of whatever screen is
+   open. They sit above the app (so the outermost 5px belongs to the window border, exactly as a
+   real frame's does) but below any modal the app raises over everything. */
+.wingrip {
+  position: fixed;
+  z-index: 40;
+}
+.wingrip-n { top: 0; left: 0; right: 0; height: 5px; cursor: ns-resize; }
+.wingrip-s { bottom: 0; left: 0; right: 0; height: 5px; cursor: ns-resize; }
+.wingrip-w { top: 0; bottom: 0; left: 0; width: 5px; cursor: ew-resize; }
+.wingrip-e { top: 0; bottom: 0; right: 0; width: 5px; cursor: ew-resize; }
+
+/* Corners last in the DOM and higher in z, so they win over the edges they overlap. */
+.wingrip-nw, .wingrip-ne, .wingrip-sw, .wingrip-se {
+  width: 12px;
+  height: 12px;
+  z-index: 41;
+}
+.wingrip-nw { top: 0; left: 0; cursor: nwse-resize; }
+.wingrip-se { bottom: 0; right: 0; cursor: nwse-resize; }
+.wingrip-ne { top: 0; right: 0; cursor: nesw-resize; }
+.wingrip-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+
+/* A maximized window has no edge to drag, and leaving the grips up would put a dead 5px strip
+   around a window that cannot be resized. */
+html.win-maximized .wingrip { display: none; }
+
+/* Frameless windows have no OS border, so the bar's bottom rule is the only thing separating the
+   caption from the app. Give the window a hairline of its own on the other three sides, so a dark
+   hub on a dark desktop still has an edge. */
+html:not(.native-frame) body {
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+/* A host that kept its native frame (macOS) draws its own buttons; ours are removed by
+   titlebar.js and the bar goes back to being just the nav. */
+html.native-frame .wincontrols,
+html.native-frame .wingrip { display: none; }

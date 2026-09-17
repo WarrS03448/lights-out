@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it works · Lights Out</title>
+<meta name="description" content="Lights Out ships no piece of Bodycam. It builds the mod on your PC from the copy of the game you already own and drops one removable file in ~mods.">
+<meta name="theme-color" content="#0b0b0c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23c8102e'/%3E%3Crect x='6' y='6' width='20' height='20' fill='none' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="preload" href="/assets/oswald-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/ibmplexsans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+  <a class="skip" href="#how">Skip to content</a>
+
+  <header class="topbar">
+    <div class="wrap">
+      <div class="brand-wrap">
+        <a class="brand" href="/"><span class="mark" aria-hidden="true">LO</span>Lights Out</a>
+        <nav class="nav" aria-label="Site">
+          <a href="/">Download</a>
+          <a href="/ranked">Ranked</a>
+          <a href="/how" class="active" aria-current="page">How it works</a>
+          <a href="/faq">FAQ</a>
+          <a href="/about">About</a>
+        </nav>
+      </div>
+      <a class="source-link" href="https://github.com/WarrS03448/lights-out" aria-label="View Lights Out source on GitHub">GitHub <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg></a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <span class="eyebrow">How it works</span>
+        <h1>What it actually touches</h1>
+        <p class="hero-sub">Nothing here goes near the running game. The mechanism is the answer, so none of this has to be taken on trust.</p>
+      </div>
+    </section>
+
+    <!-- Replaces the old "This is not a cheat" section, and moved off the front page on
+         2026-09-16. The mechanism is the answer: nothing here touches the running game, so the
+         claim does not have to be taken on trust. -->
+    <section class="section" id="how">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <h2>How it works</h2>
+            <p class="section-lede">Lights Out never ships you a piece of Bodycam. It ships a small pack of its own content, builds the mod on your PC from the copy of the game you already own, and drops one file where the game already looks for mods.</p>
+          </div>
+          <span class="chip">4 steps</span>
+        </div>
+
+        <ol class="steps">
+          <li class="step">
+            <div>
+              <h3>Install the app</h3>
+              <p>A small Windows program, installed to a folder it shows you first. No account, no sign-up.</p>
+            </div>
+          </li>
+          <li class="step">
+            <div>
+              <h3>Pick a mode and hit install</h3>
+              <p>The app downloads a <em>pack</em>: a few tens of kilobytes of the gamemode’s own content. No game assets, because none are ours to send.</p>
+            </div>
+          </li>
+          <li class="step">
+            <div>
+              <h3>The mod is built on your PC</h3>
+              <p>Everything the mode needs from Bodycam is read out of <strong>your own installed game files</strong> and combined with the pack locally. That is why it takes a minute, and why nothing of Reissad Studio’s is ever redistributed.</p>
+            </div>
+          </li>
+          <li class="step">
+            <div>
+              <h3>One file lands in <code>~mods</code></h3>
+              <p>One file, <code>CommunityGamemodes_P.pak</code>, in Bodycam’s own <code>~mods</code> folder, where the game already looks for mods. Uninstall deletes it and leaves the game as it found it.</p>
+            </div>
+          </li>
+        </ol>
+
+        <div class="notdo">
+          <h3 class="ui-card-title">What it never does</h3>
+          <ul>
+            <li>It <strong>never reads or writes the game’s memory</strong> and injects nothing into the running process. The app stays connected during ranked matches; the pak supplies the gamemode.</li>
+            <li>It <strong>never edits your game files.</strong> Everything it installs is additive: one extra file in <code>~mods</code>.</li>
+            <li>It gives <strong>no advantage in Bodycam’s own modes.</strong> It adds new modes; it doesn’t change existing ones.</li>
+            <li>It <strong>never receives your Steam password.</strong> Ranked play uses your Steam identity, match results and diagnostics. See <a href="/faq#faq-data">what data Lights Out collects</a>.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <h2>Give it a go</h2>
+            <p class="section-lede">Anything this page doesn’t answer is probably in the <a href="/faq" style="color: var(--accent)">FAQ</a>.</p>
+          </div>
+        </div>
+        <div class="hero-cta">
+          <a class="btn-primary" href="/hub/download">Download for Windows</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap">
+      <p>Not affiliated with Reissad Studio. This tool does not modify game files; it adds a removable pak. Version {{HUB_VERSION}}.</p>
+      <div class="foot-links">
+        <a href="https://github.com/WarrS03448/lights-out">Source on GitHub</a>
+        <a href="/">Download</a>
+        <a href="/ranked">Ranked</a>
+        <a href="/how">How it works</a>
+        <a href="/faq">FAQ</a>
+        <a href="/about">About</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/cookies">Cookies &amp; storage</a>
+        <a href="/notices">Third-party notices</a>
+        <a href="mailto:contact@theneeb.com">Contact</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,12 @@
+node_modules
+.env
+.env.*
+!.env.example
+
+# Logs and local scratch
+logs
+*.log
+npm-debug.log*
+.DS_Store
+tmp
+.tmp

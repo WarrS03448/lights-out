@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lights Out: ranked 5v5 for Bodycam</title>
+<meta name="description" content="Free ranked 5v5 for Bodycam. Queue solo or with a party, get matched on skill, and climb a rank ladder. Plus the community gamemodes it runs on.">
+<meta name="theme-color" content="#0b0b0c">
+<!-- The favicon is the app's hero badge: the hatched red square, drawn inline so the page costs no
+     extra request and no stale .ico ever has to be re-cut when the mark moves. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23c8102e'/%3E%3Crect x='6' y='6' width='20' height='20' fill='none' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E">
+<!-- Served by server.cjs from public/assets/; the fonts it pulls sit beside it. -->
+<link rel="preload" href="/assets/oswald-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/ibmplexsans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<!-- `home` is the one-screen layout in site.css: the download page is sized to the viewport so
+     the button, the modes and the way onward are all visible without a scroll. Every other page
+     is a document and scrolls. -->
+<body class="home">
+  <a class="skip" href="#get">Skip to download</a>
+
+  <header class="topbar">
+    <div class="wrap">
+      <div class="brand-wrap">
+        <a class="brand" href="/"><span class="mark" aria-hidden="true">LO</span>Lights Out</a>
+        <nav class="nav" aria-label="Site">
+          <a href="/" class="active" aria-current="page">Download</a>
+          <a href="/ranked">Ranked</a>
+          <a href="/how">How it works</a>
+          <a href="/faq">FAQ</a>
+          <a href="/about">About</a>
+        </nav>
+      </div>
+      <a class="source-link" href="https://github.com/WarrS03448/lights-out" aria-label="View Lights Out source on GitHub">GitHub <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg></a>
+    </div>
+  </header>
+
+  <main>
+    <!-- Full-width, dark, one column. The app's red SPLIT is deliberately not here: a 460px slab of
+         solid accent works in a fixed window and reads as a wall on a document. Red is the button,
+         the rule and the badges instead. -->
+    <section class="hero">
+      <div class="wrap">
+        <span class="eyebrow">Unofficial Bodycam community client</span>
+        <h1>Ranked 5v5 for Bodycam</h1>
+        <p class="hero-sub">Queue solo or with a party, get matched on skill, and play <strong>Bodybomb 5v5</strong> with a rank on the line.</p>
+
+        <div class="hero-cta" id="get">
+          <a class="btn-primary" href="/hub/download" aria-describedby="download-help">Download for Windows</a>
+          <p class="download-help" id="download-help"><strong>Seeing “Windows protected your PC”?</strong> Lights Out’s installer isn’t code signed yet, so Windows SmartScreen may treat it as an unrecognized app. If you downloaded it from this site and trust it, click <strong>More info</strong>, then <strong>Run anyway</strong> to start the installer. <a href="/faq#faq-smartscreen">Why this happens and what to do</a>.</p>
+        </div>
+
+        <p class="hero-note"><strong>Use at your own risk.</strong> Lights Out is not explicitly endorsed or supported by Bodycam’s developers. While we believe a ban or other disciplinary action is unlikely, the risk is not zero. By downloading and using Lights Out, you accept responsibility for that risk and any resulting account restrictions, bans or other disciplinary action. <a href="/faq#faq-bans">Read more about the risk</a>.</p>
+      </div>
+    </section>
+
+    <section class="section modes-section" id="modes">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>The gamemodes</h2>
+        </div>
+        <ul class="modes">
+{{GAMEMODES}}
+        </ul>
+        <p class="pane-note">Every player in the lobby needs the same mode installed, host and players alike. In ranked, the app checks that for you.</p>
+      </div>
+    </section>
+
+    <!-- The three sections that used to sit under the mode list are pages of their own since
+         2026-09-16, so the front page is the download and the modes. This is the door to them:
+         the top nav is the same three links, but it is hidden behind a scroll on a phone and
+         nobody reads a nav on the way down a page. -->
+    <section class="section readon-section">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Read on</h2>
+        </div>
+        <ul class="readon">
+          <li>
+            <a href="/ranked">
+              <h3>Inside a ranked match</h3>
+              <p>Steam sign-in, the queue, the coin toss and the veto, and the {{RANK_COUNT}}-rank ladder you climb.</p>
+            </a>
+          </li>
+          <li>
+            <a href="/how">
+              <h3>How it works</h3>
+              <p>What the app does to your copy of Bodycam — and the four things it never does.</p>
+            </a>
+          </li>
+          <li>
+            <a href="/faq">
+              <h3>FAQ</h3>
+              <p>Bans, friends, the SmartScreen warning, updates, languages, and removing it again.</p>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap">
+      <p>Not affiliated with Reissad Studio. This tool does not modify game files; it adds a removable pak. Version {{HUB_VERSION}}.</p>
+      <div class="foot-links">
+        <a href="https://github.com/WarrS03448/lights-out">Source on GitHub</a>
+        <a href="/">Download</a>
+        <a href="/ranked">Ranked</a>
+        <a href="/how">How it works</a>
+        <a href="/faq">FAQ</a>
+        <a href="/about">About</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/cookies">Cookies &amp; storage</a>
+        <a href="/notices">Third-party notices</a>
+        <a href="mailto:contact@theneeb.com">Contact</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

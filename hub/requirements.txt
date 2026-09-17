@@ -1,0 +1,37 @@
+# Runtime dependency of the pak builder (Oodle decompression); everything else is the Python standard library.
+pyooz==0.0.8
+# Build-time only (build_hub.bat). Pinned so every build box uses the same bootloader: Defender's
+# verdict is per bootloader hash, and a version that has been submitted as a false positive stays clean.
+pyinstaller==6.22.3
+# system-tray icon (close-to-tray); pystray on Windows needs only ctypes, Pillow draws the icon.
+# Pillow pinned like everything else so both build boxes bundle the same DLLs (12.x exists but the
+# box runs 11.x; bump deliberately after testing on the box).
+pystray==0.19.5
+pillow==11.3.0
+# Native webview for the UI redesign (docs/ui-redesign-plan.md). Only used with `--webui`; the
+# default Tkinter path never imports it (hub.webui.shell is the only importer). On Windows it
+# renders through the Edge WebView2 runtime (present by default on Win 11) via pythonnet; on
+# macOS it uses the system WKWebView with no extra deps. Pinned like everything else so the build
+# box is reproducible; bump deliberately after a real WebView2 run on the box.
+pywebview==5.4
+# pywebview's Windows (EdgeChromium) backend needs the .NET bridge; not installed off Windows.
+# 3.0.5 -> 3.1.0 on 2026-09-15, and it was forced rather than chosen: 3.0.5 declares
+# Requires-Python >=3.7,<3.14, this build box is on 3.14.6, and pip therefore cannot resolve the file
+# at all - publish.py dies at "Installing the build requirements" before PyInstaller ever runs. 3.1.0
+# resolves cleanly here (clr_loader 0.3.1 + cffi 2.1.1 cp314 wheels) and pywebview 5.4 installs
+# alongside it unchanged.
+#
+# RENDERS, from source, on this box: 2026-09-15, pywebview 5.4 + pythonnet 3.1.0 + Python 3.14.6,
+# a real EdgeChromium window against WebView2 runtime 153.0.4234.32, loading the hub's own
+# static/ over the localhost bridge and resized through four sizes. STILL UNPROVEN for the FROZEN
+# build: both previous breakages (2.0.0, 2.0.3) were frozen-build-only and invisible from source,
+# which is exactly what a from-source run cannot rule out. Keep verifying a real window on the box
+# after any build that carries this; if the web UI is dead the symptom is a hub that silently falls
+# back to the classic Tk UI for every user (hub/app.py:1315-1322).
+#
+# One thing that WILL kill it and is not our bug: an overlay injector. With RivaTuner Statistics
+# Server (MSI Afterburner) running, RTSSHooks64.dll aborts the process with 0xc0000417 during
+# WebView2 startup, before any window appears. That is a native abort, so the try/except around
+# webui_shell.run does NOT catch it and the hub does not fall back to Tk - it just dies. Rule RTSS
+# out before believing a pywebview failure here is ours.
+pythonnet==3.1.0; sys_platform == "win32"

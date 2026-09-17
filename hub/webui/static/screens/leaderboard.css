@@ -1,0 +1,187 @@
+/* Leaderboard screen — OWNED BY THE LEADERBOARD SCREEN. The only CSS file this screen edits.
+ * Consumes the shared tokens (tokens.css) and shared components (ui.css); screen-local layout
+ * below. The ranked table is a 6-column grid (Rank / Player / Tier / RR / Matches / Win %) matching
+ * the design; the column header and each row share one grid template so they stay aligned. */
+
+.leaderboard {
+  height: 100%;
+  padding: var(--sp-8) var(--sp-10) var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.leaderboard > :not(.lb-table-viewport) { flex: none; }
+
+/* -- header: heading + tabs ------------------------------------------------ */
+.leaderboard .lb-topbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-6);
+  flex-wrap: wrap;
+}
+
+.leaderboard .lb-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+/* -- shared grid for the column header and every row ----------------------- */
+.leaderboard .lb-cols,
+.leaderboard .lb-row {
+  display: grid;
+  grid-template-columns: 100px minmax(150px, 1fr) 170px 110px 110px 110px;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.leaderboard .lb-cols {
+  padding: 0 var(--sp-5) var(--sp-2);
+  border-bottom: 1px solid var(--panel-2);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.leaderboard .lb-cell { min-width: 0; }
+.leaderboard .lb-cell.lb-rr,
+.leaderboard .lb-cell.lb-matches,
+.leaderboard .lb-cell.lb-winrate {
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- rows ------------------------------------------------------------------- */
+.leaderboard .ui-table { gap: 0; }
+
+.leaderboard .lb-row {
+  padding: var(--sp-3) var(--sp-5);
+  border-bottom: 1px solid #131317;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.leaderboard .lb-row.you {
+  background: var(--panel);
+  border-left: 3px solid var(--accent);
+  border-bottom: none;
+}
+
+.leaderboard .lb-rank {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.leaderboard .lb-row.you .lb-rank { color: var(--text); }
+
+.leaderboard .lb-player {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.leaderboard .lb-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.leaderboard .lb-youtag {
+  flex: none;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* Badge then words. The badge keeps its own colour (the ladder darkens as it climbs) while the
+ * name keeps the accent it has always had, so the column still reads as one thing. The name, not
+ * the cell, is what ellipsises - a truncated badge would just be a broken-looking plate. */
+.leaderboard .lb-tier {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.leaderboard .lb-tier .rank-badge {
+  display: block;
+  width: 20px;
+  height: 23px;
+  flex: none;
+}
+.leaderboard .lb-tier-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard .lb-rr { font-weight: 600; }
+.leaderboard .lb-matches,
+.leaderboard .lb-winrate { color: #b8b8be; }
+
+/* -- honest empty state (no rank service yet) ------------------------------ */
+.leaderboard .ui-empty { padding: var(--sp-11) var(--sp-6); }
+.leaderboard .lb-empty-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  max-width: 420px;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+.leaderboard .lb-tools { display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--sp-3); }
+.leaderboard .lb-search-label { flex: 1 1 220px; }
+.leaderboard .lb-search-label,
+.leaderboard .lb-filter { display: flex; flex-direction: column; gap: var(--sp-2); color: var(--muted); font-size: 12px; }
+.leaderboard .lb-control,
+.leaderboard .lb-reset {
+  min-height: 36px; padding: 7px 10px; border: 1px solid var(--line);
+  border-radius: 3px; background: var(--panel); color: var(--text);
+  font: inherit; color-scheme: dark;
+}
+.leaderboard .lb-control { min-width: 0; max-width: 100%; }
+.leaderboard .lb-reset { cursor: pointer; }
+.leaderboard .lb-control:focus-visible,
+.leaderboard .lb-reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.leaderboard .lb-cols .lb-cell { display: flex; flex-direction: column; gap: var(--sp-2); }
+.leaderboard .lb-cols .lb-control { width: 100%; font: 12px var(--font-body); letter-spacing: normal; text-transform: none; }
+.leaderboard .lb-result-count { font-size: 12px; color: var(--muted); }
+.leaderboard .lb-table-viewport { flex: 1; overflow: auto; min-height: 0; }
+.leaderboard .lb-table-content { min-width: 850px; }
+
+.leaderboard .lb-footer { display: flex; justify-content: center; }
+.leaderboard .lb-go-to-me {
+  min-height: 40px; min-width: 160px; padding: var(--sp-2) var(--sp-5);
+  border: 1px solid var(--accent); border-radius: 3px;
+  background: var(--panel); color: var(--text); font: inherit; font-weight: 600;
+  cursor: pointer;
+}
+.leaderboard .lb-go-to-me:hover:not(:disabled) { background: var(--panel-2); }
+.leaderboard .lb-go-to-me:disabled { opacity: .45; cursor: default; }
+.leaderboard .lb-go-to-me:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.leaderboard .lb-row.you:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* All columns remain reachable by scrolling, even at the smallest hub size. */
+@media (max-width: 720px) {
+  .leaderboard { padding: var(--sp-6) var(--sp-5) var(--sp-5); }
+}

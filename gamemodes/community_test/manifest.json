@@ -1,0 +1,10 @@
+{
+  "id": "CommunityTest",
+  "base": "DeathMatch",
+  "title": "COMMUNITY TEST MODE",
+  "description": "Deathmatch, first to 5 kills. Built from a manifest by build_gamemode.py.",
+  "players": {"min": 1, "max": 7},
+  "estimate_minutes": 5,
+  "rules": {"score_limit": 5},
+  "maps": ["BombHouse", "CQB", "Hospital", "Paintball", "Pool", "Russian", "Backrooms", "Wornhouse"]
+}

@@ -1,0 +1,24 @@
+{
+  "_comment": "In-game text for Bodybomb 5v5 in the seven cultures Bodycam ships. 'en' is the SOURCE string: it must be byte-for-byte what the mode row carries (make_pack checks Title/Description against manifest.json). 'Bodybomb' is the game's own spelling of the mode (ST_Menu Gamemode_Bodybomb) and stays untranslated like the game does. Translations by Claude, 2026-09-14 — corrections welcome, edit and re-pack.",
+  "namespace": "CommunityGamemodes",
+  "entries": {
+    "BB5.Title": {
+      "en": "Bodybomb 5v5",
+      "de": "Bodybomb 5v5",
+      "es": "Bodybomb 5v5",
+      "fr": "Bodybomb 5v5",
+      "pt": "Bodybomb 5v5",
+      "ru": "Bodybomb 5 на 5",
+      "zh": "Bodybomb 5v5"
+    },
+    "BB5.Description": {
+      "en": "Competitive Bodybomb. 5v5, first to 7 round wins, sides and spawn bases swap after round 6. A 6–6 tie goes to a deciding round. The bomb starts on the ground at the attacker spawn. [4X DRONE COOLDOWN] [NO SPECTATOR DRONES]",
+      "de": "Kompetitives Bodybomb. 5v5, zuerst 7 Rundensiege. Seiten und Spawn-Basen wechseln nach Runde 6; bei 6:6 folgt eine Entscheidungsrunde. Die Bombe liegt im Angreifer-Spawn. [4-FACHE DROHNEN-ABKLINGZEIT] [KEINE ZUSCHAUER-DROHNEN]",
+      "es": "Bodybomb competitivo. 5v5, primero en ganar 7 rondas. Bandos y bases cambian tras la ronda 6; con 6–6 hay una ronda decisiva. La bomba empieza en el suelo del spawn atacante. [ENFRIAMIENTO DE DRON x4] [SIN DRONES DE ESPECTADOR]",
+      "fr": "Bodybomb compétitif. 5v5, première équipe à 7 manches. Camps et bases changent après la manche 6 ; à 6–6, une manche décisive. La bombe démarre au sol au spawn attaquant. [TEMPS DE RECHARGE DU DRONE x4] [PAS DE DRONE SPECTATEUR]",
+      "pt": "Bodybomb competitivo. 5v5, vence quem ganhar 7 rounds primeiro. Lados e bases trocam após o round 6; em 6–6, há um round decisivo. A bomba começa no chão do spawn atacante. [RECARGA DO DRONE 4X] [SEM DRONES ESPECTADORES]",
+      "ru": "Соревновательный Bodybomb. 5 на 5, до 7 побед в раундах. Стороны и базы меняются после 6-го раунда; при 6:6 играется решающий раунд. Бомба лежит на споте атакующих. [ПЕРЕЗАРЯДКА ДРОНА 4X] [БЕЗ ДРОНОВ-НАБЛЮДАТЕЛЕЙ]",
+      "zh": "竞技版 Bodybomb。5v5，率先赢下 7 回合获胜。第 6 回合后交换阵营和出生基地；6–6 时进行决胜回合。炸弹放在进攻方出生点的地面上。[无人机冷却时间 4 倍] [无观战无人机]"
+    }
+  }
+}

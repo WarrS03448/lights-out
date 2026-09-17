@@ -1,0 +1,42 @@
+{
+  "_comment": "In-game text for CTF in the seven cultures Bodycam ships. 'en' is the SOURCE string: it must be byte-for-byte what the mode row / Blueprint carries (make_pack checks Title/Description against manifest.json). The hub merges these into the player's own Game.locres per culture at install time (namespace CommunityGamemodes). Card title in the game's own Title Case style (Sam, 2026-09-14: 'follow the game's title case style' — like 'Team Deathmatch'); HUD marker labels stay in capitals. Translations by Claude, 2026-09-14 — corrections welcome, edit and re-pack.",
+  "namespace": "CommunityGamemodes",
+  "entries": {
+    "CTF.Title": {
+      "en": "Capture the Flag",
+      "de": "Capture the Flag",
+      "es": "Captura la bandera",
+      "fr": "Capture du drapeau",
+      "pt": "Capture a bandeira",
+      "ru": "Захват флага",
+      "zh": "夺旗"
+    },
+    "CTF.Description": {
+      "en": "Return the enemy flag to base to win. [2.5X DRONE COOLDOWN]",
+      "de": "Bringe die feindliche Flagge zu deiner Basis, um zu gewinnen. [2,5-FACHE DROHNEN-ABKLINGZEIT]",
+      "es": "Lleva la bandera enemiga a tu base para ganar. [ENFRIAMIENTO DE DRON x2,5]",
+      "fr": "Ramenez le drapeau ennemi à votre base pour gagner. [TEMPS DE RECHARGE DU DRONE x2,5]",
+      "pt": "Leve a bandeira inimiga até a sua base para vencer. [RECARGA DO DRONE 2,5X]",
+      "ru": "Принесите флаг врага на свою базу, чтобы победить. [ПЕРЕЗАРЯДКА ДРОНА 2,5X]",
+      "zh": "将敌方旗帜带回己方基地即可获胜。[无人机冷却时间 2.5 倍]"
+    },
+    "CTF.HUD.YourFlag": {
+      "en": "YOUR FLAG",
+      "de": "EURE FLAGGE",
+      "es": "TU BANDERA",
+      "fr": "VOTRE DRAPEAU",
+      "pt": "SUA BANDEIRA",
+      "ru": "ВАШ ФЛАГ",
+      "zh": "我方旗帜"
+    },
+    "CTF.HUD.EnemyFlag": {
+      "en": "ENEMY FLAG",
+      "de": "FEINDLICHE FLAGGE",
+      "es": "BANDERA ENEMIGA",
+      "fr": "DRAPEAU ENNEMI",
+      "pt": "BANDEIRA INIMIGA",
+      "ru": "ФЛАГ ВРАГА",
+      "zh": "敌方旗帜"
+    }
+  }
+}

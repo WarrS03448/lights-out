@@ -1,0 +1,31 @@
+{
+  "id": "CTF",
+  "title": "Capture the Flag 10v10",
+  "titles": {
+    "en": "Capture the Flag 10v10",
+    "de": "Capture the Flag 10v10",
+    "es": "Captura la bandera 10v10",
+    "fr": "Capture du drapeau 10v10",
+    "pt": "Capture a bandeira 10v10",
+    "ru": "Захват флага 10 на 10",
+    "zh": "夺旗 10v10"
+  },
+  "version": "1.0.0",
+  "description": "Return the enemy flag to base to win. [2.5X DRONE COOLDOWN]",
+  "pack_url": "https://unofficial-bodycam-community-hub.up.railway.app/packs/CTF-1.0.0.zip",
+  "sha256": "ab76a80201a01008da224f41713d390ac677bbd503c4018c7df9e38f9104a104",
+  "size": 30748,
+  "files": [
+    "GM/DATA/DataAsset/DA_CTF.uasset",
+    "GM/DATA/DataAsset/DA_CTF.uexp",
+    "GM/Gamemode/CTF/BP_CTF_Base.uasset",
+    "GM/Gamemode/CTF/BP_CTF_Base.uexp",
+    "GM/Gamemode/CTF/BP_CTF_Flag.uasset",
+    "GM/Gamemode/CTF/BP_CTF_Flag.uexp",
+    "GM/Gamemode/CTF/GE_CTF_DroneCooldown.uasset",
+    "GM/Gamemode/CTF/GE_CTF_DroneCooldown.uexp",
+    "GM/Gamemode/GM_CTF.uasset",
+    "GM/Gamemode/GM_CTF.uexp"
+  ],
+  "localized": true
+}

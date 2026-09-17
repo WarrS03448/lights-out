@@ -1,0 +1,60 @@
+{
+  "_comment": "In-game text for Domination in the seven cultures Bodycam ships. 'en' is the SOURCE string: it must be byte-for-byte what the mode row / Blueprint carries (make_pack checks Title/Description against manifest.json, and that every other key and its English source actually appear in the cooked Blueprints). The hub merges these into the player's own Game.locres per culture at install time (namespace CommunityGamemodes). Card title in the game's own Title Case style; HUD marker labels stay in capitals. Translations by Claude, 2026-09-14 — machine quality, corrections welcome: edit and re-pack.",
+  "namespace": "CommunityGamemodes",
+  "entries": {
+    "DOM.Title": {
+      "en": "Domination",
+      "de": "Herrschaft",
+      "es": "Dominio",
+      "fr": "Domination",
+      "pt": "Domínio",
+      "ru": "Превосходство",
+      "zh": "占领"
+    },
+    "DOM.Description": {
+      "en": "Hold the control points to score. First to 200. [2.5X DRONE COOLDOWN]",
+      "de": "Halte die Kontrollpunkte, um zu punkten. Wer zuerst 200 erreicht, gewinnt. [2,5-FACHE DROHNEN-ABKLINGZEIT]",
+      "es": "Controla los puntos para puntuar. El primero en llegar a 200 gana. [ENFRIAMIENTO DE DRON x2,5]",
+      "fr": "Tenez les points de contrôle pour marquer. Premier à 200. [TEMPS DE RECHARGE DU DRONE x2,5]",
+      "pt": "Mantenha os pontos de controle para pontuar. Primeiro a 200 vence. [RECARGA DO DRONE 2,5X]",
+      "ru": "Удерживайте точки, чтобы набирать очки. Побеждает первый до 200. [ПЕРЕЗАРЯДКА ДРОНА 2,5X]",
+      "zh": "占领并守住控制点得分，率先达到 200 分获胜。[无人机冷却时间 2.5 倍]"
+    },
+    "DOM.HUD.Neutral": {
+      "en": "NEUTRAL",
+      "de": "NEUTRAL",
+      "es": "NEUTRAL",
+      "fr": "NEUTRE",
+      "pt": "NEUTRO",
+      "ru": "НЕЙТРАЛЬНО",
+      "zh": "中立"
+    },
+    "DOM.HUD.Yours": {
+      "en": "YOUR POINT",
+      "de": "EUER PUNKT",
+      "es": "TU PUNTO",
+      "fr": "VOTRE POINT",
+      "pt": "SEU PONTO",
+      "ru": "ВАША ТОЧКА",
+      "zh": "我方据点"
+    },
+    "DOM.HUD.Enemy": {
+      "en": "ENEMY POINT",
+      "de": "FEINDLICHER PUNKT",
+      "es": "PUNTO ENEMIGO",
+      "fr": "POINT ENNEMI",
+      "pt": "PONTO INIMIGO",
+      "ru": "ТОЧКА ВРАГА",
+      "zh": "敌方据点"
+    },
+    "DOM.HUD.Contested": {
+      "en": "CONTESTED",
+      "de": "UMKÄMPFT",
+      "es": "EN DISPUTA",
+      "fr": "DISPUTÉ",
+      "pt": "EM DISPUTA",
+      "ru": "ОСПАРИВАЕТСЯ",
+      "zh": "争夺中"
+    }
+  }
+}

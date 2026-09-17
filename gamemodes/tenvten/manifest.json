@@ -1,0 +1,29 @@
+{
+  "id": "TenVTen",
+  "base": "TeamDeathMatch",
+  "title": "10v10 TEAM DEATHMATCH",
+  "description": "Team Deathmatch for 20 players, first team to 100 kills. Community test of the 10-per-team player cap.",
+  "players": {
+    "min": 1,
+    "max": 20
+  },
+  "estimate_minutes": 15,
+  "rules": {
+    "score_limit": 100,
+    "team_size": 10,
+    "max_players": 20
+  },
+  "maps": [
+    "BombHouse",
+    "CQB",
+    "Hospital",
+    "Paintball",
+    "Pool",
+    "Russian",
+    "Backrooms",
+    "Wornhouse"
+  ],
+  "url_options": {
+    "MaxPlayers": 20
+  }
+}

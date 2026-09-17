@@ -1,0 +1,281 @@
+/* Community Hub — shared UI core styles (the reset, the app shell chrome, and the reusable
+ * component primitives every screen draws with). Loaded AFTER tokens.css and BEFORE any screen
+ * CSS from index.html.
+ *
+ * SHARED, OWNED BY THE CORE. A screen agent edits their own screens/<name>.css, never this file.
+ * The reusable components here are namespaced `ui-*` on purpose: a screen builds with ui.js
+ * helpers (chip(), card(), statTile(), tabs(), table(), avatar(), emptyState(), modal()) and gets
+ * these styles for free, without colliding with a screen's own local class names. */
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--ground);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
+  overflow: hidden;
+
+  /* WINDOW SCALING — the one line that makes the app fit any window size.
+   *
+   * The screens are laid out in real px against a fixed smallest-comfortable size (core.js
+   * FIT_W/FIT_H); `zoom` scales that whole drawing down when the window is smaller than that.
+   * Before this, a shorter window simply lost whatever hung off the bottom - at the minimum
+   * window size the hero clipped its readiness text and the Find Match button sat on the edge.
+   *
+   * zoom, not transform: scale() - zoom is a layout scale, so text stays crisply hinted, the
+   * hit-testing lines up, and a scroll container inside still scrolls the content it clips.
+   * It is applied HERE on <body> rather than on #root so that everything appended to the body
+   * (the modals, the toast, the update strip) scales with the rest of the app.
+   *
+   * Sizes that are PERCENTAGES need no correction: the containing block a zoomed box is laid
+   * out against is already divided by the zoom, so `height: 100%` here is a full window either
+   * way. VIEWPORT UNITS are the exception - vh/vw stay raw viewport pixels and ignore the zoom
+   * entirely, so `height: 100vh` under a 0.78 scale would draw 78% of a window and leave a
+   * strip of bare background beneath it. Nothing inside the app may size itself in vh/vw. */
+  zoom: var(--ui-scale, 1);
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 5px; }
+
+/* ---------------------------------------------------------------- app shell */
+#root {
+  /* 100%, NOT 100vh: a percentage is scaled with the zoomed body, a viewport unit is not (see
+   * the note on body above). */
+  height: 100%;
+  display: grid;
+  grid-template-rows: var(--topbar-h) auto minmax(0, 1fr);
+}
+#topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--sp-4) 0 var(--sp-5);
+  background: var(--ground);
+  border-bottom: 1px solid var(--line-2);
+}
+/* Nav, then the counts. The gap used to hold the wordmark off the nav and was sized for that;
+ * with the counts in its place it is the nav's own item spacing, so the readout reads as the
+ * row's continuation rather than as a second group.
+ *
+ * min-width: 0 so that THIS is what yields when the bar is wider than the window - a nav item
+ * wrapping is survivable, the window buttons being pushed off the edge is not (titlebar.css
+ * .wincontrols). It is only reachable in Russian at the smallest window; core.js FIT_W keeps
+ * every other language on one line at every size. */
+.brand-wrap { display: flex; align-items: center; gap: var(--sp-5); min-width: 0; }
+.nav {
+  display: flex;
+  /* 16px, not 20: the counts moved into this row (.topstats) and the bar has eight items, three
+   * figures and the window buttons to fit on one line before core.js's FIT_W has to zoom the
+   * whole app down. Four pixels off each of the seven gaps is 28 of them, which is the cheapest
+   * 28px in the bar - nothing here is any harder to hit or to read for it. */
+  gap: var(--sp-4);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.nav .navitem { padding-bottom: 3px; border-bottom: 2px solid transparent; cursor: pointer; }
+.nav .navitem:hover { color: #fff; }
+.nav .navitem.active { color: #fff; border-bottom-color: var(--accent); }
+/* The service counts, in the bar just right of the nav. A thin rule separates them from the
+ * last nav item so they read as a readout rather than as three more tabs, and the row never
+ * wraps: on a narrow window the bar is zoomed (body { zoom: var(--ui-scale) }), not reflowed. */
+.topstats {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex: none;
+  white-space: nowrap;
+  padding-left: var(--sp-3);
+  border-left: 1px solid var(--line-2);
+}
+.topstat { font-size: 12px; color: var(--muted); }
+/* Emptied while the stream is down (core.js renderStatus), and an empty span must not leave a
+ * gap the eye reads as a missing number. */
+.topstat:empty { display: none; }
+.status-dot { display: flex; align-items: center; gap: var(--sp-2); font-size: 12px; color: var(--muted); }
+.status-dot .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.status-dot.ok .dot { background: var(--green); }
+.status-dot.bad .dot { background: var(--accent); }
+
+#workspace { position: relative; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 44px; }
+#app { min-width: 0; min-height: 0; overflow: hidden; }
+.boot { display: grid; place-items: center; height: 100%; color: var(--muted); }
+
+/* ---------------------------------------------------------------- app self-update strip */
+/* Update notices occupy their own auto-sized row below the header, inside the app shell.
+ * The row collapses when empty and grows with wrapped messages or download progress. */
+.updatebar {
+  position: relative;
+  z-index: 900;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-1);
+}
+/* The gamemode strip shares the same notice row in a quieter colour. */
+.updatebar.ub-gamemode { background: var(--surface-3, #2a2f38); color: var(--text, #fff); }
+.updatebar.ub-gamemode .ub-btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.updatebar .ub-inner {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-2) var(--sp-5);
+}
+.updatebar .ub-msg { font-size: 13px; line-height: 1.4; white-space: pre-line; }
+.updatebar .ub-actions { display: flex; align-items: center; gap: var(--sp-2); flex: none; }
+.updatebar .ub-btn {
+  font-family: var(--font-body);
+  font-size: 12px;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-1);
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, .6);
+  background: transparent;
+  color: var(--on-accent);
+}
+.updatebar .ub-btn.primary { background: var(--on-accent); color: var(--accent); border-color: var(--on-accent); font-weight: 600; }
+.updatebar .ub-btn.ghost:hover { border-color: var(--on-accent); }
+.updatebar .ub-progress { height: 3px; background: rgba(255, 255, 255, .25); }
+.updatebar .ub-fill { height: 100%; background: var(--on-accent); transition: width .2s ease; }
+
+/* Forced update (catalogue hub.required): a blocking, centered overlay — the old all-or-nothing
+ * update screen, not a dismissable strip. */
+.updatebar.forced {
+  position: fixed;
+  inset: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(11, 11, 12, .92);
+  padding: var(--sp-6);
+}
+.updatebar.forced .ub-inner {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-5);
+  max-width: 520px;
+  background: var(--panel);
+  border-top: 3px solid var(--accent);
+  padding: var(--sp-8);
+  box-shadow: var(--shadow-2);
+  color: var(--text);
+}
+.updatebar.forced .ub-actions { justify-content: center; }
+
+/* ---------------------------------------------------------------- toast (transient cues) */
+#toast {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  padding: 10px var(--sp-4); font-size: 13px; opacity: 0; transition: opacity .2s ease;
+  pointer-events: none; box-shadow: var(--shadow-2); z-index: 1000;
+}
+#toast.show { opacity: 1; }
+
+/* ================================================================ shared components (ui-*)
+ * Built by the ui.js helpers; consumed by every screen. */
+
+/* chip — a small status pill / inline action */
+.ui-chip {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  border: 1px solid var(--line); background: transparent; color: var(--text);
+  padding: var(--sp-1) var(--sp-3); font-size: 12px; font-family: var(--font-body);
+  border-radius: var(--radius-1); line-height: 1.4;
+}
+button.ui-chip, .ui-chip[role="button"] { cursor: pointer; touch-action: manipulation; }
+button.ui-chip:hover, .ui-chip[role="button"]:hover { border-color: var(--accent); }
+.ui-chip.accent { border-color: var(--accent); color: var(--accent); }
+.ui-chip.green  { border-color: var(--green);  color: var(--green); }
+.ui-chip.gold   { border-color: var(--gold);   color: var(--gold); }
+.ui-chip.solid  { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+/* card / panel — a titled surface */
+.ui-card { background: var(--panel); border-top: 3px solid var(--line); padding: var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-4); }
+.ui-card.accent { border-top-color: var(--accent); }
+.ui-panel { background: var(--panel); padding: var(--sp-4) var(--sp-5); }
+.ui-card-title { font-family: var(--font-display); font-weight: 600; font-size: 14px; letter-spacing: .14em; text-transform: uppercase; }
+
+/* statTile — a number + label tile */
+.ui-stat { background: var(--panel); padding: var(--sp-4) var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-1); border-top: 2px solid var(--accent); }
+.ui-stat .n { font-family: var(--font-display); font-weight: 700; font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
+.ui-stat .l { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+/* tabs / segmented control */
+.ui-tabs { display: inline-flex; gap: 0; border: 1px solid var(--line); }
+.ui-tab {
+  font-family: var(--font-display); font-weight: 600; font-size: 12px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted); background: transparent; border: none;
+  padding: var(--sp-2) var(--sp-4); cursor: pointer; touch-action: manipulation;
+}
+.ui-tab + .ui-tab { border-left: 1px solid var(--line); }
+.ui-tab.active { background: var(--accent); color: var(--on-accent); }
+.ui-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* table / listRow */
+.ui-table { display: flex; flex-direction: column; }
+.ui-listrow { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-3) var(--sp-4); background: var(--panel); }
+.ui-listrow + .ui-listrow { border-top: 1px solid var(--line-2); }
+.ui-listrow .grow { flex: 1; min-width: 0; }
+
+/* avatar */
+.ui-avatar {
+  width: 32px; height: 32px; display: grid; place-items: center; flex: none;
+  font-family: var(--font-display); font-weight: 700; font-size: 16px;
+  background: var(--accent); color: var(--on-accent);
+}
+.ui-avatar.light { background: #fff; color: var(--ground); }
+/* The Steam picture, laid over the initials rather than instead of them: the plate keeps its size
+ * and its letters, and an image that never arrives simply uncovers them again. */
+.ui-avatar { position: relative; overflow: hidden; }
+.ui-avatar .ui-avatar-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+/* The blank silhouette for a hidden player. Drawn in the plate itself - a head and a pair of
+ * shoulders out of two gradients - so there is no image to ship, nothing to fetch under a CSP
+ * that only allows `self`, and no broken-image path that could end up showing a real picture. */
+.ui-avatar.anon { background: var(--panel-2); color: transparent; }
+.ui-avatar.anon::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 50% 33%, var(--muted) 0 19%, transparent 20%),
+    radial-gradient(56% 42% at 50% 101%, var(--muted) 0 64%, transparent 65%);
+}
+
+/* emptyState */
+.ui-empty { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); text-align: center; padding: var(--sp-10) var(--sp-6); color: var(--muted); }
+.ui-empty .ui-empty-icon { font-family: var(--font-display); font-weight: 700; font-size: 40px; line-height: 1; color: var(--line); }
+.ui-empty .ui-empty-msg { font-size: 13px; line-height: 1.5; max-width: 340px; }
+
+/* modal / overlay */
+.ui-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 900; padding: var(--sp-6); }
+/* max-height + scroll, not just max-width: a long dialog (the rank ladder, a match detail) is
+ * taller than a short window, and the overlay is fixed to the viewport, so without these the
+ * bottom of the dialog - where its buttons are - is simply unreachable. */
+.ui-modal { position: relative; background: var(--panel-2); border-top: 3px solid var(--accent); box-shadow: var(--shadow-2); max-width: 480px; width: 100%; max-height: 100%; overflow-y: auto; padding: var(--sp-7); display: flex; flex-direction: column; gap: var(--sp-4); overscroll-behavior: contain; }
+.ui-modal-title { font-family: var(--font-display); font-weight: 700; font-size: 22px; text-transform: uppercase; }
+/* The way out, and the only visible one: the backdrop and Escape are invisible affordances, so a
+ * modal that covers the window has to say how to leave it. Padded right on the title so a long
+ * one does not run under the X. */
+.ui-modal-x {
+  position: absolute; top: var(--sp-4); right: var(--sp-4);
+  width: 30px; height: 30px; line-height: 1;
+  display: grid; place-items: center;
+  background: transparent; border: 1px solid var(--line); color: var(--muted);
+  font-family: var(--font-body); font-size: 20px; cursor: pointer; padding: 0;
+  transition: border-color .15s ease, color .15s ease;
+}
+.ui-modal-x:hover { border-color: var(--accent); color: var(--text); }
+.ui-modal-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ui-modal-title { padding-right: 38px; }
+
+/* a "coming soon" placeholder used by stub screens until an agent fills each in */
+.ui-comingsoon { display: grid; place-items: center; height: 100%; padding: var(--sp-10); }
+.ui-comingsoon .inner { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); text-align: center; }
+.ui-comingsoon h1 { font-family: var(--font-display); font-weight: 700; font-size: 40px; text-transform: uppercase; letter-spacing: .04em; margin: 0; text-wrap: balance; }
+.ui-comingsoon p { color: var(--muted); font-size: 13px; margin: 0; }
+.ui-comingsoon .badge { font-family: var(--font-display); font-weight: 600; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); padding: var(--sp-1) var(--sp-3); }

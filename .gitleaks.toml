@@ -1,0 +1,21 @@
+title = "Lights Out source checks"
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = 'Cooked replacement sentinel, never a real credential'
+condition = 'AND'
+paths = ['''(?:^|/)mirror/Bodycam/Scripts/lobby_graphs\.py$''']
+regexes = ['''^chjoin\-7f3a91$''']
+
+[[allowlists]]
+description = 'Cooked replacement sentinel, never a real credential'
+condition = 'AND'
+paths = ['''(?:^|/)tools/pak/retarget_lobby\.py$''']
+regexes = ['''^chjoin\-7f3a91$''']
+
+[[allowlists]]
+description = 'Fixed local retargeting test fixture'
+condition = 'AND'
+paths = ['''(?:^|/)tests/test_lobbypak\.py$''']
+regexes = ['''^chm\-0123456789abcdef$''']
