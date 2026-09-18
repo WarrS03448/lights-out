@@ -603,3 +603,7 @@ a { color: inherit; }
   .faq .answer { padding: 0 var(--sp-4) var(--sp-4); }
   .prose .lead { font-size: 17px; }
 }
+
+/* Highlight account creation wherever the public navigation offers it. */
+.nav a[href="/account"], .foot-links a[href="/account"] { color: var(--accent); }
+.nav a[href="/account"]:hover, .foot-links a[href="/account"]:hover { color: var(--accent-lit); }

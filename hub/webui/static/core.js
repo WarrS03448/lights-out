@@ -284,7 +284,9 @@
   }
 
   function captureInputs() {
-    var nodes = app.querySelectorAll("input[id], textarea[id]");
+    // Account-link fields live in a body overlay. Preserve them only for its
+    // current attempt/step; IDs change across attempts and secrets clear on submit.
+    var nodes = document.querySelectorAll("#app input[id], #app textarea[id], .account-link-modal input[id]");
     var saved = [];
     for (var i = 0; i < nodes.length; i++) {
       var n = nodes[i];

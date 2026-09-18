@@ -16,12 +16,18 @@ def bridge():
                                                    is_maximized=lambda: False))
     server, _ = httpbridge.start(panel)
 
-    def request(path, method='GET', body=None, headers=None):
+    def request(path, method='GET', body=None, headers=None, *, refusal=False):
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=2)
         try:
             conn.request(method, path, body, headers or {})
             response = conn.getresponse()
             return response.status, response.read()
+        except ConnectionError:
+            # Early refusal closes without reading an untrusted/oversized body.
+            # Windows may reset that connection before the HTTP error arrives.
+            if refusal:
+                return None, b''
+            raise
         finally:
             conn.close()
     yield request, calls, 'http://127.0.0.1:%d' % server.server_port
@@ -35,7 +41,7 @@ def test_all_local_routes_reject_rebinding_and_foreign_origins(bridge):
         assert request(path, headers={'Host': 'attacker.example'})[0] == 403
     for path in ('/verb/cancel_search', '/window/close'):
         for bad in ('https://attacker.example', 'null', ''):
-            assert request(path, 'POST', '[]', {'Origin': bad, 'Content-Type': 'application/json'})[0] == 403
+            assert request(path, 'POST', '[]', {'Origin': bad, 'Content-Type': 'application/json'}, refusal=True)[0] in (403, None)
     assert calls == []
     assert request('/window/close', 'POST', headers={'Origin': origin})[0] == 200
     assert calls == ['close']
@@ -46,7 +52,7 @@ def test_malformed_oversized_or_form_verbs_never_dispatch(bridge):
     for body, ctype in (('{', 'application/json'), ('{}', 'application/json'),
                          ('[]', 'text/plain'), ('x' * 65537, 'application/json')):
         assert request('/verb/cancel_search', 'POST', body,
-                       {'Origin': origin, 'Content-Type': ctype})[0] == 400
+                       {'Origin': origin, 'Content-Type': ctype}, refusal=True)[0] in (400, None)
     assert calls == []
     assert request('/verb/cancel_search', 'POST', '[]',
                    {'Origin': origin, 'Content-Type': 'application/json'})[0] == 200

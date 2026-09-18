@@ -58,8 +58,9 @@ dependencies in `scripts/account-test-requirements.txt` (fakeredis with Lua).
 `HUB_ACCOUNT_GAMEPLAY_ENABLED=1` enables verified Bodycam Steam authentication
 for Lights Out account gameplay and requires your own `STEAM_WEB_API_KEY`.
 Verifying the game identity does not link Steam as a sign-in provider.
-`HUB_ACCOUNT_OWNERSHIP_ENABLED` remains off on the official public release while
-user-facing linking, disconnection and recovery controls are unfinished. Never
+`HUB_ACCOUNT_OWNERSHIP_ENABLED=1` enables verified account linking, available in
+Settings > Account in Lights Out 2.3.89. User-facing disconnection and password
+recovery controls remain unfinished. Never
 merge profiles merely because submitted names, emails or SteamIDs match.
 
 The supplied privacy and terms pages describe the official service; adapt them

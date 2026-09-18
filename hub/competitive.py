@@ -1755,12 +1755,16 @@ class MockSession(Session):
         if token:
             threading.Thread(target=lambda: auth_mod.revoke_session(token, pending=pending), daemon=True).start()
         self.token = ""
-        self.panel.save_auth(None)
         self.me = None
         self.phase = "signed_out"
         self.party = None
         self.party_error = ""
         self.error = ""
+        try:
+            self.panel.save_auth(None)
+        except Exception:
+            # Revoked authority must remain detached even if persistence fails.
+            pass
         self.reset_match()
         self._changed()
 
@@ -1876,6 +1880,10 @@ class MockSession(Session):
 
         Only the party leader starts the search; everyone else waits (see the panel)."""
         from .activity import files_busy
+        if getattr(getattr(self, "account_link", None), "active", False):
+            self.error = t("account_link_finish")
+            self._changed()
+            return
         if files_busy(self.panel):
             self.error = t("comp_files_busy")
             self._changed()
@@ -2708,6 +2716,8 @@ class LiveSession(MockSession):
         self.parent_token = ""
         self._proof_epoch = 0
         self._pending_game_account = None
+        from .account_link import AccountLink
+        self.account_link = AccountLink(self)
         # Exactly one queue countdown may ever be running. It is armed idempotently (the
         # `queued` event and the join POST's 200 race each other, and either may arrive first),
         # so this flag is what stops a second overlapping loop from double-counting the clock.
@@ -2880,6 +2890,10 @@ class LiveSession(MockSession):
                         "game_steam_id": player_identity.native_id(account)})
         self.token = token
         self.parent_token = str(account.get("parent_token") or token)
+        linked = account.get("account") or {}
+        self.me.update({"auth_method": "lightsout" if self.parent_token.startswith("lo_") else "steam",
+                        "linked_account": bool(account.get("account_id") or linked.get("steam_id")),
+                        "account_email": str(linked.get("email") or account.get("email") or "")})
         if save:
             saved = self.panel.save_auth({"token": self.parent_token, "player_id": steam_id,
                 "steam_id": steam_id, "game_steam_id": self.me["game_steam_id"],
@@ -3016,6 +3030,7 @@ class LiveSession(MockSession):
         return {"hub": HUB_VERSION, "mode": str(entry.get("version") or "")}
 
     def _disconnect(self):
+        self.account_link.cancel(notify=False)
         self._account_epoch += 1
         self.stats_ready = False
         if self.client is not None:
@@ -3056,6 +3071,27 @@ class LiveSession(MockSession):
         self._cancel_account_login()
         self.parent_token = ""
         self._pending_game_account = None
+        self._complete_sign_out(token, pending)
+
+    def finish_account_link(self):
+        """Ownership changed or its final response was lost: require fresh authority.
+
+        Normal sign-out may refuse for cleanup or disk errors. Revoked/uncertain
+        credentials must still be detached, and must not remain in app memory.
+        """
+        token = self.parent_token or self.token
+        try:
+            pending = auth_mod.queue_revoke(token) if token else None
+        except Exception:
+            pending = None
+        self._disconnect()
+        self._clear_account_state()
+        self._cancel_account_login()
+        self.parent_token = ""
+        self._pending_game_account = None
+        state = getattr(getattr(self.panel, "app", None), "state", None)
+        if isinstance(state, dict):
+            state["auth"] = None
         self._complete_sign_out(token, pending)
 
     def _on_live_status(self, ok, detail):

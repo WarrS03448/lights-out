@@ -437,6 +437,11 @@ _S = {
 }
 
 
+from ._account_link_strings import STRINGS as _LINK_STRINGS
+for _lang, _copy in _LINK_STRINGS.items():
+    _S[_lang].update(_copy)
+
+
 def _strings(lang: str) -> dict:
     """This screen's strings for the active language, English-filled so a missing key can never
     render as the raw key (the same English-fallback rule i18n.py uses)."""
@@ -521,6 +526,11 @@ def _account_slice(session) -> dict:
         "steam_id_masked": _mask_steam_id(me.get("steam_id") or ""),
         "avatar": me.get("avatar") or "",
         "locked": bool(session.locked_in()),
+        "linked": bool(me.get("linked_account")),
+        "email": me.get("account_email") or "",
+        "login_method": me.get("auth_method") or "steam",
+        "link": session.account_link.view() if hasattr(type(session), "adopt_account") and
+                getattr(session, "account_link", None) is not None else {},
     }
 
 
@@ -901,7 +911,21 @@ def _uninstall(panel, wipe_data=False):
 # Verbs are 1:1 passthroughs run on the UI thread. Names are settings-scoped to avoid colliding
 # with the core verbs (set_language is the core's; the JS calls it directly for the language
 # picker) or another screen's verbs.
+def _account_link(panel, action="", fields=None):
+    def apply():
+        flow = getattr(panel.session, "account_link", None)
+        if flow is None:
+            return
+        if action == "signin" and flow.stage in ("done", "uncertain"):
+            flow.cancel()
+            panel.set_view("competitive")
+        else:
+            flow.action(str(action), fields)
+    panel.post(apply)
+
+
 register_verbs("settings", {
+    "settings_account_link": _account_link,
     "settings_browse_game_path": _browse_game_path,
     "settings_set_game_path":    _set_game_path,
     "settings_set_sound_volume": _set_sound_volume,

@@ -3164,3 +3164,11 @@ STRINGS['fr'].update({'account_game_privacy': 'Pour jouer, nous vérifions le co
 STRINGS['pt'].update({'account_game_privacy': 'Para jogar, verificamos a conta Steam que executa Bodycam, mesmo sem vincular o Steam para entrar. Consulte Privacidade para saber o que é compartilhado e armazenado.', 'account_privacy': 'Privacidade', 'account_terms': 'Termos'})
 STRINGS['ru'].update({'account_game_privacy': 'Для игры мы проверяем аккаунт Steam, в котором запущена Bodycam, даже без привязки Steam для входа. О передаче и хранении данных читайте в политике конфиденциальности.', 'account_privacy': 'Конфиденциальность', 'account_terms': 'Условия'})
 STRINGS['zh'].update({'account_game_privacy': '游戏时，我们会验证运行 Bodycam 的 Steam 账户，即使你未绑定 Steam 登录。共享和保存的数据请参阅隐私政策。', 'account_privacy': '隐私', 'account_terms': '条款'})
+
+STRINGS['en']["account_link_finish"] = 'Finish or cancel account linking in Settings before queueing.'
+STRINGS['de']["account_link_finish"] = 'Beende oder brich die Kontoverbindung in den Einstellungen ab, bevor du suchst.'
+STRINGS['es']["account_link_finish"] = 'Termina o cancela la conexión de cuentas en Ajustes antes de buscar partida.'
+STRINGS['fr']["account_link_finish"] = 'Terminez ou annulez la connexion des comptes dans les paramètres avant de chercher une partie.'
+STRINGS['pt']["account_link_finish"] = 'Conclua ou cancele a conexão de contas nas configurações antes de buscar partida.'
+STRINGS['ru']["account_link_finish"] = 'Завершите или отмените подключение аккаунтов в настройках перед поиском матча.'
+STRINGS['zh']["account_link_finish"] = '请在设置中完成或取消账户连接后，再开始匹配。'

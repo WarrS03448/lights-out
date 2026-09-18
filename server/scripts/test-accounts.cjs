@@ -192,6 +192,13 @@ test('optional linking requires both proofs and allows either login to reach the
   const steamMe=await request('me',undefined,steamToken);
   assert.equal(steamMe.status,200);assert.equal(steamMe.body.account.id,account.id);
   assert.equal((await request('/api/auth/me',undefined,steamToken)).body.account_id,account.id);
+  await store(['SET',prefix+'auth:link:fixture-ready',JSON.stringify({status:'ready',steam_id:STEAM,token:steamToken}),'EX','60']);
+  const poll=await request('/api/auth/poll?code=fixture-ready');
+  assert.equal(poll.status,200);
+  assert.equal(poll.body.account_id,account.id);
+  assert.equal(poll.body.account.email,EMAIL);
+  assert.equal(poll.body.account.steam_id,STEAM);
+  assert.equal(poll.body.player_id,steamMe.body.account.player_id);
   const other=await register('other@example.test');const otherToken=await login('other@example.test');
   assert.notEqual(account.id,other.id);
   assert.equal((await link(otherToken,steamToken)).status,409);

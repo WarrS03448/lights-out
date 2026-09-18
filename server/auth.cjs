@@ -251,9 +251,18 @@ function create({ upstashCmd, prefix = 'hub:', accountPrefix=prefix, accountStor
     const identity=await steamIdentity(pending.token);
     if(!identity)return sendJson(res,401,{ok:false,error:'Sign in again. This account association has changed.'});
     const profile = await profileFor(pending.steam_id);
+    let linked=null;
+    if(accountService.ready && identity.account_id) {
+      try {
+        const candidate=await accountService.bySteam(pending.steam_id);
+        if(candidate && candidate.id===identity.account_id && candidate.player_id===identity.player_id &&
+           candidate.steam_id===pending.steam_id)linked=accountService.summary(candidate);
+      } catch { /* Optional display enrichment does not change authenticated ownership. */ }
+    }
     sendJson(res, 200, {
       ok: true, status: 'ready', token: pending.token, steam_id: pending.steam_id,
       player_id:identity.player_id||pending.steam_id,game_steam_id:pending.steam_id,auth_method:'steam',...profile,
+      ...(identity.account_id?{account_id:identity.account_id}:{}),...(linked?{account:linked}:{}),
     });
   }
 

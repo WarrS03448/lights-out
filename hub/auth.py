@@ -28,7 +28,11 @@ GIVE_UP_AFTER_SECONDS = 300   # 5 minutes of not finishing in the browser
 
 
 class AuthError(Exception):
-    """Sign-in could not be completed. The message is shown to the player as-is."""
+    """Sign-in failure, with a safe machine-readable code for account UI."""
+    def __init__(self, message, *, code="", status=None):
+        super().__init__(message)
+        self.code = code if isinstance(code, str) and len(code) <= 80 else ""
+        self.status = status
 
 
 def _request(path, method="GET", token=None, timeout=TIMEOUT_SECONDS, data=None):
@@ -63,7 +67,8 @@ def account_request(action, data=None, token=None):
     status, body = _request("/api/auth/account/" + action,
                            method="POST" if data is not None else "GET", token=token, data=data)
     if status not in (200, 201, 202) or not isinstance(body, dict) or not body.get("ok"):
-        raise AuthError("Account verification failed. Please try again.")
+        raise AuthError("Account verification failed. Please try again.",
+                        code=body.get("code", "") if isinstance(body, dict) else "", status=status)
     return body
 
 

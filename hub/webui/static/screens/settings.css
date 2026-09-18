@@ -226,3 +226,14 @@
 @media (prefers-reduced-motion: reduce) {
   .set-btn { transition: none; }
 }
+
+/* Account connection stays inside Settings > Account. */
+.set-acct { flex-wrap: wrap; }
+.set-account-link-row { flex: 1 0 100%; border-top: 1px solid var(--line); padding-top: var(--sp-3); }
+.set-account-link-row p { margin: 0 0 var(--sp-3); }
+.set-btn.primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.set-link-form { display: flex; flex-direction: column; gap: var(--sp-3); }
+.set-link-field { display: flex; flex-direction: column; gap: var(--sp-2); font-size: 13px; }
+.set-link-field input { width: 100%; min-height: 44px; border: 1px solid var(--line); background: var(--ground); color: var(--text); padding: 10px; font: inherit; }
+.set-link-pair { font-size: 12px; overflow-wrap: anywhere; color: var(--muted); }
+.account-link-modal { overflow-y: auto; }

@@ -1,5 +1,5 @@
 {
-  "release": "2.3.88",
+  "release": "2.3.89",
   "date": "2026-09-18",
   "scope": "Original client, server, gamemode generators, editor helper, packaging code and tests",
   "source_export_changes": [
@@ -13,7 +13,8 @@
     "Bundle license notices with local builds and pin optional oozextract to 0.5.0",
     "Include authenticated host travel, public policies and automated privacy checks for release 2.3.86",
     "Include single-load host startup, one joiner reconnect action, and verified timestamped release signing for 2.3.87",
-    "Include email accounts, privacy disclosures, verified game identity, host migration and reconnect grace for 2.3.88; omit private test deployment tooling and settings"
+    "Include email accounts, privacy disclosures, verified game identity, host migration and reconnect grace for 2.3.88; omit private test deployment tooling and settings",
+    "Add verified Settings account linking and highlighted website account links in 2.3.89"
   ],
   "gamemode_packs": [
     {

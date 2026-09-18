@@ -15,7 +15,7 @@ import os
 
 # ---------------------------------------------------------------- identity
 APP_NAME = "Lights Out"
-HUB_VERSION = "2.3.88"                      # display version: shown in the UI, the installer name, AppVersion
+HUB_VERSION = "2.3.89"                      # display version: shown in the UI, the installer name, AppVersion
 # Version-info resource fields (hub.spec). Plain strings; the exe's file version is HUB_VERSION.
 COMPANY_NAME = "Lights Out (unofficial)"
 PRODUCT_NAME = APP_NAME
@@ -51,8 +51,9 @@ def version_tuple(v=HUB_VERSION):
 # VersionInfoVersion. AppVersion / the installer filename keep the display string HUB_VERSION.
 HUB_FILE_VERSION = ".".join(str(n) for n in version_tuple())
 
-# Legacy publisher label retained for compatibility. The verified Windows publisher comes from
-# the certificate applied to the release installer, not this string.
+# Code-signing identity. Kept separate from COMPANY_NAME above because it is the name that has to
+# match the certificate, not the name shown in the version resource. docs/code-signing.md: whatever
+# identity Azure validates becomes the publisher Windows shows, and PUBLISHER must equal it exactly.
 #
 # The 1.1.0 merge (2026-09-14) dropped the duplicate FILE_DESCRIPTION and COPYRIGHT that used to sit
 # here: the installer branch renamed them to FILE_DESCRIPTION / LEGAL_COPYRIGHT at the top of this

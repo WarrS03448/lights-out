@@ -48,6 +48,7 @@
     // core.render() clears the body's overlays before each draw (test_webui_a_modal_is_cleared_
     // by_the_next_render), which is what closes this one when `confirming` goes false.
     if ((s.uninstall || {}).confirming) { document.body.appendChild(uninstallModal()); }
+    if ((((s.account || {}).link) || {}).stage) { document.body.appendChild(accountLinkModal()); }
 
     function build() {
       var wrap = el("div", "settings");
@@ -282,7 +283,69 @@
         out.setAttribute("aria-label", t("comp_signout_locked"));
       }
       card.appendChild(out);
+      var linking = el("div", "set-account-link-row");
+      if (acct.linked) {
+        linking.appendChild(el("div", "set-hint", st("link_connected", {email: acct.email || "Lights Out"})));
+      } else if (acct.login_method !== "lightsout") {
+        linking.appendChild(el("p", "set-hint", st((acct.link || {}).can_connect ? "link_hint" : "link_idle_required")));
+        var connect = ui.btn("set-btn set-account-link", st("link_button"),
+          function () { call("settings_account_link", "start"); }, {tag:"button"});
+        connect.disabled = !((acct.link || {}).can_connect);
+        linking.appendChild(connect);
+      }
+      if (linking.childNodes.length) card.appendChild(linking);
       return card;
+    }
+
+    function accountLinkModal() {
+      var link = (s.account || {}).link || {}, stage = link.stage;
+      var kids = [], form = el("form", "set-link-form");
+      form.setAttribute("aria-busy", String(!!link.busy));
+      var messages = {login:"link_login_intro",login_code:"link_email_code_intro",steam:"link_steam_intro",
+        password:"link_password_intro",confirm:"link_confirm_intro",done:"link_success",uncertain:"link_uncertain"};
+      kids.push(el("p", "set-hint", st(messages[stage] || "link_hint")));
+      if (link.email && stage !== "done" && stage !== "uncertain") kids.push(el("p", "set-link-pair", st("link_pair", link)));
+      var errorKeys = {progress_conflict:"link_progress_conflict",link_conflict:"link_owner_conflict",
+        already_linked:"link_owner_conflict",active_match:"link_match",fresh_steam_required:"link_expired",
+        invalid_action_code:"link_code_invalid",invalid_code:"link_code_invalid",account_changed:"link_restart",
+        not_signed_in:"link_restart",invalid_credentials:"link_credentials",rate_limited:"link_rate",wrong_steam:"link_wrong_steam"};
+      if (link.error) { var error = el("div", "set-note bad", st(errorKeys[link.error] || "link_unavailable")); error.setAttribute("role","alert"); kids.push(error); }
+      function field(name, label, type) {
+        var row = el("label", "set-link-field", t(label)), input = document.createElement("input");
+        input.id = "settings-link-" + (link.epoch || 0) + "-" + stage + "-" + name; input.name = name; input.type = type || "text";
+        input.required = true; input.disabled = !!link.busy; input.maxLength = name === "code" ? 6 : 254;
+        input.autocomplete = type === "password" ? "current-password" : name === "email" ? "email" : "one-time-code";
+        if (name === "code") { input.inputMode="numeric";input.pattern="[0-9]{6}"; }
+        if (type === "password") input.minLength = 6;
+        input.autocapitalize="none"; input.spellcheck=false; row.appendChild(input);form.appendChild(row);
+      }
+      if (stage === "login") field("email", "account_email", "email");
+      if (stage === "login" || stage === "password") field("password", "account_password", "password");
+      if (stage === "login_code" || stage === "confirm") field("code", "account_code");
+      if (["login","login_code","password","confirm"].indexOf(stage) >= 0) {
+        var submit = document.createElement("button"); submit.type="submit";submit.className="set-btn primary";
+        submit.disabled=!!link.busy; submit.textContent=link.busy?t("account_working"):stage==="password"?st("link_send_confirmation"):stage==="confirm"?st("link_confirm_button"):t("account_continue");form.appendChild(submit);
+        form.onsubmit=function(event){
+          event.preventDefault();if(link.busy)return;
+          var fields={};form.querySelectorAll("input").forEach(function(input){fields[input.name]=input.value;if(input.type==="password"||input.name==="code")input.value="";});
+          call("settings_account_link",stage,fields);
+        };
+        kids.push(form);
+      } else if (stage === "steam") {
+        if (link.busy) kids.push(el("p","set-hint",st("link_steam_waiting")));
+        var steam=ui.btn("set-btn primary",st("link_steam_button"),function(){call("settings_account_link", "steam");},{tag:"button"});steam.disabled=!!link.busy;kids.push(steam);
+        if(link.busy)kids.push(ui.btn("set-btn",t("comp_signin_open_again"),function(){call("settings_account_link","open_steam");},{tag:"button"}));
+      } else if ((stage === "done" || stage === "uncertain")) {
+        kids.push(ui.btn("set-btn primary",st("link_signin"),function(){call("settings_account_link","signin");},{tag:"button"}));
+      }
+      function close(){ if(!(stage==="confirm"&&link.busy))call("settings_account_link","cancel"); }
+      if(stage!=="done"&&stage!=="uncertain"){
+        var cancel=ui.btn("set-btn",t("comp_cancel"),close,{tag:"button"});cancel.disabled=stage==="confirm"&&!!link.busy;kids.push(cancel);
+        if(link.error){var restart=ui.btn("set-btn",st("link_start_over"),function(){call("settings_account_link","restart");},{tag:"button"});restart.disabled=!!link.busy;kids.push(restart);}
+      }
+      var overlay=ui.modal({title:st("link_title"),children:kids,onClose:close});
+      overlay.querySelector(".ui-modal").classList.add("account-link-modal");
+      return overlay;
     }
 
     // -- Uninstall ------------------------------------------------------------
