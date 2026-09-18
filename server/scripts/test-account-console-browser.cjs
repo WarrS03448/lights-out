@@ -38,17 +38,28 @@ const server=http.createServer(async(req,res)=>{try{const u=new URL(req.url,'htt
       assert.deepEqual(await page.locator('#account-stats b').allTextContents(),['3','1','0','2']);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'overview overflow');
       await page.screenshot({path:`work/account-console-browser/overview-${width}.png`,fullPage:true});
+      for(const [player,persona,steam] of [[GAME,'Steam Player',GAME],[PLAYER,'New Steam profile',OLD]]) {
+        await page.goto(url+'/admin/players?player_id='+player);
+        await page.waitForFunction(()=>document.querySelector('#count').textContent.includes('1 of 3'));
+        const profile=page.getByRole('link',{name:persona,exact:true});
+        assert.equal(await profile.getAttribute('href'),'https://steamcommunity.com/profiles/'+steam);
+        assert.equal(await profile.getAttribute('target'),'_blank');
+        assert.match(await profile.getAttribute('rel'),/noreferrer/);
+        assert.match(await profile.getAttribute('rel'),/noopener/);
+        assert.equal(await page.locator('#rows').getByRole('link',{name:'Analytics',exact:true}).getAttribute('href'),'/admin/analytics?player_id='+player);
+      }
       await page.goto(url+'/admin/players?player_id='+OLD);
       await page.waitForFunction(()=>document.querySelector('#count').textContent.includes('1 of 3'));
       assert.equal(await page.locator('#rows tr').count(),1);
       assert.equal(await page.locator('#q').inputValue(),OLD);
       assert.equal(await page.locator('#rows img').count(),0);
+      assert.equal(await page.getByRole('link',{name,exact:true}).count(),0,'a disconnected numeric profile must not guess its old Steam identity');
       assert.match(await page.locator('#rows').innerText(),/Lights Out/);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'players overflow');
       await page.screenshot({path:`work/account-console-browser/players-${width}.png`,fullPage:true});
       await page.locator('#q').fill(ACCOUNT);
       await page.waitForFunction(()=>document.querySelector('#count').textContent.includes('1 of 3'));
-      await page.locator('#rows a').first().click();
+      await page.locator('#rows').getByRole('link',{name:'Analytics',exact:true}).click();
       await page.waitForFunction(()=>document.querySelector('#notice').textContent!=='Loading…');
       assert.match(await page.locator('#content').innerText(),/old-profile-match/);
       assert.doesNotMatch(await page.locator('#content').innerText(),/new-profile-match/);

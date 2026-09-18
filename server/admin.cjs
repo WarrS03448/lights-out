@@ -227,13 +227,23 @@ const PLAYERS_JS = `
     var v = row[column.key];
     td.className = 'c-' + column.type;
     if (column.type === 'name') {
-      // Drill into evidence for the canonical player, independent of their sign-in method.
-      var a = document.createElement('a');
-      a.href = '/admin/analytics?player_id=' + encodeURIComponent(row.player_id);
+      // Names retain the Steam profile shortcut; account IDs are never Steam identities.
+      var steam = [row.game_steam_id, row.steam_login_id].find(function(id) { return /^[0-9]{17}$/.test(id || ''); });
+      var a = document.createElement(steam ? 'a' : 'span');
+      if (steam) {
+        a.href = 'https://steamcommunity.com/profiles/' + steam;
+        a.target = '_blank';
+        a.rel = 'noreferrer noopener';
+      }
       a.textContent = v || row.player_id;
       if (!v) a.className = 'unnamed';
       td.appendChild(a);
       if (row.admin) td.appendChild(tag('admin', 'strong'));
+      var history = document.createElement('a');
+      history.href = '/admin/analytics?player_id=' + encodeURIComponent(row.player_id);
+      history.textContent = 'Analytics';
+      history.className = 'player-analytics';
+      td.appendChild(history);
     } else if (column.type === 'status') {
       td.appendChild(tag(v, v === 'offline' ? '' : 'ok'));
     } else if (column.type === 'rank') {
@@ -887,7 +897,8 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
   td.c-id { font-family:ui-monospace,Consolas,monospace; color:var(--muted); }
   td.c-name a { color:var(--text); text-decoration:none; }
   td.c-name a:hover { color:var(--accent); text-decoration:underline; }
-  td.c-name a.unnamed { font-family:ui-monospace,Consolas,monospace; color:var(--muted); }
+  td.c-name .unnamed { font-family:ui-monospace,Consolas,monospace; color:var(--muted); }
+  td.c-name a.player-analytics { display:block; margin-top:4px; font-size:11px; color:var(--muted); }
   td.muted { color:var(--muted); }
   td .tag { margin-left:6px; }
   .tag.ok { color:var(--ok); border-color:var(--ok); }

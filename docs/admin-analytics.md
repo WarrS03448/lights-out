@@ -18,7 +18,10 @@ creation date and both Steam identity fields. Creation date differs from first g
 connection. The former Sign-ins column is labeled Hub connections because reconnects
 increment it. Existing saved column choices remain available.
 
-Player links select the exact canonical profile. Free-text searches may intentionally
+In Players, clicking a name opens its last observed game Steam profile (or Steam
+sign-in profile when no game identity is known) in a new tab. Names without a known
+Steam identity remain plain text. The separate Analytics link selects the exact
+canonical profile. Free-text searches may intentionally
 match more than one profile using a game Steam ID; exact links do not mix their histories.
 Analytics match and event links return to the exact player row, and match details show
 canonical player ID separately from the game's Steam ID. Disconnecting Steam retains
