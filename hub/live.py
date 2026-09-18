@@ -3,7 +3,7 @@
 The server pushes over Server-Sent Events and takes actions as ordinary POSTs
 (server/live.cjs explains why that transport). From Python an SSE stream is just a long
 GET whose body arrives in pieces, so there is no dependency here beyond the standard
-library — which matters for an exe that already has SmartScreen to get past.
+library, keeping the desktop client's dependencies small.
 
     client = LiveClient(token, on_event=..., on_status=..., versions=...)
     client.start()                       # connects, reconnects, until stop()

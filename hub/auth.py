@@ -5,8 +5,7 @@ thing — a SteamID64 — which is exactly what a rank should hang off.
 
 The hub is a desktop program and cannot receive a browser redirect, so sign-in is a LINK
 CODE handshake against our own service (server/auth.cjs). Deliberately NO local HTTP
-listener: opening a port would fight the player's firewall and antivirus, and an unsigned
-exe already has SmartScreen to get past.
+listener: using outbound requests avoids local firewall and antivirus configuration.
 
     start()            -> {"code", "url", "expires_in"}   ask for a pending sign-in
     webbrowser.open(url)                                   the player signs in with Steam

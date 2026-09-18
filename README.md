@@ -10,9 +10,11 @@ it downloads into the game is not designed to provide cheats.** This is not an
 anti-cheat guarantee. A separately purchased, compatible Bodycam installation is
 required to play.
 
-[Download the Windows app](https://lightsout.up.railway.app/)
+[Download the Windows app](https://lightsoutranked.com/)
 · [Source releases](https://github.com/WarrS03448/lights-out/releases)
 · [Report a bug](https://github.com/WarrS03448/lights-out/issues)
+
+The official Windows installer is digitally signed by **Samuel Warren**.
 
 ## What is included
 

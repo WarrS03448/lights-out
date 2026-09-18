@@ -3,10 +3,9 @@
 # Run from the repository root:  pyinstaller --noconfirm hub\hub.spec   (build_hub.bat does this, then wraps
 # the folder in an Inno Setup installer, hub\installer.iss).
 #
-# Why --onedir and not --onefile: Defender's cloud ML flagged the unsigned one-file exe as a trojan
-# (docs/distribution). A one-file build unpacks itself into %TEMP% and execs from there, which is
-# exactly what droppers do; a plain folder with a versioned, described exe looks like ordinary
-# software. The names are stable (no version in them) so the installer, the updater and shortcuts
+# Why --onedir and not --onefile: the installer manages a persistent application folder, avoiding
+# extraction into %TEMP% on every launch. The official release installer is digitally signed.
+# The names are stable (no version in them) so the installer, the updater and shortcuts
 # never have to chase a filename; the version lives in the exe's version-info resource instead.
 import os, sys, re
 # PyInstaller hook helpers for the --webui native deps (pywebview + pythonnet). Imported at the top

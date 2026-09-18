@@ -6,8 +6,7 @@
  * verified SteamID64 — and nothing else: no email, no password, no friends list.
  *
  * The hub is a desktop program, so it cannot receive a browser redirect. Rather than open
- * a local HTTP listener (which firewalls and antivirus would fight, and this exe already
- * has SmartScreen to contend with), sign-in is a LINK CODE handshake:
+ * a local HTTP listener requiring firewall configuration, sign-in is a LINK CODE handshake:
  *
  *   1. hub  -> GET  /api/auth/start            -> { code, url, expires_in }
  *   2. hub opens `url` in the player's browser -> Steam login -> /auth/steam/return

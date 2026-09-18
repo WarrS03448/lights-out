@@ -650,10 +650,8 @@ function handleCatalogueJson(req, res) {
 function handleHubDownload(req, res) {
   const catalogue = readCatalogue();
   const hub = (catalogue && catalogue.hub) || {};
-  // Prefer the zipped copy. Windows Defender blocks a bare unsigned .exe as the browser writes it
-  // to disk (Chrome reports "Failed - Virus detected"), while the same bytes inside a .zip get
-  // through. Falls back to the raw exe when no zip has been published yet. hub.download_url stays
-  // the .exe on purpose: hub/update.py self-updates from it and must get something it can run.
+  // Serve an optional zip when the catalogue provides one; otherwise serve the installer.
+  // hub.download_url stays executable because hub/update.py runs it for self-updates.
   const downloadUrl = hub.zip_url || hub.download_url;
   if (!downloadUrl) {
     return sendJson(res, 500, { error: 'Server error.' });

@@ -14,6 +14,10 @@ that folder as an installer using `hub/installer.iss`; `hub/build_hub.bat` perfo
 the Windows packaging steps. No game installation is needed to package the
 client. Playing or assembling a game mod does require your own compatible game.
 
+The official Windows installer is digitally signed by **Samuel Warren**. Signing
+local builds requires your own certificate and a separate signing step; the
+packaging scripts do not apply the official release signature.
+
 The optional third-party sound recordings are absent from this source release.
 The desktop packaging specification includes existing files in the static tree;
 it can build without those recordings. Supply your own licensed files at the
