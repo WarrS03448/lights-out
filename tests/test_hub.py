@@ -3634,14 +3634,19 @@ def test_game_running_cached_never_blocks_and_then_settles():
     hub took three seconds. Worse the more processes are running, which is why one player saw it
     and another did not."""
     import time as _t
+    import threading as _threading
     from hub import game as game_mod
 
     calls = []
     real = game_mod.game_running
+    release = _threading.Event()
+    completed = _threading.Event()
+    caller = _threading.get_ident()
 
     def _slow():
-        calls.append(1)
-        _t.sleep(0.4)
+        calls.append(_threading.get_ident())
+        release.wait(10)
+        completed.set()
         return True
 
     game_mod.game_running = _slow
@@ -3651,16 +3656,18 @@ def test_game_running_cached_never_blocks_and_then_settles():
         game_mod._running_value = False
         game_mod._running_refreshing = False
 
-        started = _t.monotonic()
         first = game_mod.game_running_cached()
-        inline = _t.monotonic() - started
-        assert inline < 0.05, "game_running_cached blocked %.0f ms" % (inline * 1000)
+        # Prove the probe is still blocked after the caller returns. A strict
+        # 50ms wall-clock budget mistakes a busy CI runner for an inline probe.
+        assert not completed.is_set(), "game_running_cached waited for the probe"
         assert first is False, "with no answer yet it must not invent one"
+        release.set()
 
         deadline = _t.monotonic() + 3.0
         while _t.monotonic() < deadline and not game_mod.game_running_cached():
             _t.sleep(0.01)
         assert game_mod.game_running_cached() is True, "the background probe never landed"
+        assert calls and caller not in calls, "the probe ran on the calling thread"
 
         # ...and a second read inside the TTL must not spawn another tasklist
         before = len(calls)
@@ -3668,6 +3675,7 @@ def test_game_running_cached_never_blocks_and_then_settles():
             game_mod.game_running_cached()
         assert len(calls) == before, "the cache re-probed %d times" % (len(calls) - before)
     finally:
+        release.set()
         game_mod.game_running = real
         game_mod._running_at = 0.0
         game_mod._running_value = False
