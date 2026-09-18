@@ -57,9 +57,9 @@ GI_CLASS = GI_PKG + ".BodycamGI_C"
 def combat_transport():
     """Manager queue transport; capability stays in the private GameInstance field."""
     g = G(); g.existing('combat_transmit', 'CombatTransmit')
-    g.call('combat_host', GS_LIB, 'GetPlayerState', {'PlayerStateIndex': '0'})
+    g.call("combat_host_local", GS_LIB, "GetPlayerController", {"PlayerIndex":"0"}); g.get("combat_host", "PlayerState", CONTROLLER); g.link(("combat_host_local.ReturnValue", "combat_host.self"))
     g.call('combat_hostid', ONLINE, 'RetrievePlatformIdAsStringFromPlayerState')
-    g.link(('combat_host.ReturnValue', 'combat_hostid.PlayerState'))
+    g.link(('combat_host.PlayerState', 'combat_hostid.PlayerState'))
     _report_send(g, 'combat_http', {'URL': REPORT_URL, 'EventName': 'ch_combat_v1'})
     g.link(('combat_transmit.Row', 'combat_http.Platform'), ('combat_hostid.ReturnValue', 'combat_http.UserId'))
     g.n('combat_response', 'createevent', func='CombatReportResult')
@@ -82,8 +82,14 @@ def _report_send(g, node, defaults):
     g.cast(p + "cast", GI_CLASS, pure=True)
     g.get(p + "token", REPORT_TOKEN_PROP, GI_CLASS)
     g.link((p + "gi.ReturnValue", p + "cast.cast_object"),
-           (p + "cast.cast_result", p + "token.self"),
-           (p + "token." + REPORT_TOKEN_PROP, node + ".BearerToken"))
+           (p + "cast.cast_result", p + "token.self"))
+    g.call(p+"gm", GS_LIB, "GetGameMode")
+    g.call(p+"component", ACTOR, "GetComponentByClass", {"ComponentClass":RULE});g.link((p+"gm.ReturnValue",p+"component.self"))
+    g.cast(p+"rule", RULE, pure=True);g.link((p+"component.ReturnValue",p+"rule.cast_object"))
+    g.get(p+"epoch", "HostEpoch", RULE);g.link((p+"rule.cast_result",p+"epoch.self"))
+    g.call(p+"epoch_s", STR, "Conv_IntToString");g.link((p+"epoch.HostEpoch",p+"epoch_s.InInt"))
+    g.call(p+"prefix", STR, "Concat_StrStr", {"B":"."});g.link((p+"token."+REPORT_TOKEN_PROP,p+"prefix.A"))
+    g.call(p+"bearer", STR, "Concat_StrStr");g.link((p+"prefix.ReturnValue",p+"bearer.A"),(p+"epoch_s.ReturnValue",p+"bearer.B"),(p+"bearer.ReturnValue",node+".BearerToken"))
 
 # The lobby half of the proof. CreateLobby/UpdateLobby/FindLobbies all take an arbitrary
 # TMap<FString, FBodycamLobbyAttribute> of session attributes, and FindLobbies SEARCHES on
@@ -390,8 +396,8 @@ def gm_stat_report(g):
 
     # The REPORTER is the host, always - player state 0, the same node the probe has been using since 2026-09-14. The
     # subject's id rides inside the row instead. Confusing the two would have the server refuse nine calls in ten.
-    g.call("st_hps", GS_LIB, "GetPlayerState", {"PlayerStateIndex": "0"})
-    g.call("st_hid", ONLINE, "RetrievePlatformIdAsStringFromPlayerState"); g.link(("st_hps.ReturnValue", "st_hid.PlayerState"))
+    g.call("st_hps_local", GS_LIB, "GetPlayerController", {"PlayerIndex":"0"}); g.get("st_hps", "PlayerState", CONTROLLER); g.link(("st_hps_local.ReturnValue", "st_hps.self"))
+    g.call("st_hid", ONLINE, "RetrievePlatformIdAsStringFromPlayerState"); g.link(("st_hps.PlayerState", "st_hid.PlayerState"))
 
     for node, src in (("st_kS", "st_k.Kill"), ("st_dS", "st_d.Death"),
                       ("st_spS", "st_sp.SpawnCount"), ("st_scS", "st_sc.ReturnValue"),
@@ -474,9 +480,11 @@ def rule_signature(name):
         g.entry(params=[P("Side", "int")]); g.result(params=[P("Start", "object", **{"class": ACTOR})])
     elif name == "ResolveStart":
         g.entry(params=[P("Player", "object", **{"class": CONTROLLER}), P("Fallback", "object", **{"class": ACTOR})]); g.result(params=[P("Start", "object", **{"class": ACTOR})])
-    elif name in ("RecountTeams", "BeginCompetitive"):
+    elif name in ("RecountTeams", "BeginCompetitive", "CaptureStartHumans"):
         g.entry()
-    elif name in ("StartRoster", "FinalRows"):
+    elif name == "StartHumansPresent":
+        g.entry(); g.result(params=[P("ReturnValue", "bool")])
+    elif name in ("StartRoster", "PresenceRoster", "FinalRows"):
         g.entry(); g.result(params=[P("ReturnValue", "string")])
     else: raise KeyError(name)
     return g.json()
@@ -829,6 +837,90 @@ def rule_fn_FinalRows():
     return g.json()
 
 
+def _presence_identity(g):
+    g.call("id_len", STR, "Len"); g.link(("id.ReturnValue", "id_len.S"))
+    g.call("id_length", MATH, "EqualEqual_IntInt", {"B": "17"}); g.link(("id_len.ReturnValue", "id_length.A"))
+    g.call("id_numeric", STR, "IsNumeric"); g.link(("id.ReturnValue", "id_numeric.SourceString"))
+    g.call("human", MATH, "BooleanAND"); g.link(("id_length.ReturnValue", "human.A"), ("id_numeric.ReturnValue", "human.B"))
+
+
+def _human_scan(capture):
+    """Only Controller-backed identities count; a dead/destroyed pawn is not a disconnect."""
+    g = G(); g.entry()
+    target = "StartApprovedHumans" if capture else "StartCurrentHumans"
+    g.get("ids", target); g.call("clear", ARR, "Array_Clear", array=True)
+    g.link(("ids." + target, "clear.TargetArray")); g.chain("entry", "clear")
+    g.call("gs", GS_LIB, "GetGameState")
+    g.get("players", "PlayerArray", GAMESTATE); g.link(("gs.ReturnValue", "players.self"))
+    g.foreach("each"); g.link(("players.PlayerArray", "each.Array"), ("clear.then", "each.Exec"))
+    g.call("id", ONLINE, "RetrievePlatformIdAsStringFromPlayerState"); g.link(("each.Array Element", "id.PlayerState"))
+    _presence_identity(g)
+    g.call("owner", ACTOR, "GetOwner"); g.link(("each.Array Element", "owner.self"))
+    g.cast("controller", CONTROLLER, pure=True); g.link(("owner.ReturnValue", "controller.cast_object"))
+    g.call("valid", SYS, "IsValid"); g.link(("controller.cast_result", "valid.Object"))
+    g.call("connected", MATH, "BooleanAND"); g.link(("human.ReturnValue", "connected.A"), ("valid.ReturnValue", "connected.B"))
+    condition = "connected.ReturnValue"
+    if not capture:
+        # Outsiders are handled by the arrival guard, not by pausing the assigned players.
+        g.get("approved", "StartApprovedHumans")
+        g.call("member", ARR, "Array_Contains", array=True)
+        g.link(("approved.StartApprovedHumans", "member.TargetArray"), ("id.ReturnValue", "member.ItemToFind"))
+        g.call("required", MATH, "BooleanAND"); g.link((condition, "required.A"), ("member.ReturnValue", "required.B"))
+        condition = "required.ReturnValue"
+    g.branch("include"); g.link((condition, "include.condition"), ("each.LoopBody", "include.exec"))
+    g.call("add", ARR, "Array_AddUnique", array=True)
+    g.link(("ids." + target, "add.TargetArray"), ("id.ReturnValue", "add.NewItem")); g.chain("include", "add")
+    if not capture:
+        g.result(params=[P("ReturnValue", "bool")])
+        for name, array in (("want", "approved.StartApprovedHumans"), ("have", "ids.StartCurrentHumans")):
+            g.call(name, ARR, "Array_Length", array=True); g.link((array, name + ".TargetArray"))
+        g.call("nonempty", MATH, "GreaterEqual_IntInt", {"B": "1"}); g.link(("want.ReturnValue", "nonempty.A"))
+        g.call("same", MATH, "EqualEqual_IntInt"); g.link(("want.ReturnValue", "same.A"), ("have.ReturnValue", "same.B"))
+        g.call("ok", MATH, "BooleanAND"); g.link(("nonempty.ReturnValue", "ok.A"), ("same.ReturnValue", "ok.B"))
+        g.get("started", "CompetitiveStarted"); g.call("missing", MATH, "Not_PreBool"); g.link(("ok.ReturnValue", "missing.A"))
+        g.call("departed", MATH, "BooleanAND"); g.link(("started.CompetitiveStarted", "departed.A"), ("missing.ReturnValue", "departed.B"))
+        g.branch("mark"); g.link(("departed.ReturnValue", "mark.condition"), ("each.Completed", "mark.exec"))
+        g.set("dirty", "PresenceDirty", defaults={"PresenceDirty": "true"}); g.chain("mark", "dirty", "result"); g.link(("mark.else", "result.exec"))
+        g.get("dirty_value", "PresenceDirty"); g.call("clean", MATH, "Not_PreBool"); g.link(("dirty_value.PresenceDirty", "clean.A"))
+        g.call("ready", MATH, "BooleanAND"); g.link(("ok.ReturnValue", "ready.A"), ("clean.ReturnValue", "ready.B"), ("ready.ReturnValue", "result.ReturnValue"))
+    return g.json()
+
+
+def rule_fn_CaptureStartHumans():
+    return _human_scan(True)
+
+
+def rule_fn_StartHumansPresent():
+    return _human_scan(False)
+
+
+def rule_fn_PresenceRoster():
+    """Wire snapshot contains only connected human identities, independent of bots and pawns."""
+    g = G(); g.entry(); g.result(params=[P("ReturnValue", "string")])
+    g.set("clear", "PresenceScratch", defaults={"PresenceScratch": ""})
+    g.set("zero", "PresenceCount", defaults={"PresenceCount": "0"}); g.chain("entry", "clear", "zero")
+    g.call("gs", GS_LIB, "GetGameState"); g.get("players", "PlayerArray", GAMESTATE); g.link(("gs.ReturnValue", "players.self"))
+    g.foreach("each"); g.link(("players.PlayerArray", "each.Array"), ("zero.then", "each.Exec"))
+    g.call("id", ONLINE, "RetrievePlatformIdAsStringFromPlayerState"); g.link(("each.Array Element", "id.PlayerState"))
+    _presence_identity(g)
+    g.call("owner", ACTOR, "GetOwner"); g.link(("each.Array Element", "owner.self"))
+    g.cast("controller", CONTROLLER, pure=True); g.link(("owner.ReturnValue", "controller.cast_object"))
+    g.call("valid", SYS, "IsValid"); g.link(("controller.cast_result", "valid.Object"))
+    g.call("connected", MATH, "BooleanAND"); g.link(("human.ReturnValue", "connected.A"), ("valid.ReturnValue", "connected.B"))
+    g.branch("include"); g.link(("connected.ReturnValue", "include.condition"), ("each.LoopBody", "include.exec"))
+    g.get("scratch", "PresenceScratch"); g.get("count", "PresenceCount")
+    g.call("idcat", STR, "Concat_StrStr"); g.link(("scratch.PresenceScratch", "idcat.A"), ("id.ReturnValue", "idcat.B"))
+    g.call("sep", STR, "Concat_StrStr", {"B": ";"}); g.link(("idcat.ReturnValue", "sep.A"))
+    g.set("append", "PresenceScratch"); g.link(("sep.ReturnValue", "append.PresenceScratch")); g.chain("include", "append")
+    g.call("inc", MATH, "Add_IntInt", {"B": "1"}); g.link(("count.PresenceCount", "inc.A"))
+    g.set("savecount", "PresenceCount"); g.link(("inc.ReturnValue", "savecount.PresenceCount")); g.chain("append", "savecount")
+    g.call("counts", STR, "Conv_IntToString"); g.link(("count.PresenceCount", "counts.InInt"))
+    g.call("prefix", STR, "Concat_StrStr", {"B": "|"}); g.link(("counts.ReturnValue", "prefix.A"))
+    g.call("out", STR, "Concat_StrStr"); g.link(("prefix.ReturnValue", "out.A"), ("scratch.PresenceScratch", "out.B"))
+    g.link(("out.ReturnValue", "result.ReturnValue"), ("each.Completed", "result.exec"))
+    return g.json()
+
+
 def rule_fn_BeginCompetitive():
     """Clear warmup K/D exactly once, at the native first-round start (round index is still zero)."""
     g = G(); g.entry()
@@ -844,11 +936,13 @@ def rule_fn_BeginCompetitive():
     return g.json()
 
 
-RULE_FUNCTIONS = ["AverageOf", "GatherStarts", "LatchFrom", "SideForPlayer", "PickStart", "ResolveStart", "RecountTeams", "StartRoster", "FinalRows", "BeginCompetitive"]
+RULE_FUNCTIONS = ["AverageOf", "GatherStarts", "LatchFrom", "SideForPlayer", "PickStart", "ResolveStart", "RecountTeams", "StartRoster", "PresenceRoster", "FinalRows", "BeginCompetitive", "CaptureStartHumans", "StartHumansPresent"]
 RULE_FN_BODIES = {"AverageOf": rule_fn_AverageOf, "GatherStarts": rule_fn_GatherStarts, "LatchFrom": rule_fn_LatchFrom,
                   "SideForPlayer": rule_fn_SideForPlayer, "PickStart": rule_fn_PickStart, "ResolveStart": rule_fn_ResolveStart,
                   "RecountTeams": rule_fn_RecountTeams, "StartRoster": rule_fn_StartRoster, "FinalRows": rule_fn_FinalRows,
-                  "BeginCompetitive": rule_fn_BeginCompetitive}
+                  "BeginCompetitive": rule_fn_BeginCompetitive,
+                  "CaptureStartHumans": rule_fn_CaptureStartHumans, "StartHumansPresent": rule_fn_StartHumansPresent,
+                  "PresenceRoster": rule_fn_PresenceRoster}
 
 def gm_findplayerstart():
     """Override FindPlayerStart(Player, IncomingName) -> Actor. The parent runs FIRST, always: its answer is both the fallback
@@ -878,6 +972,8 @@ def gm_chooseplayerstart():
 # ==================================================================================================================
 def gm_events():
     g = G()
+    import migration_graphs
+    migration_graphs.events(g)
     g.custom("perkmod", "RefreshPerkMods")
     # Delayed authenticated arrival reports; neither changes lobby settings.
     g.custom("lread", "LobbyRead")
@@ -931,6 +1027,8 @@ def gm_logic():
     gm_arrival_guard(g)
     gm_start_gate(g)
     gm_final_report(g)
+    import migration_graphs
+    migration_graphs.logic(g)
     # Both timers are on the ONE chain. Each block only declares its timer node; the order lives
     # here, in a single line, because an exec output pin drives exactly one link.
     import combat_graphs as combat
@@ -941,7 +1039,8 @@ def gm_logic():
     g.link(("combat_manager.ReturnValue", "combat_start.self"))
     g.get("combat_rule", "BB5BombRule"); g.set("keep_combat", "CombatManager", RULE)
     g.link(("combat_rule.BB5BombRule", "keep_combat.self"), ("combat_manager.ReturnValue", "keep_combat.CombatManager"))
-    g.chain("bp", "bp_parent", "combat_manager", "combat_start", "keep_combat", "t_score", "t_stats", "t_team", "t_arrival", "t_startgate", "t_final", "perktimer")
+    g.chain("bp", "bp_parent", "combat_manager", "combat_start", "keep_combat", "t_score", "t_stats", "t_team", "t_arrival", "t_startgate", "t_final", "migration_timeout")
+    g.chain("t_migration", "perktimer")
     # RefreshPerkMods (server, every 2 s): every pawn carries the infinite "GadgetCooldown x4" effect (stack limit 1 -> never compounds;
     # the ASC lives on the pawn, so a new round's pawn needs it again) — the CTF mechanism with factor 4
     g.existing("perkmod", "RefreshPerkMods")
@@ -1067,10 +1166,10 @@ def gm_score(g):
     g.brk("sc_b1", V_TEAMDATA); g.link(("sc_t1.Item", "sc_b1.in"))
 
     # Who we are, and which side we are on. Same two nodes the probe uses for identity.
-    g.call("sc_ps", GS_LIB, "GetPlayerState", {"PlayerStateIndex": "0"})
+    g.call("sc_ps_local", GS_LIB, "GetPlayerController", {"PlayerIndex":"0"}); g.get("sc_ps", "PlayerState", CONTROLLER); g.link(("sc_ps_local.ReturnValue", "sc_ps.self"))
     g.call("sc_pid", ONLINE, "RetrievePlatformIdAsStringFromPlayerState")
-    g.link(("sc_ps.ReturnValue", "sc_pid.PlayerState"))
-    g.cast("sc_psbc", BC_PS, pure=True); g.link(("sc_ps.ReturnValue", "sc_psbc.cast_object"))
+    g.link(("sc_ps.PlayerState", "sc_pid.PlayerState"))
+    g.cast("sc_psbc", BC_PS, pure=True); g.link(("sc_ps.PlayerState", "sc_psbc.cast_object"))
     g.get("sc_hteam", "TeamID", BC_PS); g.link(("sc_psbc.cast_result", "sc_hteam.self"))
 
     g.call("sc_lim", BC_GS, "GetScoreLimit"); g.link(("sc_asgs.cast_result", "sc_lim.self"))
@@ -1153,9 +1252,9 @@ def _lobby_report(g, p, event_name):
     g.link((p + "slash.ReturnValue", p + "both.A"), (p + "maxS.ReturnValue", p + "both.B"))
     g.call(p + "had", STR, "Conv_BoolToString"); g.link((p + "attr.ReturnValue", p + "had.InBool"))
 
-    g.call(p + "ps", GS_LIB, "GetPlayerState", {"PlayerStateIndex": "0"})
+    g.call(p + "ps_local", GS_LIB, "GetPlayerController", {"PlayerIndex":"0"}); g.get(p + "ps", "PlayerState", CONTROLLER); g.link((p + "ps_local.ReturnValue", p + "ps.self"))
     g.call(p + "pid", ONLINE, "RetrievePlatformIdAsStringFromPlayerState")
-    g.link((p + "ps.ReturnValue", p + "pid.PlayerState"))
+    g.link((p + "ps.PlayerState", p + "pid.PlayerState"))
 
     _report_send(g, p + "send", {
         "URL": PROBE_URL, "IP": "", "EventName": event_name,
@@ -1213,9 +1312,9 @@ def gm_teamset(g):
     g.call("tw_get", ARR, "Array_Get", array=True)
     g.link(("tw_pa.PlayerArray", "tw_get.TargetArray"), ("tw_idx.ReturnValue", "tw_get.Index"))
     g.cast("tw_ps", BC_PS); g.link(("tw_get.Item", "tw_ps.cast_object"), ("tw_slotbr.then", "tw_ps.exec"))
-    g.call("tw_hps", GS_LIB, "GetPlayerState", {"PlayerStateIndex": "0"})
+    g.call("tw_hps_local", GS_LIB, "GetPlayerController", {"PlayerIndex":"0"}); g.get("tw_hps", "PlayerState", CONTROLLER); g.link(("tw_hps_local.ReturnValue", "tw_hps.self"))
     g.call("tw_hid", ONLINE, "RetrievePlatformIdAsStringFromPlayerState")
-    g.link(("tw_hps.ReturnValue", "tw_hid.PlayerState"))
+    g.link(("tw_hps.PlayerState", "tw_hid.PlayerState"))
     g.call("tw_transform", MATH, "MakeTransform")
     g.spawn("tw_request", TEAM_REQUEST)
     g.link(("tw_transform.ReturnValue", "tw_request.SpawnTransform"), ("tw_ps.then", "tw_request.exec"))
@@ -1245,9 +1344,9 @@ def gm_arrival_guard(g):
     g.call("ag_token_len", STR, "Len"); g.link(("ag_token." + REPORT_TOKEN_PROP, "ag_token_len.S"))
     g.call("ag_token_ready", MATH, "EqualEqual_IntInt", {"B": "64"})
     g.link(("ag_token_len.ReturnValue", "ag_token_ready.A"))
-    g.call("ag_host_ps", GS_LIB, "GetPlayerState", {"PlayerStateIndex": "0"})
+    g.call("ag_host_ps_local", GS_LIB, "GetPlayerController", {"PlayerIndex":"0"}); g.get("ag_host_ps", "PlayerState", CONTROLLER); g.link(("ag_host_ps_local.ReturnValue", "ag_host_ps.self"))
     g.call("ag_host_id", ONLINE, "RetrievePlatformIdAsStringFromPlayerState")
-    g.link(("ag_host_ps.ReturnValue", "ag_host_id.PlayerState"))
+    g.link(("ag_host_ps.PlayerState", "ag_host_id.PlayerState"))
 
     def steam_id_valid(prefix, value):
         g.call(prefix + "_len", STR, "Len"); g.link((value, prefix + "_len.S"))
@@ -1563,9 +1662,9 @@ def gm_teamkill(g):
     g.link(("tk_kps.PlayerState", "tk_kid.PlayerState"))
     g.call("tk_vid", ONLINE, "RetrievePlatformIdAsStringFromPlayerState")
     g.link(("tk_vps.PlayerState", "tk_vid.PlayerState"))
-    g.call("tk_hps", GS_LIB, "GetPlayerState", {"PlayerStateIndex": "0"})
+    g.call("tk_hps_local", GS_LIB, "GetPlayerController", {"PlayerIndex":"0"}); g.get("tk_hps", "PlayerState", CONTROLLER); g.link(("tk_hps_local.ReturnValue", "tk_hps.self"))
     g.call("tk_hid", ONLINE, "RetrievePlatformIdAsStringFromPlayerState")
-    g.link(("tk_hps.ReturnValue", "tk_hid.PlayerState"))
+    g.link(("tk_hps.PlayerState", "tk_hid.PlayerState"))
 
     for node, src in (("tk_teamS", "tk_kteam.TeamID"), ("tk_elS", "tk_eli.ReturnValue"),
                       ("tk_rdS", "tk_rd.ReturnValue"), ("tk_a0S", "tk_a0.ReturnValue"),
@@ -1613,9 +1712,9 @@ def gm_arrival_reports(g):
 def _exit_report(g, p, event_name):
     """One bare marker on the exit path. DestroyLobby's delegates are FEmptyOnlineDelegate, so
     there is no payload either way - that a given event fired IS the message."""
-    g.call(p + "ps", GS_LIB, "GetPlayerState", {"PlayerStateIndex": "0"})
+    g.call(p + "ps_local", GS_LIB, "GetPlayerController", {"PlayerIndex":"0"}); g.get(p + "ps", "PlayerState", CONTROLLER); g.link((p + "ps_local.ReturnValue", p + "ps.self"))
     g.call(p + "pid", ONLINE, "RetrievePlatformIdAsStringFromPlayerState")
-    g.link((p + "ps.ReturnValue", p + "pid.PlayerState"))
+    g.link((p + "ps.PlayerState", p + "pid.PlayerState"))
     _report_send(g, p + "snd", {
         "URL": PROBE_URL, "IP": "", "EventName": event_name,
         "Storefront": "bb5exit", "FirstSessionTimestamp": LOBBY_VALUE, "IsFirstGameOpen": "false"})
@@ -1787,9 +1886,9 @@ def gm_round(g):
     p = _rcat("rr_c6", p, literal=";a1=")
     p = _rcat("rr_c7", p, b_pin="rr_a1S.ReturnValue")
 
-    g.call("rr_hps", GS_LIB, "GetPlayerState", {"PlayerStateIndex": "0"})
+    g.call("rr_hps_local", GS_LIB, "GetPlayerController", {"PlayerIndex":"0"}); g.get("rr_hps", "PlayerState", CONTROLLER); g.link(("rr_hps_local.ReturnValue", "rr_hps.self"))
     g.call("rr_hid", ONLINE, "RetrievePlatformIdAsStringFromPlayerState")
-    g.link(("rr_hps.ReturnValue", "rr_hid.PlayerState"))
+    g.link(("rr_hps.PlayerState", "rr_hid.PlayerState"))
     g.call("rr_info", ONLINE, "GetCurrentLobbyInfo")
     g.call("rr_attr", ONLINE_TYPES, "GetLobbyInfoStringAttribute", {"Key": LOBBY_KEY})
     g.link(("rr_info.ReturnValue", "rr_attr.LobbyInfo"))
@@ -1886,10 +1985,10 @@ def gm_heartbeat(g):
     g.brk("hb_bd1", V_TEAMDATA); g.link(("hb_td1.ReturnValue", "hb_bd1.in"))
     g.call("hb_lim", BC_GS, "GetScoreLimit"); g.link(("hb_gsc.cast_result", "hb_lim.self"))
 
-    g.call("hb_hps", GS_LIB, "GetPlayerState", {"PlayerStateIndex": "0"})
+    g.call("hb_hps_local", GS_LIB, "GetPlayerController", {"PlayerIndex":"0"}); g.get("hb_hps", "PlayerState", CONTROLLER); g.link(("hb_hps_local.ReturnValue", "hb_hps.self"))
     g.call("hb_hid", ONLINE, "RetrievePlatformIdAsStringFromPlayerState")
-    g.link(("hb_hps.ReturnValue", "hb_hid.PlayerState"))
-    g.cast("hb_psbc", BC_PS, pure=True); g.link(("hb_hps.ReturnValue", "hb_psbc.cast_object"))
+    g.link(("hb_hps.PlayerState", "hb_hid.PlayerState"))
+    g.cast("hb_psbc", BC_PS, pure=True); g.link(("hb_hps.PlayerState", "hb_psbc.cast_object"))
     g.get("hb_hteam", "TeamID", BC_PS); g.link(("hb_psbc.cast_result", "hb_hteam.self"))
 
     for node, src in (("hb_htS", "hb_hteam.TeamID"), ("hb_s0S", "hb_bd0.TeamScore"),
@@ -1989,9 +2088,9 @@ def gm_kill(g):
                       ("kl_a0S", "kl_a0.ReturnValue"), ("kl_a1S", "kl_a1.ReturnValue")):
         g.call(node, STR, "Conv_IntToString"); g.link((src, node + ".InInt"))
 
-    g.call("kl_hps", GS_LIB, "GetPlayerState", {"PlayerStateIndex": "0"})
+    g.call("kl_hps_local", GS_LIB, "GetPlayerController", {"PlayerIndex":"0"}); g.get("kl_hps", "PlayerState", CONTROLLER); g.link(("kl_hps_local.ReturnValue", "kl_hps.self"))
     g.call("kl_hid", ONLINE, "RetrievePlatformIdAsStringFromPlayerState")
-    g.link(("kl_hps.ReturnValue", "kl_hid.PlayerState"))
+    g.link(("kl_hps.PlayerState", "kl_hid.PlayerState"))
     g.call("kl_info", ONLINE, "GetCurrentLobbyInfo")
     g.call("kl_attr", ONLINE_TYPES, "GetLobbyInfoStringAttribute", {"Key": LOBBY_KEY})
     g.link(("kl_info.ReturnValue", "kl_attr.LobbyInfo"))
@@ -2179,7 +2278,7 @@ def _start_key(g, p):
 
 
 def _start_predicate():
-    """Both native predicates require a fresh approval for THIS exact current roster.
+    """Initial start requires fresh full-spawn approval; later rounds require connected humans.
 
     Calls inside the function execute synchronously, including the complete roster scan.
     No network request or timer is allowed in a predicate. Ordinary non-ranked BB5 retains
@@ -2191,7 +2290,9 @@ def _start_predicate():
     g.call("valid", SYS, "IsValid"); g.link(("rule.BB5BombRule", "valid.Object"))
     g.branch("ranked"); g.link((ranked, "ranked.condition")); g.chain("entry", "ranked")
     g.branch("valid_rule"); g.link(("valid.ReturnValue", "valid_rule.condition")); g.chain("ranked", "valid_rule")
-    g.call("roster", RULE, "StartRoster"); g.link(("rule.BB5BombRule", "roster.self")); g.chain("valid_rule", "roster", "result")
+    g.call("roster", RULE, "StartRoster"); g.link(("rule.BB5BombRule", "roster.self")); g.chain("valid_rule", "roster")
+    g.call("present", RULE, "StartHumansPresent"); g.link(("rule.BB5BombRule", "present.self")); g.chain("roster", "present", "result")
+    g.get("started", "CompetitiveStarted", RULE); g.link(("rule.BB5BombRule", "started.self"))
     g.link(("ranked.else", "result.exec"), ("valid_rule.else", "result.exec"))
     for name in ("StartApprovedRoster", "StartApprovedMatch", "StartDeadline"):
         g.get(name, name, RULE); g.link(("rule.BB5BombRule", name + ".self"))
@@ -2200,8 +2301,15 @@ def _start_predicate():
     g.call("clock", SYS, "GetGameTimeInSeconds")
     g.call("clocki", MATH, "FTrunc"); g.link(("clock.ReturnValue", "clocki.A"))
     g.call("fresh", MATH, "Less_IntInt"); g.link(("clocki.ReturnValue", "fresh.A"), ("StartDeadline.StartDeadline", "fresh.B"))
+    g.call("initial", MATH, "BooleanAND"); g.link(("same.ReturnValue", "initial.A"), ("fresh.ReturnValue", "initial.B"))
+    g.call("not_started", MATH, "Not_PreBool"); g.link(("started.CompetitiveStarted", "not_started.A"))
+    g.call("initial_phase", MATH, "BooleanAND"); g.link(("not_started.ReturnValue", "initial_phase.A"), ("initial.ReturnValue", "initial_phase.B"))
+    g.call("live_phase", MATH, "BooleanAND"); g.link(("started.CompetitiveStarted", "live_phase.A"), ("present.ReturnValue", "live_phase.B"))
+    g.call("phase_ok", MATH, "BooleanOR"); g.link(("initial_phase.ReturnValue", "phase_ok.A"), ("live_phase.ReturnValue", "phase_ok.B"))
     previous = "valid.ReturnValue"
-    for i, check in enumerate(("same.ReturnValue", "match.ReturnValue", "fresh.ReturnValue")):
+    g.get("migrating", "MigrationPending", RULE);g.link(("rule.BB5BombRule","migrating.self"))
+    g.call("authority_ready", MATH, "Not_PreBool");g.link(("migrating.MigrationPending","authority_ready.A"))
+    for i, check in enumerate(("match.ReturnValue", "phase_ok.ReturnValue", "authority_ready.ReturnValue")):
         name = "ok" + str(i)
         g.call(name, MATH, "BooleanAND"); g.link((previous, name + ".A"), (check, name + ".B")); previous = name + ".ReturnValue"
     legacy = _gate_expr(g, "legacy_")
@@ -2240,8 +2348,17 @@ def start_request_logic():
     g.get("rule", "Rule"); g.get("key", "MatchKey"); g.get("snapshot", "Snapshot"); g.get("deadline", "Deadline"); g.get("phase", "Phase")
     g.set("capture_rule", "Rule"); g.link(("begin.RuleComponent", "capture_rule.Rule"))
     g.set("capture_key", "MatchKey"); g.link(("begin.MatchKey", "capture_key.MatchKey")); g.chain("begin", "capture_rule", "capture_key")
-    g.call("roster", RULE, "StartRoster"); g.link(("rule.Rule", "roster.self")); g.chain("capture_key", "roster")
-    g.set("capture_roster", "Snapshot"); g.link(("roster.ReturnValue", "capture_roster.Snapshot")); g.chain("roster", "capture_roster")
+    g.get("current_epoch", "HostEpoch", RULE);g.link(("rule.Rule","current_epoch.self"))
+    g.set("capture_epoch", "Epoch");g.link(("current_epoch.HostEpoch","capture_epoch.Epoch"));g.chain("capture_key","capture_epoch")
+    g.get("saved_epoch", "Epoch")
+    g.call("same_epoch", MATH, "EqualEqual_IntInt");g.link(("current_epoch.HostEpoch","same_epoch.A"),("saved_epoch.Epoch","same_epoch.B"))
+    g.get("started", "CompetitiveStarted", RULE); g.link(("rule.Rule", "started.self"))
+    g.set("capture_mode", "Presence"); g.link(("started.CompetitiveStarted", "capture_mode.Presence")); g.chain("capture_epoch", "capture_mode")
+    g.get("mode", "Presence"); g.branch("which"); g.link(("mode.Presence", "which.condition")); g.chain("capture_mode", "which")
+    g.call("roster", RULE, "StartRoster"); g.link(("rule.Rule", "roster.self"), ("which.else", "roster.exec"))
+    g.call("presence_roster", RULE, "PresenceRoster"); g.link(("rule.Rule", "presence_roster.self")); g.chain("which", "presence_roster")
+    g.call("snapshot_value", MATH, "SelectString"); g.link(("mode.Presence", "snapshot_value.bPickA"), ("presence_roster.ReturnValue", "snapshot_value.A"), ("roster.ReturnValue", "snapshot_value.B"))
+    g.set("capture_roster", "Snapshot"); g.link(("snapshot_value.ReturnValue", "capture_roster.Snapshot")); g.chain("roster", "capture_roster"); g.chain("presence_roster", "capture_roster")
     g.call("clock", SYS, "GetGameTimeInSeconds"); g.call("clocki", MATH, "FTrunc"); g.link(("clock.ReturnValue", "clocki.A"))
     g.call("expiry", MATH, "Add_IntInt", {"B": "3"}); g.link(("clocki.ReturnValue", "expiry.A"))
     g.set("capture_expiry", "Deadline"); g.link(("expiry.ReturnValue", "capture_expiry.Deadline")); g.chain("capture_roster", "capture_expiry")
@@ -2249,7 +2366,9 @@ def start_request_logic():
     g.call("lifespan", ACTOR, "SetLifeSpan", {"InLifespan": "3.0"}); g.chain("capture_expiry", "pending", "lifespan")
     g.call("host", ONLINE, "GetPlatformUserNetId")
     _report_send(g, "ask", {"URL": START_URL, "IP": "",
-           "EventName": "ch_start_ready", "FirstSessionTimestamp": "chstart-1", "IsFirstGameOpen": "false"})
+           "IsFirstGameOpen": "false"})
+    for name, pin, a, b in (("event", "EventName", "ch_match_presence", "ch_start_ready"), ("version", "FirstSessionTimestamp", "chpresence-1", "chstart-1")):
+        g.call(name, MATH, "SelectString", {"A": a, "B": b}); g.link(("mode.Presence", name + ".bPickA"), (name + ".ReturnValue", "ask." + pin))
     g.link(("host.ReturnValue", "ask.UserId"), ("key.MatchKey", "ask.Storefront"), ("snapshot.Snapshot", "ask.Platform"))
     g.n("delegate", "createevent", func="OnStartReply"); g.link(("delegate.OutputDelegate", "ask.OnResponse")); g.chain("lifespan", "ask")
 
@@ -2258,23 +2377,30 @@ def start_request_logic():
     g.call("pending_ok", MATH, "EqualEqual_IntInt", {"B": "1"}); g.link(("phase.Phase", "pending_ok.A"))
     g.call("fresh", MATH, "Less_IntInt"); g.link(("clocki.ReturnValue", "fresh.A"), ("deadline.Deadline", "fresh.B"))
     previous = "reply.bSuccess"
-    for i, check in enumerate(("valid.ReturnValue", "pending_ok.ReturnValue", "fresh.ReturnValue")):
+    for i, check in enumerate(("valid.ReturnValue", "pending_ok.ReturnValue", "fresh.ReturnValue", "same_epoch.ReturnValue")):
         name = "guard" + str(i); g.call(name, MATH, "BooleanAND"); g.link((previous, name + ".A"), (check, name + ".B")); previous = name + ".ReturnValue"
     g.branch("guard"); g.link((previous, "guard.condition")); g.chain("reply", "guard")
     g.set("consume", "Phase", defaults={"Phase": "2"}); g.chain("guard", "consume")
     # Recheck all identities, teams and controller presence after the HTTP callback.
-    g.call("current", RULE, "StartRoster"); g.link(("rule.Rule", "current.self")); g.chain("consume", "current")
-    g.call("same", STR, "EqualEqual_StrStr"); g.link(("current.ReturnValue", "same.A"), ("snapshot.Snapshot", "same.B"))
+    g.branch("current_which"); g.link(("mode.Presence", "current_which.condition")); g.chain("consume", "current_which")
+    g.call("current", RULE, "StartRoster"); g.link(("rule.Rule", "current.self"), ("current_which.else", "current.exec"))
+    g.call("current_presence", RULE, "PresenceRoster"); g.link(("rule.Rule", "current_presence.self")); g.chain("current_which", "current_presence")
+    g.call("current_value", MATH, "SelectString"); g.link(("mode.Presence", "current_value.bPickA"), ("current_presence.ReturnValue", "current_value.A"), ("current.ReturnValue", "current_value.B"))
+    g.call("same", STR, "EqualEqual_StrStr"); g.link(("current_value.ReturnValue", "same.A"), ("snapshot.Snapshot", "same.B"))
     current_key, _ = _start_key(g, "current_")
     g.call("same_match", STR, "EqualEqual_StrStr"); g.link((current_key, "same_match.A"), ("key.MatchKey", "same_match.B"))
     g.call("unchanged", MATH, "BooleanAND"); g.link(("same.ReturnValue", "unchanged.A"), ("same_match.ReturnValue", "unchanged.B"))
-    g.branch("accept"); g.link(("unchanged.ReturnValue", "accept.condition")); g.chain("current", "accept")
+    g.call("same_phase", MATH, "EqualEqual_BoolBool"); g.link(("mode.Presence", "same_phase.A"), ("started.CompetitiveStarted", "same_phase.B"))
+    g.call("same_transaction", MATH, "BooleanAND"); g.link(("unchanged.ReturnValue", "same_transaction.A"), ("same_phase.ReturnValue", "same_transaction.B"))
+    g.branch("accept"); g.link(("same_transaction.ReturnValue", "accept.condition")); g.chain("current", "accept"); g.chain("current_presence", "accept")
     previous = "accept"
     for name, value in (("StartApprovedRoster", "snapshot.Snapshot"), ("StartApprovedMatch", "key.MatchKey"), ("StartDeadline", "deadline.Deadline")):
         g.set(name, name, RULE); g.link(("rule.Rule", name + ".self"), (value, name + "." + name)); g.chain(previous, name); previous = name
+    g.call("capture_humans", RULE, "CaptureStartHumans"); g.link(("rule.Rule", "capture_humans.self")); g.chain(previous, "capture_humans")
+    g.set("clean_presence", "PresenceDirty", RULE, defaults={"PresenceDirty": "false"}); g.link(("rule.Rule", "clean_presence.self")); g.chain("capture_humans", "clean_presence")
     g.call("gm", GS_LIB, "GetGameMode")
     g.cast("gmc", BC_GM, pure=True); g.link(("gm.ReturnValue", "gmc.cast_object"))
-    g.call("refresh", BC_GM, "RefreshWaitingForPlayer"); g.link(("gmc.cast_result", "refresh.self")); g.chain(previous, "refresh")
+    g.call("refresh", BC_GM, "RefreshWaitingForPlayer"); g.link(("gmc.cast_result", "refresh.self")); g.chain("clean_presence", "refresh")
     return g.json()
 
 
@@ -2292,9 +2418,15 @@ def gm_final_report(g):
         g.get(name, name, RULE); g.link(("final_rule.BB5BombRule", name + ".self"))
     g.call("final_unacked", MATH, "Not_PreBool"); g.link(("FinalAcknowledged.FinalAcknowledged", "final_unacked.A"))
     g.call("final_waiting", MATH, "BooleanAND"); g.link(("FinalPending.FinalPending", "final_waiting.A"), ("final_unacked.ReturnValue", "final_waiting.B"))
-    g.branch("final_branch"); g.link(("final_waiting.ReturnValue", "final_branch.condition")); g.chain("final_tick", "final_branch")
+    g.get("final_migrating", "MigrationPending", RULE);g.link(("final_rule.BB5BombRule","final_migrating.self"))
+    g.call("final_host_ready", MATH, "Not_PreBool");g.link(("final_migrating.MigrationPending","final_host_ready.A"))
+    g.call("final_allowed", MATH, "BooleanAND");g.link(("final_waiting.ReturnValue","final_allowed.A"),("final_host_ready.ReturnValue","final_allowed.B"))
+    g.branch("final_branch"); g.link(("final_allowed.ReturnValue", "final_branch.condition")); g.chain("final_tick", "final_branch")
     g.get("final_captured", "FinalCaptured", RULE); g.link(("final_rule.BB5BombRule", "final_captured.self"))
-    g.branch("final_capture_branch"); g.link(("final_captured.FinalCaptured", "final_capture_branch.condition")); g.chain("final_branch", "final_capture_branch")
+    g.get("final_host_epoch", "HostEpoch", RULE);g.link(("final_rule.BB5BombRule","final_host_epoch.self"))
+    g.call("final_original", MATH, "EqualEqual_IntInt", {"B":"0"});g.link(("final_host_epoch.HostEpoch","final_original.A"))
+    g.call("final_reuse", MATH, "BooleanAND");g.link(("final_captured.FinalCaptured","final_reuse.A"),("final_original.ReturnValue","final_reuse.B"))
+    g.branch("final_capture_branch"); g.link(("final_reuse.ReturnValue", "final_capture_branch.condition")); g.chain("final_branch", "final_capture_branch")
     g.call("final_rows", RULE, "FinalRows"); g.link(("final_rule.BB5BombRule", "final_rows.self"), ("final_capture_branch.else", "final_rows.exec"))
     g.call("final_gs", GS_LIB, "GetGameState"); g.cast("final_gsc", BC_GS, pure=True); g.link(("final_gs.ReturnValue", "final_gsc.cast_object"))
     for name, fn in (("round", "GetCurrentRound"), ("limit", "GetScoreLimit")):
@@ -2378,9 +2510,9 @@ def _phase_report(g, p, which, after):
     row = cat(p + "r3", row, literal=";want=")
     row = cat(p + "r4", row, b_pin=p + "wS.ReturnValue")
 
-    g.call(p + "hps", GS_LIB, "GetPlayerState", {"PlayerStateIndex": "0"})
+    g.call(p + "hps_local", GS_LIB, "GetPlayerController", {"PlayerIndex":"0"}); g.get(p + "hps", "PlayerState", CONTROLLER); g.link((p + "hps_local.ReturnValue", p + "hps.self"))
     g.call(p + "hid", ONLINE, "RetrievePlatformIdAsStringFromPlayerState")
-    g.link((p + "hps.ReturnValue", p + "hid.PlayerState"))
+    g.link((p + "hps.PlayerState", p + "hid.PlayerState"))
 
     _report_send(g, p + "send", {
         "URL": PROBE_URL, "IP": "", "EventName": PHASE_EVENT,

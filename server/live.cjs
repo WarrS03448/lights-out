@@ -39,6 +39,7 @@
  * be exercised by one person. Sam cannot summon ten players to test a queue.
  */
 const crypto = require('crypto');
+const identity = require('./player-identity.cjs');
 const ratingLib = require('./rating.cjs');
 const matchmaker = require('./matchmaker.cjs');
 const networkLib = require('./network.cjs');
@@ -190,7 +191,7 @@ const FRIEND_CODE_LEN = Math.max(6, Number(process.env.COMP_FRIEND_CODE_LEN) || 
 // EMPTY MEANS NOBODY. Not "everybody", not "the first person who asks" - an unset variable is the
 // state a fresh deploy is in, and that state must be closed.
 const ADMIN_IDS = new Set(String(process.env.COMP_ADMIN_STEAM_IDS || '')
-  .split(/[\s,]+/).map((x) => x.trim()).filter((x) => /^\d{17}$/.test(x)));
+  .split(/[\s,]+/).map((x) => x.trim()).filter((x) => identity.validSteam(x)));
 
 const MAX_FRIENDS = Math.max(1, Number(process.env.COMP_MAX_FRIENDS) || 200);
 const MAX_FRIEND_REQUESTS = Math.max(1, Number(process.env.COMP_MAX_FRIEND_REQUESTS) || 100);
@@ -281,7 +282,7 @@ const ENEMY_CALLSIGNS = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo',
 //          status/rank/ban  their own small renderers
 const PLAYER_COLUMNS = [
   { key: 'persona', label: 'Name', type: 'name', text: true },
-  { key: 'steam_id', label: 'SteamID64', type: 'id', text: true },
+  { key: 'player_id', label: 'Player ID', type: 'id', text: true },
   { key: 'status', label: 'Status', type: 'status', text: true },
   { key: 'rank_name', label: 'Rank', type: 'rank', text: true },
   { key: 'rr', label: 'RR', type: 'num' },
@@ -756,8 +757,11 @@ function banFirstTeam(poolSize, advantageTeam) {
 
 const HEARTBEAT_MS = 15000;          // SSE comment frames, so proxies keep the pipe open
 
-function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, prefix, analytics,
-                 collectSeconds, requiredVersions, profileOf, relayIssuer, expectedRules, rankedRules }) {
+function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, upstashCmd, prefix, analytics, admitGameplay, activityGate,
+                 collectSeconds, requiredVersions, profileOf, relayIssuer, expectedRules, rankedRules, privateSoloSteam='' }) {
+  const soloMatch=match=>Boolean(privateSoloSteam&&identity.validSteam(privateSoloSteam)&&match?.players?.length===1&&
+    identity.gameFor(match,match.host)===privateSoloSteam&&match.players[0].player_id===match.host);
+  const sendJson = (res, status, body) => rawSendJson(res, status, identity.wire(body));
   // How long this service holds a decided match open for its last stats (see COLLECT_SECONDS).
   // Overridable per service so a test can close the window at once, or hold it open and drive it.
   const collectFor = Number.isFinite(Number(collectSeconds)) ? Number(collectSeconds) : COLLECT_SECONDS;
@@ -794,8 +798,19 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   const queue = [];
   const queueIntents = new Map();   // caller -> pending admission identity
   const queueOf = new Map();         // steamId -> unit, the reverse index
-  const matches = new Map();         // matchId -> match
+  const matches = new identity.MatchMap();         // matchId -> match
   const inMatch = new Map();         // steamId -> matchId
+  // Live-service keys are persistent player IDs; native adapters alone take Steam IDs.
+  const verifiedPlayers = new Map();
+  const gameOfPlayer = id => verifiedPlayers.get(id)?.game_steam_id ||
+    (identity.validSteam(id) ? id : ''); // historical in-process queue entries
+  function bindingConflict(members) {
+    const games = members.map(gameOfPlayer);
+    if (games.some(g => !identity.validSteam(g)) || new Set(games).size !== games.length) return true;
+    const wanted = new Set(games), own = new Set(members);
+    return [...queueOf.keys(), ...inMatch.keys()].some(id => !own.has(id) && wanted.has(
+      identity.gameFor(matches.get(inMatch.get(id)), id) || gameOfPlayer(id)));
+  }
   // steamId -> { rating, rd, vol, matches, wins, losses, updated }. Exactly the penalties
   // arrangement and for exactly the same reason: memory is the truth for the life of the
   // process, Upstash is the copy that survives a redeploy. A rank that evaporates on every
@@ -896,6 +911,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   // The LIVE copy of a match in flight, and the index of them. Deliberately not matchKey's
   // namespace: that one is the finished record history reads. See LIVE_STATE_TTL_SECONDS.
   const liveMatchKey = (matchId) => `${prefix || 'hub:'}live:match:${matchId}`;
+  const authorityKey = (id) => `${prefix || 'hub:'}live:authority:${id}`;
   const liveIndexKey = () => `${prefix || 'hub:'}live:matches`;
   const settlementKey = (id) => `${prefix || 'hub:'}settlement:${id}`;
   // THE DIRECTORY, one hash with one field per player. No TTL, for personaKey's reason: the
@@ -907,7 +923,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const client = clients.get(clientId);
     if (!client) return;
     try {
-      client.res.write(`data: ${JSON.stringify(event)}\n\n`);
+      client.res.write(`data: ${JSON.stringify(identity.wire(event))}\n\n`);
     } catch {
       drop(clientId);
     }
@@ -1214,7 +1230,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // an unranked event or admit the player to matchmaking with a default record.
     const raw = await store(['GET', ratingKey(steamId)], { strict: true });
     if (raw) {
-      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const parsed = typeof raw === 'string' ? identity.parse(raw) : identity.hydrate(structuredClone(raw));
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         throw new Error('Invalid saved rating');
       }
@@ -1320,7 +1336,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
             // different container's update. Its receipt prevents double charge
             // if an earlier request succeeded but its response was lost.
             const raw = await store(['GET', ratingKey(steamId)], { strict: true });
-            const current = ratingLib.normalise(raw ? JSON.parse(raw) : ratingLib.defaultRating());
+            const current = ratingLib.normalise(raw ? identity.parse(raw) : ratingLib.defaultRating());
             const next = ratingLib.normalise(row.change(current) || current);
             next.revision = (current.revision || 0) + 1;
             Object.assign(row, { expected: current.revision || 0, json: JSON.stringify(next),
@@ -1378,7 +1394,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       const beforeRead = penalties.get(steamId);
       const raw = await store(['GET', penaltyKey(steamId)], { strict: true });
       if (raw) {
-        const parsed = JSON.parse(raw);
+        const parsed = identity.parse(raw);
         if (!parsed || typeof parsed !== 'object' || !Number.isFinite(Number(parsed.until))) {
           throw new Error('Invalid saved penalty');
         }
@@ -1493,7 +1509,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    */
   function historyRow(match, record, steamId) {
     const roster = everyone(match);
-    const me = roster.find((p) => p.steam_id === steamId) || {};
+    const me = roster.find((p) => p.player_id === steamId) || {};
     const team = teamOf(match, steamId);
     return {
       id: match.id,
@@ -1571,7 +1587,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    * Returns [] when nothing at all is known, which is what a match that ended before the gamemode
    * said anything looks like, and is how the hub decides whether to draw a board at all.
    */
-  function scoreboardOf(match) {
+  function scoreboardOf(match) { return identity.wire(buildScoreboard(match)); }
+  function buildScoreboard(match) {
     try {
       const rows = (match && match.stats && Array.isArray(match.stats.players))
         ? match.stats.players : [];
@@ -1591,22 +1608,24 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       const num = (v) => (Number.isFinite(v) ? v : null);
       const flag = (v) => (typeof v === 'boolean' ? v : null);
       return everyone(match).map((p) => {
-        const r = byId.get(p.steam_id) || {};
+        const r = byId.get(p.player_id) || {};
         return {
-          steam_id: p.steam_id,
-          team: teamOf(match, p.steam_id),
-          reported: byId.has(p.steam_id),
+          player_id: p.player_id, game_steam_id: identity.gameFor(match, p.player_id),
+          team: teamOf(match, p.player_id),
+          reported: byId.has(p.player_id),
           kills: num(r.kills),
           deaths: num(r.deaths),
           // 0 is real once a feed exists; null means no feed reached us for this match.
-          team_kills: feed.length ? (teamKills.get(p.steam_id) || 0) : null,
+          team_kills: feed.length ? (teamKills.get(p.player_id) || 0) : null,
           rounds_won: num(r.roundsWon),
           clutches: num(r.clutches),
           ping: num(r.ping),
           spawns: num(r.spawnCount),
           late_join: flag(r.lateJoin),
           spectator: flag(r.spectator),
-          ...(match.combatState ? { combat: combatLib.summary(match.combatState, p.steam_id, combatRounds(match, r)) } : {}),
+          ...(r.disconnected === true || p.left === true ? {disconnected:true} : {}),
+          ...(r.stats_complete === false ? {stats_complete:false} : {}),
+          ...(match.combatState ? { combat: combatSummary(match, p.player_id, combatRounds(match, r)) } : {}),
         };
       });
     } catch {
@@ -1627,20 +1646,21 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     if (!match.combatState) return stats;
     const existing = new Map((stats.players || []).map(row => [row.steamId, row]));
     return { ...stats, players: everyone(match).map(player => {
-      const row = existing.get(player.steam_id) || { steamId: player.steam_id };
-      return { ...row, combat: combatLib.summary(match.combatState, player.steam_id, combatRounds(match, row)) };
+      const row = existing.get(player.player_id) || { steamId: player.player_id };
+      return { ...row, combat: combatSummary(match, player.player_id, combatRounds(match, row)) };
     }) };
   }
 
   function statLine(match, steamId) {
     const board = scoreboardOf(match);
-    const mine = board.find((r) => r.steam_id === steamId);
+    const mine = board.find((r) => r.player_id === steamId);
     if (!mine) return { kills: null, deaths: null, team_kills: null };
     return { kills: mine.kills, deaths: mine.deaths, team_kills: mine.team_kills };
   }
 
   /** The whole match, for the detail pop-up. Fetched only when a row is clicked. */
-  function fullRecord(match, record) {
+  function fullRecord(match, record) { return identity.wire(buildFullRecord(match, record)); }
+  function buildFullRecord(match, record) {
     const roster = everyone(match);
     const detailRounds = roundDetails(match);
     return {
@@ -1651,6 +1671,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       reason: record.reason || '',
       map: record.map || '',
       host: record.host || '',
+      game_bindings: match.game_bindings,
+      host_game_steam_id: identity.gameFor(match, record.host || match.host),
       size: roster.length,
       // The coin flip, the side choice and the veto run on the SERVER now, so a normal match's
       // teams/sides/bans are server-decided ('server'). A match that came in on the old path -
@@ -1672,16 +1694,16 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       // It is what makes a cancellation self-explanatory a day later; see note().
       diag: Array.isArray(match.diag) ? match.diag.slice() : [],
       players: roster.map((p) => ({
-        steam_id: p.steam_id,
+        player_id: p.player_id, game_steam_id: identity.gameFor(match, p.player_id),
         persona: p.persona || '',
         accepted: Boolean(p.accepted),
         connected: Boolean(p.connected),
         left: Boolean(p.left),
-        team: teamOf(match, p.steam_id),
-        blamed: (record.blame || []).includes(p.steam_id) || Boolean(p.left),
-        elo: (record.punished && record.punished[p.steam_id]
-              && typeof record.punished[p.steam_id].elo === 'number')
-          ? -record.punished[p.steam_id].elo : null,
+        team: teamOf(match, p.player_id),
+        blamed: (record.blame || []).includes(p.player_id) || Boolean(p.left),
+        elo: (record.punished && record.punished[p.player_id]
+              && typeof record.punished[p.player_id].elo === 'number')
+          ? -record.punished[p.player_id].elo : null,
       })),
       won_team: null,
       score: null,
@@ -1724,7 +1746,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       // never disagree about the same match.
       const rows = [];
       for (const p of everyone(match)) {
-        try { rows.push([p.steam_id, historyRow(match, record, p.steam_id)]); } catch { /* skip */ }
+        try { rows.push([p.player_id, historyRow(match, record, p.player_id)]); } catch { /* skip */ }
       }
       for (const [steamId, row] of rows) {
         const list = history.get(steamId) || [];
@@ -1771,9 +1793,9 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       full.round_index_base = 0;
       full.rounds_played = full.round_details.length || null;
       for (const p of everyone(match)) {
-        const mine = board.find((r) => r.steam_id === p.steam_id);
+        const mine = board.find((r) => r.player_id === p.player_id);
         if (!mine) continue;
-        const rows = history.get(p.steam_id) || [];
+        const rows = history.get(p.player_id) || [];
         const row = rows.find((r) => r && r.id === match.id);
         if (row) {
           row.kills = mine.kills; row.deaths = mine.deaths; row.team_kills = mine.team_kills;
@@ -1783,15 +1805,15 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       const writes = [store(['SET', matchKey(match.id), JSON.stringify(full),
                              'EX', String(MATCH_TTL_SECONDS)])];
       for (const p of everyone(match)) {
-        const mine = board.find((r) => r.steam_id === p.steam_id);
+        const mine = board.find((r) => r.player_id === p.player_id);
         if (!mine) continue;
-        const key = historyKey(p.steam_id);
+        const key = historyKey(p.player_id);
         writes.push(Promise.resolve(store(['LRANGE', key, '0', String(HISTORY_KEEP - 1)]))
           .then((raw) => {
             if (!Array.isArray(raw)) return null;
             for (let i = 0; i < raw.length; i += 1) {
               let row;
-              try { row = typeof raw[i] === 'string' ? JSON.parse(raw[i]) : raw[i]; } catch { continue; }
+              try { row = typeof raw[i] === 'string' ? identity.parse(raw[i]) : raw[i]; } catch { continue; }
               if (!row || row.id !== match.id) continue;
               row.kills = mine.kills; row.deaths = mine.deaths; row.team_kills = mine.team_kills;
               return store(['LSET', key, String(i), JSON.stringify(row)]);
@@ -1812,7 +1834,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
           const rows = [];
           for (const item of raw) {
             try {
-              const row = typeof item === 'string' ? JSON.parse(item) : item;
+              const row = typeof item === 'string' ? identity.parse(item) : item;
               // A null or a stray scalar in the list would reach the hub as a row it cannot
               // read; drop it here rather than make every reader defensive.
               if (row && typeof row === 'object' && !Array.isArray(row)) rows.push(row);
@@ -1824,7 +1846,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
             const receipts = await store(['MGET', ...rows.map(row => settlementKey(row.id))]);
             if (Array.isArray(receipts)) for (let i = 0; i < rows.length; i++) {
               if (!receipts[i]) continue;
-              try { applyReceiptRow(rows[i], JSON.parse(receipts[i]), steamId); } catch { /* keep original */ }
+              try { applyReceiptRow(rows[i], identity.parse(receipts[i]), steamId); } catch { /* keep original */ }
             }
           }
           return rows;
@@ -1843,26 +1865,27 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     if (store) {
       try {
         const raw = await store(['GET', matchKey(matchId)]);
-        if (raw) full = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (raw) full = typeof raw === 'string' ? identity.parse(raw) : identity.hydrate(structuredClone(raw));
         const settled = await store(['GET', settlementKey(matchId)]);
-        if (settled) receipt = typeof settled === 'string' ? JSON.parse(settled) : settled;
+        if (settled) receipt = typeof settled === 'string' ? identity.parse(settled) : identity.hydrate(structuredClone(settled));
       } catch { full = null; }
     }
     if (!full) full = archived.get(matchId) || null;
     if (receipt && receipt.publicMatch) full = structuredClone(receipt.publicMatch);
     if (!full || typeof full !== 'object') return null;
+    identity.hydrate(full);
     const players = Array.isArray(full.players) ? full.players : [];
-    if (!players.some((p) => p && p.steam_id === steamId)) return null;
+    if (!players.some((p) => p && p.player_id === steamId)) return null;
     if (receipt) receipt = await combatStorage.unpack(store, receipt, settlementKey(matchId));
     if (receipt) {
       full.won_team = receipt.winner;
       full.score = receipt.score;
       full.scoreboard = receipt.board || full.scoreboard;
-      for (const p of players) applyReceiptRow(p, receipt, p.steam_id, false);
+      for (const p of players) applyReceiptRow(p, receipt, p.player_id, false);
     }
     // New display detail can be recovered from retained evidence. Preserve the
     // settled totals/rating decision and never mutate or expose the raw receipt.
-    const retainedCombat = receipt?.inputs?.combatState;
+    const retainedCombat = [...(receipt?.inputs?.combat_segments || []), receipt?.inputs?.combatState].filter(s=>s?.version===1);
     if (!Array.isArray(full.round_details)) {
       // Older collectors used inconsistent round indexing and mixed warmup into
       // stat round zero. Only an explicit marker permits native-data backfill.
@@ -1874,14 +1897,14 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
           : (Array.isArray(full.rounds) ? full.rounds : []).filter(r => r && !Object.hasOwn(r, 'round')),
       }) };
     }
-    if (retainedCombat?.version === 1 && Array.isArray(full.scoreboard)) {
+    if (retainedCombat.length && Array.isArray(full.scoreboard)) {
       full = { ...full, scoreboard: full.scoreboard.map(row => {
         if (!row?.combat || Array.isArray(row.combat.playerStats)) return row;
-        const detail = combatLib.summary(retainedCombat, row.steam_id, null);
-        return { ...row, combat: { ...row.combat, playerStats: detail.playerStats } };
+        const detail = combatLib.summaryAcross(retainedCombat, identity.gameFor(identity.freezeMatch(full), row.player_id), null);
+        return { ...row, combat: { ...row.combat, playerStats: identity.combatSummary(full, detail).playerStats } };
       }) };
     }
-    return full;
+    return identity.wire(full);
   }
 
   function applyReceiptRow(row, receipt, steamId, historyRow = true) {
@@ -1894,7 +1917,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     row.delta = ratingLib.arrowsFor(row.rr_delta || 0);
     row.placement = Boolean(rr.placing || rr.placed);
     if (historyRow) row.score = `${receipt.score[side]}-${receipt.score[side === 1 ? 2 : 1]}`;
-    const stats = (receipt.board || []).find(r => r.steam_id === steamId);
+    const stats = (receipt.board || []).find(r => r.player_id === steamId);
     if (stats) for (const key of ['kills', 'deaths', 'team_kills']) row[key] = stats[key];
   }
 
@@ -1939,6 +1962,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    * Returns the match, or null when nothing forms. Null is the normal answer.
    */
   function tryFormMatch() {
+    if(activityGate?.blocksFormation)return null;
     if (queuedPlayers() < MATCH_SIZE) return null;
     const teamSize = Math.max(1, Math.floor(MATCH_SIZE / 2));
     const picked = matchmaker.findMatch(queueSnapshot(), {
@@ -1970,7 +1994,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const size = taken.reduce((n, unit) => n + unit.members.length, 0);
     if (size !== MATCH_SIZE || teamOfId.size !== MATCH_SIZE
         || roster[1].length !== teamSize || roster[2].length !== MATCH_SIZE - teamSize
-        || [...teamOfId.keys()].some(id => inMatch.has(id))) return null;
+        || [...teamOfId.keys()].some(id => inMatch.has(id)) || bindingConflict([...teamOfId.keys()])) return null;
     for (const unit of taken) removeFromQueue(unit.members[0]);
 
     const matchId = crypto.randomBytes(8).toString('hex');
@@ -1980,7 +2004,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       // live client is the normal answer - but an SSE reconnect landing on this instant would
       // write a BLANK onto the roster, and the roster is what the match record and its scoreboard
       // are built from, so that blank would outlive the match it was taken from.
-      return { steam_id: steamId, persona: (anyClient && anyClient.persona) || personaOf(steamId),
+      return { player_id: steamId, game_steam_id: gameOfPlayer(steamId), persona: (anyClient && anyClient.persona) || personaOf(steamId),
                // Carried on the match itself, not looked up when a payload is built: a player who
                // drops out of the lobby still has a face on the roster everyone else is looking at.
                avatar: (anyClient && anyClient.avatar) || avatarOf(steamId),
@@ -2012,14 +2036,14 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
                     } };
     matches.set(matchId, match);
     note(match, 'formed', { quality: picked.quality, wait_seconds: picked.waited, match_size: size });
-    for (const p of players) inMatch.set(p.steam_id, matchId);
+    for (const p of players) inMatch.set(p.player_id, matchId);
 
     const found = {
       type: 'match_found', match_id: matchId, accept_seconds: ACCEPT_SECONDS,
       network: match.network,
-      players: players.map((p) => ({ steam_id: p.steam_id, persona: p.persona, avatar: p.avatar || '' })),
+      players: players.map((p) => ({ player_id: p.player_id, game_steam_id: identity.gameFor(match, p.player_id), persona: p.persona, avatar: p.avatar || '' })),
     };
-    for (const p of players) sendTo(p.steam_id, found);
+    for (const p of players) sendTo(p.player_id, found);
     broadcast(stats());
 
     arm(match, ACCEPT_SECONDS, 'accept', () => expireAccept(matchId));
@@ -2082,7 +2106,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       else if (value && typeof value === 'object' && Array.isArray(value.__set)) out[key] = new Set(value.__set);
       else out[key] = value;
     }
-    return out;
+    return identity.freezeMatch(out);
   }
 
   /**
@@ -2098,7 +2122,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const json = JSON.stringify(serialiseMatch(match));
     const pending = (matchWriting.get(match.id) || Promise.resolve()).catch(() => {}).then(async () => {
       const receipt = await settlementLib.snapshot(store,
-        [settlementKey(match.id), liveMatchKey(match.id), liveIndexKey()], match.id, json, LIVE_STATE_TTL_SECONDS);
+        [settlementKey(match.id), liveMatchKey(match.id), liveIndexKey(), authorityKey(match.id)], match.id, json, LIVE_STATE_TTL_SECONDS);
       if (receipt && receipt.pendingMatch) {
         for (const key of ['timer', 'collectTimer', 'stage_timer', 'ban_timer']) if (match[key]) clearTimeout(match[key]);
         Object.assign(match, reviveMatch(receipt.pendingMatch));
@@ -2144,8 +2168,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     persisted.delete(matchId);
     if (!store) return;
     const pending = (matchWriting.get(matchId) || Promise.resolve()).catch(() => {}).then(async () => {
-      await store(['DEL', liveMatchKey(matchId)], { strict: true });
-      await store(['SREM', liveIndexKey(), matchId], { strict: true });
+      await store(['EVAL',require('./migration.cjs').FORGET,'4',liveMatchKey(matchId),liveIndexKey(),authorityKey(matchId),settlementKey(matchId),matchId],{strict:true});
     });
     matchWriting.set(matchId, pending);
     pending.finally(() => { if (matchWriting.get(matchId) === pending) matchWriting.delete(matchId); }).catch(() => {});
@@ -2186,12 +2209,14 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         continue;
       }
       let match, snapshot;
-      try { snapshot = JSON.parse(raw); match = reviveMatch(snapshot); } catch { match = null; }
+      try { snapshot = identity.parse(raw); match = reviveMatch(snapshot); } catch { match = null; }
       if (!match || !match.id || !Array.isArray(match.players) || !match.players.length) {
         forgetMatch(String(id));
         continue;
       }
       if (!LIVE_STATES.has(match.state)) { forgetMatch(match.id); continue; }
+      const savedAuthority=await store(['GET',authorityKey(match.id)],{strict:true});
+      if(savedAuthority && identity.parse(savedAuthority).closed) {forgetMatch(match.id);continue;}
       // Missing evidence is retryable storage failure, never a reason to discard a match.
       snapshot = await combatStorage.unpack(store, snapshot, liveMatchKey(String(id)));
       match = reviveMatch(snapshot);
@@ -2216,13 +2241,13 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       match.recovered = Date.now();
       // A game can finish before any hub reconnects. Never use new-player
       // defaults for the restored roster; failed reads remain retryable.
-      await loadRatings(match.players.map(p => p.steam_id));
+      await loadRatings(match.players.map(p => p.player_id));
       recovered.push(match);
     }
     // Admit nobody until the complete inventory has been read successfully.
     for (const match of recovered) {
       matches.set(match.id, match);
-      for (const p of match.players) inMatch.set(p.steam_id, match.id);
+      for (const p of match.players) inMatch.set(p.player_id, match.id);
       // Remember what we read, so the first sweep does not rewrite an unchanged match.
       try { persisted.set(match.id, JSON.stringify(serialiseMatch(match))); } catch { /* it will rewrite */ }
       rearm(match);
@@ -2252,6 +2277,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // ...and the same tick is what keeps the live matches on disk, so a redeploy costs at most
     // one tick of a match rather than the whole thing (see flushMatches).
     try { flushMatches(); } catch { /* likewise */ }
+    checkHostTimeouts().catch(()=>{});
   }, MATCH_TICK_MS);
   if (typeof matchTick.unref === 'function') matchTick.unref();
 
@@ -2357,7 +2383,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   function expireAccept(matchId) {
     const match = matches.get(matchId);
     if (!match || match.state !== 'found') return;
-    const declined = match.players.filter((p) => !p.accepted).map((p) => p.steam_id);
+    const declined = match.players.filter((p) => !p.accepted).map((p) => p.player_id);
     closeMatch(match, 'declined', declined);
   }
 
@@ -2470,11 +2496,11 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const match = matches.get(matchId);
     if (!match || match.state !== 'connecting') return;
     const host = String(match.host || '');
-    const hostUp = match.players.some((p) => String(p.steam_id) === host && p.connected);
+    const hostUp = match.players.some((p) => String(p.player_id) === host && p.connected);
     const missing = match.players
       .filter((p) => !p.connected)
-      .filter((p) => hostUp || String(p.steam_id) === host)
-      .map((p) => p.steam_id);
+      .filter((p) => hostUp || String(p.player_id) === host)
+      .map((p) => p.player_id);
     const punished = {};
     for (const steamId of missing) punished[steamId] = applyNoShow(steamId);
     closeMatch(match, missing.length ? 'no_show' : 'stalled', missing, punished);
@@ -2496,14 +2522,26 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   }
 
   function closeMatch(match, reason, blame = [], punished = {}) {
-    if (match.collecting || match.settling) return; // a decided result is awaiting its commit
+    if (matches.get(match.id)!==match || match.collecting || match.settling || match.final_snapshot) return;
+    if(store && match.migration_capabilities && !approvedClosures.has(match)) {
+      const host=match.host,epoch=match.host_epoch||0;
+      return matchOperation(match.id,async()=>{
+        if(matches.get(match.id)!==match || match.collecting || match.settling || match.final_snapshot ||
+           match.host!==host || (match.host_epoch||0)!==epoch)return;
+        const closed=await store(['EVAL',require('./migration.cjs').CLOSE,'2',authorityKey(match.id),settlementKey(match.id),
+          host,String(epoch),String(Date.now()),'0',String(LIVE_STATE_TTL_SECONDS)],{strict:true});
+        if(closed!==1)return;
+        approvedClosures.add(match);
+        closeMatch(match,reason,blame,punished);
+      }).catch(()=>{});
+    }
     // The lobby stage clock is a SECOND timer, and a match can be closed from a dozen places that
     // never went near the lobby (a decline, a no-show, a redeploy). Left running it would fire
     // expireStageTurn on a dead match - harmless today, only because that function re-checks the
     // state - and hold the match object alive until it did.
     clearStageTurn(match);
     revokeHostPermit(match.host);
-    for (const p of match.players) revokeJoinPermit(p.steam_id);
+    for (const p of match.players) revokeJoinPermit(p.player_id);
     // THE CALLER, and it is the whole point of this row. `no_show` is reachable from exactly two
     // places - expireConnect, which blames every unconnected player, and handleMatchLeave, which
     // blames one - and the archived record alone cannot tell them apart when a 2-player match has
@@ -2522,8 +2560,9 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     if (match.timer) clearTimeout(match.timer);
     match.timer = null;
     match.state = 'cancelled';
-    for (const p of match.players) inMatch.delete(p.steam_id);
+    for (const p of match.players) inMatch.delete(p.player_id);
     matches.delete(match.id);
+    hostChecks.delete(match.id);
     forgetMatch(match.id);          // and the live copy, so no boot can bring it back
     // Only now, with the players already released and the match already out of the registry:
     // archiving needs nothing from either, so writing history can never be what keeps ten
@@ -2558,15 +2597,15 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const regroup = new Map();          // party code (or the player's own id) -> [steamId, ...]
     const requeued = new Set();
     for (const p of match.players) {
-      const blamed = blame.includes(p.steam_id);
+      const blamed = blame.includes(p.player_id);
       const innocent = !blamed && (reason === 'no_show' || reason === 'stalled' ? true : p.accepted);
-      if (innocent && bySteam.has(p.steam_id) && !isQueued(p.steam_id)) {
+      if (innocent && bySteam.has(p.player_id) && !isQueued(p.player_id)) {
         // Back together, if they came in together. Requeuing a five-stack as five solos would
         // let the next search cut them across the two teams, which is the one thing C10 forbids.
-        const code = partyOf.get(p.steam_id) || '';
-        const key = code || `solo:${p.steam_id}`;
+        const code = partyOf.get(p.player_id) || '';
+        const key = code || `solo:${p.player_id}`;
         if (!regroup.has(key)) regroup.set(key, { code, members: [] });
-        regroup.get(key).members.push(p.steam_id);
+        regroup.get(key).members.push(p.player_id);
       }
     }
     for (const { code, members } of regroup.values()) {
@@ -2575,8 +2614,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       if (enqueue(members, code, backOfNothing)) for (const id of members) requeued.add(id);
     }
     for (const p of match.players) {
-      sendTo(p.steam_id, {type:'match_cancelled',match_id:match.id,reason,
-        requeued:requeued.has(p.steam_id),blamed:blame.includes(p.steam_id),penalty:punished[p.steam_id]||null});
+      sendTo(p.player_id, {type:'match_cancelled',match_id:match.id,reason,
+        requeued:requeued.has(p.player_id),blamed:blame.includes(p.player_id),penalty:punished[p.player_id]||null});
     }
     for (const id of requeued) {
         sendTo(id, { type: 'queued', position: queuePosition(id), size: queuedPlayers() });
@@ -2589,13 +2628,13 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const matchId = inMatch.get(steamId);
     const match = matchId && matches.get(matchId);
     if (!match || match.state !== 'found') return { ok: false, error: 'No match to accept.' };
-    const player = match.players.find((p) => p.steam_id === steamId);
+    const player = match.players.find((p) => p.player_id === steamId);
     if (!player) return { ok: false, error: 'You are not in that match.' };
     player.accepted = true;
 
     const accepted = match.players.filter((p) => p.accepted).length;
     const progress = { type: 'match_accept', match_id: match.id, accepted, total: match.players.length };
-    for (const p of match.players) sendTo(p.steam_id, progress);
+    for (const p of match.players) sendTo(p.player_id, progress);
 
     if (accepted === match.players.length) {
       match.state = 'ready';
@@ -2609,9 +2648,9 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       // one designated captain clicked, and nothing made them.
       armStageTurn(match);
       for (const p of match.players) {
-        sendTo(p.steam_id, { type: 'match_ready', match_id: match.id,
+        sendTo(p.player_id, { type: 'match_ready', match_id: match.id,
                              lobby_seconds: LOBBY_SECONDS,
-                             players: match.players.map((q) => ({ steam_id: q.steam_id, persona: q.persona, avatar: q.avatar || '' })),
+                             players: match.players.map((q) => ({ player_id: q.player_id, game_steam_id: identity.gameFor(match, q.player_id), persona: q.persona, avatar: q.avatar || '' })),
                              ...lobbyPayload(match) });
       }
     }
@@ -2628,7 +2667,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    * for the whole match is a deterministic, server-owned choice - the captain of team 1 - so
    * every client agrees who it is without any negotiation. */
   function buildLobby(match) {
-    const ids = match.players.map((p) => p.steam_id);
+    const ids = match.players.map((p) => p.player_id);
     // THE TEAMS WERE ALREADY DECIDED, at formation, by matchmaker.bestSplit - the most even of
     // the 126 ways to cut ten players in two, with every party whole on one side (C10). They
     // are only read back here. Filtered against the live roster because a player can walk out
@@ -2712,7 +2751,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
 
   function broadcastLobby(match) {
     const payload = lobbyPayload(match);
-    for (const p of match.players) sendTo(p.steam_id, { type: 'lobby', match_id: match.id, ...payload });
+    for (const p of match.players) sendTo(p.player_id, { type: 'lobby', match_id: match.id, ...payload });
   }
 
   function lobbyTeamOf(match, steamId) {
@@ -2859,7 +2898,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   //   3. The sender's name is resolved PER RECIPIENT, so an anonymised enemy's persona is never
   //      put on the wire at all (chatNameFor).
 
-  /** {steam_id: call sign} for the team `viewerId` is NOT on, or {} when nothing is hidden. */
+  /** {player_id: call sign} for the team `viewerId` is NOT on, or {} when nothing is hidden. */
   function chatCallsigns(match, viewerId) {
     // Only while the pre-round lobby is the screen. From the connect window on, leaving is a
     // no-show that costs elo and a queue ban, so the penalty is the deterrent and the names cost
@@ -2879,7 +2918,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   function chatNameFor(match, senderId, viewerId) {
     const hidden = chatCallsigns(match, viewerId)[senderId];
     if (hidden) return hidden;
-    const player = match.players.find((p) => p.steam_id === senderId);
+    const player = match.players.find((p) => p.player_id === senderId);
     return (player && player.persona) || '';
   }
 
@@ -2906,7 +2945,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     if (!store) return null;
     try {
       const raw = await store(['GET', chatKey(String(matchId || ''))]);
-      return raw ? JSON.parse(raw) : null;
+      return raw ? identity.parse(raw) : null;
     } catch (e) {
       return null;
     }
@@ -2943,12 +2982,12 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // side - which is also why a client cannot talk into the other team's channel by asking to.
     const audience = channel === 'all'
       ? match.players
-      : match.players.filter((p) => lobbyTeamOf(match, p.steam_id) === team);
+      : match.players.filter((p) => lobbyTeamOf(match, p.player_id) === team);
     for (const p of audience) {
-      sendTo(p.steam_id, {
+      sendTo(p.player_id, {
         type: 'chat', match_id: match.id, channel,
-        steam_id: steamId,
-        name: chatNameFor(match, steamId, p.steam_id),
+        player_id: steamId,
+        name: chatNameFor(match, steamId, p.player_id),
         text: clean, at: now,
       });
     }
@@ -2964,24 +3003,32 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       sides: match.sides || (match.lobby && match.lobby.sides),
       network: match.network || null,
       connect_seconds: Math.max(0, Math.round((match.deadline - Date.now()) / 1000)),
-      map: match.map, host: match.host,
+      map: match.map, host: match.host, host_game_steam_id: identity.gameFor(match, match.host),
       // The roster, for the same reason livePayload carries it: this is the whole of what a
       // hub that reconnects into the connect window gets, and without it that hub has no
       // names - so it cannot even say who is hosting, and would fall back to the player
       // themselves. Everyone gets it, not only the rejoiner: one payload, one shape.
-      players: match.players.map((p) => ({ steam_id: p.steam_id, persona: p.persona, avatar: p.avatar || '' })),
-      connected: match.players.filter((p) => p.connected).map((p) => p.steam_id),
+      players: match.players.map((p) => ({ player_id: p.player_id, game_steam_id: identity.gameFor(match, p.player_id), persona: p.persona, avatar: p.avatar || '' })),
+      connected: match.players.filter((p) => p.connected).map((p) => p.player_id),
       total: match.players.length,
       // per-player: what walking away from THIS window would cost the person being told
       no_show_elo: NO_SHOW_RR,
       no_show_rr: NO_SHOW_RR,
       no_show_seconds: forSteamId ? nextNoShowSeconds(forSteamId) : rungSeconds(1),
       ...(forSteamId === match.host ? { report_token: match.reportToken } : {}),
+      ...(match.migration_capabilities?.[forSteamId] ? {migration_token:match.migration_capabilities[forSteamId]} : {}),
+      host_epoch:match.host_epoch||0,
     };
   }
 
   function ensureReportCredential(match) {
     if (!match.reportToken) match.reportToken = crypto.randomBytes(32).toString('hex');
+    if(!match.migration_capabilities) {
+      match.host_epoch=0;
+      match.migration_capabilities=Object.fromEntries(match.players.map(p=>[p.player_id,
+        p.player_id===match.host?match.reportToken:crypto.randomBytes(32).toString('hex')]));
+      match.migration_digests=Object.fromEntries(Object.entries(match.migration_capabilities).map(([id,t])=>[id,require('./migration.cjs').digest(t)]));
+    }
     if (!match.agreedScoreLimit) {
       const rules = typeof rankedRules === 'function' ? rankedRules() : null;
       const requested = Number(rules && rules.score_limit);
@@ -2997,10 +3044,86 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       if (!['connecting', 'live'].includes(match.state) || match.finished ||
           !/^[a-f0-9]{64}$/.test(match.reportToken || '')) continue;
       if (crypto.timingSafeEqual(incoming, Buffer.from(match.reportToken, 'hex'))) {
-        return { steamId: match.host, matchId: match.id, scoreLimit: match.agreedScoreLimit || DEFAULT_SCORE_LIMIT };
+        return { steamId: identity.gameFor(match, match.host), playerId: match.host, matchId: match.id, epoch:match.host_epoch||0, scoreLimit: match.agreedScoreLimit || DEFAULT_SCORE_LIMIT };
       }
     }
     return null;
+  }
+
+  async function refreshAuthority(match) {
+    if(!store || !match.migration_capabilities)return;
+    const raw=await store(['GET',authorityKey(match.id)],{strict:true});
+    if(!raw) {await persistLive(match);return;}
+    const a=identity.parse(raw);
+    if(a.closed)throw Error('Match authority ended');
+    if(a.epoch===(match.host_epoch||0) && a.host===match.host)return;
+    const snapshot=await store(['GET',liveMatchKey(match.id)],{strict:true});
+    if(!snapshot)throw Error('Match authority ended');
+    const restored=reviveMatch(await combatStorage.unpack(store,identity.parse(snapshot),liveMatchKey(match.id)));
+    for(const key of ['timer','collectTimer','stage_timer','ban_timer'])if(match[key])clearTimeout(match[key]);
+    for(const key of Object.keys(match))delete match[key];
+    Object.assign(match,restored);
+    rearm(match);
+  }
+
+  async function authoriseReportFresh(token) {
+    const match=[...matches.values()].find(m=>m.reportToken===token || Object.values(m.migration_capabilities||{}).includes(token));
+    if(!match)return null;
+    return matchOperation(match.id,async()=>{
+      await refreshAuthority(match);
+      return authoriseReport(token);
+    });
+  }
+
+  function withReportAuthority(auth,operation) {
+    return matchOperation(auth.matchId,async()=>{
+      const m=matches.get(auth.matchId);
+      if(m) {
+        await refreshAuthority(m);
+        if((m.host!==auth.playerId && identity.gameFor(m,m.host)!==auth.steamId) || (m.host_epoch||0)!==(auth.epoch||0))
+          throw Error('Superseded match reporter');
+      } else if(!auth.completed)throw Error('Match no longer active');
+      return reportScope.run({match:auth.matchId,host:auth.playerId,epoch:auth.epoch||0},operation);
+    });
+  }
+
+  async function migrationReport(token,fields) {
+    if(!store || !/^[a-f0-9]{64}$/.test(token||'') || !/^[a-f0-9]{16}$/.test(fields?.match_id||'') ||
+       !['endorse','activate'].includes(fields.operation) || !Number.isSafeInteger(fields.epoch) || fields.epoch<0)
+      return {ok:false,error:'Invalid handoff'};
+    return matchOperation(fields.match_id,async()=>{
+      const match=matches.get(fields.match_id);
+      if(!match)return {ok:false,error:'Match is not live'};
+      await refreshAuthority(match);
+      const player=Object.entries(match.migration_capabilities||{}).find(([,t])=>t===token)?.[0];
+      if(!player)return {ok:false,error:'Invalid handoff credential'};
+      const candidate=fields.candidate?identity.playerFor(match,fields.candidate):'';
+      if(fields.candidate&&!candidate)return {ok:false,error:'Invalid successor'};
+      const result=await require('./migration.cjs').transition(store,
+        [authorityKey(match.id),liveMatchKey(match.id),settlementKey(match.id)],
+        {operation:fields.operation,player,token,epoch:fields.epoch,candidate,ttl:LIVE_STATE_TTL_SECONDS});
+      if(result.ok && result.snapshot) {
+        const restored=reviveMatch(result.snapshot);
+        for(const key of ['timer','collectTimer','stage_timer','ban_timer'])if(match[key])clearTimeout(match[key]);
+        for(const key of Object.keys(match))delete match[key];
+        Object.assign(match,restored);rearm(match);
+        for(const p of match.players)sendTo(p.player_id,livePayload(match,p.player_id));
+      }
+      return {ok:result.ok,error:result.error};
+    });
+  }
+
+  async function authoriseFinalReport(token, matchId) {
+    if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token) || !/^[a-f0-9]{16}$/.test(matchId || '')) return null;
+    const active = await authoriseReportFresh(token);
+    if (active) return active.matchId === matchId ? active : null;
+    const receipt = await readReceipt(matchId);
+    if (receipt?.data_collected !== true || !/^[a-f0-9]{64}$/.test(receipt.report_digest || '')) return null;
+    const digest = crypto.createHash('sha256').update(token).digest();
+    if (!crypto.timingSafeEqual(digest, Buffer.from(receipt.report_digest, 'hex'))) return null;
+    const full = identity.freezeMatch(receipt.publicMatch);
+    const steamId = identity.gameFor(full, receipt.host);
+    return steamId ? {steamId, playerId:receipt.host, matchId, completed:true,epoch:receipt.host_epoch||0, scoreLimit:receipt.limit} : null;
   }
 
   // Redeploy compatibility for a match that was already active before per-match report
@@ -3038,7 +3161,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    */
   function adoptLobby(match, body) {
     if (!body || typeof body !== 'object') return;
-    const roster = new Set(match.players.map((p) => p.steam_id));
+    const roster = new Set(match.players.map((p) => p.player_id));
     const seen = new Set();
     const teams = {};
     for (const key of ['1', '2']) {
@@ -3080,14 +3203,17 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    */
   function livePayload(match, recipient) {
     return {
-      type: 'match_live', match_id: match.id, map: match.map, host: match.host,
+      type: 'match_live', match_id: match.id, map: match.map, host: match.host, host_game_steam_id: identity.gameFor(match, match.host),
       network: match.network || null,
       live_seconds: Math.max(0, Math.round((match.deadline - Date.now()) / 1000)),
-      players: match.players.map((p) => ({ steam_id: p.steam_id, persona: p.persona, avatar: p.avatar || '' })),
+      players: match.players.map((p) => ({ player_id: p.player_id, game_steam_id: identity.gameFor(match, p.player_id), persona: p.persona, avatar: p.avatar || '' })),
       teams: match.teams || null,
       sides: match.sides || null,
       bans: match.bans || null,
+      reconnect_waiting: Object.entries(match.reconnect || {}).map(([player_id,w])=>({player_id,deadline:w.deadline})),
       ...(recipient === match.host && match.reportToken ? {report_token:match.reportToken} : {}),
+      ...(match.migration_capabilities?.[recipient] ? {migration_token:match.migration_capabilities[recipient]} : {}),
+      host_epoch:match.host_epoch||0,
     };
   }
 
@@ -3118,7 +3244,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // body here: the server-authoritative lobby decides it (the `let map` block further down), which
     // also keeps the old-client fallback that still validates a body.map with MAP_NAME.
     let host = match.network ? match.network.host : (typeof body.host === 'string' ? body.host.trim() : '');
-    if (!match.players.some((p) => p.steam_id === host)) {
+    if (!match.players.some((p) => p.player_id === host)) {
       return { ok: false, error: 'The host has to be a player in this match.' };
     }
     // A TEST LEVER, off unless an operator sets it. The client nominates the lowest-ping player
@@ -3130,7 +3256,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // on the roster, so it grants nothing and lets nobody in who was not there. Unset it and the
     // client's pick stands.
     const prefer = String(process.env.COMP_PREFER_HOST || '').trim();
-    if (!match.network && prefer && prefer !== host && match.players.some((p) => p.steam_id === prefer)) {
+    if (!match.network && prefer && prefer !== host && match.players.some((p) => p.player_id === prefer)) {
       console.log('[match] COMP_PREFER_HOST: host %s -> %s', host, prefer);
       host = prefer;
     }
@@ -3175,7 +3301,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // a normal launch, a second lobby load after the match - gets no reply and no travel.
     grantHostPermit(match.host, CONNECT_SECONDS + 120);
     arm(match, CONNECT_SECONDS, 'connect', () => expireConnect(match.id));
-    for (const p of match.players) sendTo(p.steam_id, connectPayload(match, p.steam_id));
+    for (const p of match.players) sendTo(p.player_id, connectPayload(match, p.player_id));
     return { ok: true, ...connectPayload(match, steamId) };
   }
 
@@ -3203,7 +3329,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const connected = match.players.filter((p) => p.connected);
     const progress = { type: 'match_connect', match_id: match.id,
                        stamped: Boolean(match.lobby_stamped),
-                       connected: connected.map((p) => p.steam_id), total: match.players.length };
+                       connected: connected.map((p) => p.player_id), total: match.players.length };
     // HOW LONG IS ACTUALLY LEFT, and it rides on every progress message rather than only on the
     // one that opened the window (Sam, 2026-09-16: "the time to connect timer is still ticking
     // down and the timer could run out before the hoster respawns"). The deadline is re-armed when
@@ -3215,7 +3341,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     if (match.expiry === 'connect' && match.deadline) {
       progress.connect_seconds = Math.max(0, Math.round((match.deadline - Date.now()) / 1000));
     }
-    for (const p of match.players) sendTo(p.steam_id, progress);
+    for (const p of match.players) sendTo(p.player_id, progress);
     return progress;
   }
 
@@ -3223,7 +3349,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const matchId = inMatch.get(steamId);
     const match = matchId && matches.get(matchId);
     if (!match || match.state !== 'connecting') return { ok: false, error: 'No match is connecting.' };
-    const player = match.players.find((p) => p.steam_id === steamId);
+    const player = match.players.find((p) => p.player_id === steamId);
     if (!player) return { ok: false, error: 'You are not in that match.' };
     const firstArrival = !player.connected;
     player.connected = true;
@@ -3291,7 +3417,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
 
   function grantHostPermit(steamId, seconds) {
     const id = String(steamId || '');
-    if (!/^\d{17}$/.test(id)) return false;
+    if (!identity.validPlayer(id)) return false;
     const until = Date.now() + (Number(seconds) || HOST_PERMIT_SECONDS) * 1000;
     const match = matches.get(inMatch.get(id));
     if (!match || match.host !== id || match.state !== 'connecting' || match.lobby_stamped) return false;
@@ -3360,7 +3486,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   // so in practice the permit is waiting before the game finishes loading. This is the second lock
   // on the same door: if a joiner's game is somehow already at BeginPlay, it still gets no answer
   // until the host is really there.
-  const joinPermits = new Map();     // steamId -> expiry (ms since epoch)
+  const joinPermits = new Map();     // playerId -> {until, matchId}
   const JOIN_PERMIT_SECONDS = 600;   // a match lasts longer than this matters for; one-shot anyway
 
   /** Every player in the match EXCEPT the host, the moment the host is confirmed in. */
@@ -3369,9 +3495,9 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const until = Date.now() + JOIN_PERMIT_SECONDS * 1000;
     let n = 0;
     for (const p of match.players) {
-      const id = String(p.steam_id || '');
-      if (!/^\d{17}$/.test(id) || id === String(match.host || '')) continue;
-      joinPermits.set(id, until);
+      const id = String(p.player_id || '');
+      if (!identity.validPlayer(id) || id === String(match.host || '')) continue;
+      joinPermits.set(id, {until, matchId:match.id});
       n += 1;
     }
     return n;
@@ -3380,10 +3506,12 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   /** Spend it. One-shot, like the host's: a second lobby load must not re-join. */
   function takeJoinPermit(steamId) {
     const id = String(steamId || '');
-    const until = joinPermits.get(id);
-    if (!until) return false;
+    const permit = joinPermits.get(id);
+    if (!permit) return false;
     joinPermits.delete(id);
-    return until > Date.now();
+    const match = matches.get(permit.matchId);
+    return permit.until > Date.now() && inMatch.get(id) === permit.matchId &&
+      !!match && ['connecting','live'].includes(match.state) && match.players.some(p=>p.player_id===id);
   }
 
   function revokeJoinPermit(steamId) {
@@ -3421,8 +3549,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   function teamRuling(hostId, subjectId, ask) {
     const host = String(hostId || '');
     const subject = String(subjectId || '');
-    if (!/^\d{17}$/.test(host)) return { ok: false, error: 'not a steamid64' };
-    if (!/^\d{17}$/.test(subject)) return { ok: false, error: 'subject is not a steamid64' };
+    if (!identity.validPlayer(host)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(subject)) return { ok: false, error: 'subject is not a steamid64' };
     const matchId = inMatch.get(host);
     const match = matchId && matches.get(matchId);
     if (!match) return { ok: false, error: 'no match' };
@@ -3434,7 +3562,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // The roster is `players` - who is STILL in the match. Someone who walked out is deliberately
     // not a member any more: if they reconnect into the game world they are as much a stranger as
     // anyone else, and the kick is the right answer.
-    const member = match.players.some((p) => p.steam_id === subject);
+    const member = match.players.some((p) => p.player_id === subject);
     if (String(ask || '') === 'member') {
       return { ok: true, match_id: match.id, subject, ask: 'member', member, yes: member };
     }
@@ -3482,7 +3610,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // ending would lose the matches that actually got played. The score and the winner are
     // filled in later, by whatever reports the scoreboard.
     if (!match.start_ready_verified) archiveMatch(match, { outcome: 'played', reason: '' });
-    for (const p of match.players) sendTo(p.steam_id, livePayload(match, p.steam_id));
+    for (const p of match.players) sendTo(p.player_id, livePayload(match, p.player_id));
   }
 
   /**
@@ -3509,7 +3637,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const sideOf = (id) => ((teams[1] || []).includes(id) ? 1 : ((teams[2] || []).includes(id) ? 2 : 0));
 
     const seen = match.ingame instanceof Map ? match.ingame : new Map();
-    const missing = match.players.filter((p) => !seen.has(p.steam_id)).map((p) => p.steam_id);
+    const missing = match.players.filter((p) => !seen.has(p.player_id)).map((p) => p.player_id);
     // A player the sweep has not reached yet, or whose TeamID was still -1, is NOT a mismatch. The
     // game leaves TeamID at -1 for the first ~30 s of the match world (measured 2026-09-15), and
     // reading that as a team would fail every match on its first report.
@@ -3523,10 +3651,10 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // The verified writer uses side 1 -> 0, side 2 -> 1. A reversed pre-write snapshot
     // cannot establish a different mapping while the writer is still correcting it.
     if (match.team_sort_verified) {
-      const wrong = match.players.filter(p => !sideOf(p.steam_id) ||
-        seen.get(p.steam_id) !== sideOf(p.steam_id) - 1)
-        .map(p => ({ steam_id: p.steam_id, want: sideOf(p.steam_id),
-          got: seen.get(p.steam_id) + 1, ingame: seen.get(p.steam_id) }));
+      const wrong = match.players.filter(p => !sideOf(p.player_id) ||
+        seen.get(p.player_id) !== sideOf(p.player_id) - 1)
+        .map(p => ({ player_id: p.player_id, game_steam_id: identity.gameFor(match, p.player_id), want: sideOf(p.player_id),
+          got: seen.get(p.player_id) + 1, ingame: seen.get(p.player_id) }));
       return { ok: true, agree: wrong.length === 0, wrong,
         reason: wrong.length ? 'the game does not match the lobby' : '',
         mapping: [{ ingame: 0, side: 1 }, { ingame: 1, side: 2 }] };
@@ -3541,8 +3669,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // not hypothetical - it is the case where the gate would be holding a match that can never
     // satisfy it, which is precisely the failure the bounded deadline exists to survive rather than
     // one it should be asked to absorb.
-    const sidesInPlay = [1, 2].filter((side) => match.players.some((pl) => sideOf(pl.steam_id) === side));
-    const ingameIds = [...new Set(match.players.map(p => seen.get(p.steam_id)))].sort((a, b) => a - b);
+    const sidesInPlay = [1, 2].filter((side) => match.players.some((pl) => sideOf(pl.player_id) === side));
+    const ingameIds = [...new Set(match.players.map(p => seen.get(p.player_id)))].sort((a, b) => a - b);
     if (ingameIds.length !== sidesInPlay.length) {
       return { ok: true, agree: false,
                reason: `the game has everyone on ${ingameIds.length} team id(s), the lobby uses ${sidesInPlay.length}`,
@@ -3560,10 +3688,10 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
 
     const wrong = [];
     for (const p of match.players) {
-      const want = sideOf(p.steam_id);
-      if (!want) { wrong.push({ steam_id: p.steam_id, want: 0, got: 0, why: 'on the roster but on no team' }); continue; }
-      const got = mapping.get(seen.get(p.steam_id));
-      if (got !== want) wrong.push({ steam_id: p.steam_id, want, got, ingame: seen.get(p.steam_id) });
+      const want = sideOf(p.player_id);
+      if (!want) { wrong.push({ player_id: p.player_id, game_steam_id: identity.gameFor(match, p.player_id), want: 0, got: 0, why: 'on the roster but on no team' }); continue; }
+      const got = mapping.get(seen.get(p.player_id));
+      if (got !== want) wrong.push({ player_id: p.player_id, game_steam_id: identity.gameFor(match, p.player_id), want, got, ingame: seen.get(p.player_id) });
     }
     if (wrong.length) {
       return { ok: true, agree: false, reason: 'the game does not match the lobby', wrong,
@@ -3578,7 +3706,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     if (!match || match.state !== 'connecting') return { started: false, reason: 'not connecting' };
     const verdict = teamsAgree(match);
     for (const p of match.players) {
-      sendTo(p.steam_id, { type: 'match_teams_wait', match_id: match.id,
+      sendTo(p.player_id, { type: 'match_teams_wait', match_id: match.id,
         reason: verdict.reason || 'Waiting for the game to confirm the complete roster.',
         reported: (match.ingame || new Map()).size, total: match.players.length, deadline: match.deadline || 0 });
     }
@@ -3595,25 +3723,25 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const host = String(hostId || ''), id = String(matchId || '');
     const reject = error => ({ ok: false, error });
     const match = matches.get(id);
-    if (!/^\d{17}$/.test(host) || !match || inMatch.get(host) !== id) return reject('no match');
+    if (!identity.validPlayer(host) || !match || inMatch.get(host) !== id) return reject('no match');
     if (String(match.host || '') !== host) return reject('not the host');
     if (!['connecting', 'live'].includes(match.state)) return reject('match is not starting');
     const t = match.assigned_teams;
     if (!Array.isArray(t?.[1]) || !Array.isArray(t?.[2])) return reject('no frozen assignment');
     const ids = [...t[1], ...t[2]].map(String), unique = new Set(ids);
-    if (ids.length < 2 || ids.length > 10 || unique.size !== ids.length || ids.some(x => !/^\d{17}$/.test(x)))
+    if (ids.length < (soloMatch(match)?1:2) || ids.length > 10 || unique.size !== ids.length || ids.some(x => !identity.validPlayer(x)))
       return reject('invalid frozen assignment');
     const sideOf = new Map([...t[1].map(x => [String(x), 0]), ...t[2].map(x => [String(x), 1])]);
     if (!Array.isArray(rows) || rows.length !== ids.length) return reject('wrong roster size');
     const reported = new Map();
     for (const row of rows) {
-      if (!row || !unique.has(row.steam_id) || reported.has(row.steam_id)) return reject('wrong roster');
+      if (!row || !unique.has(row.player_id) || reported.has(row.player_id)) return reject('wrong roster');
       if (row.active !== 1) return reject('inactive player');
-      if (row.team !== sideOf.get(row.steam_id)) return reject('wrong team');
-      reported.set(row.steam_id, row.team);
+      if (row.team !== sideOf.get(row.player_id)) return reject('wrong team');
+      reported.set(row.player_id, row.team);
     }
     if (match.state === 'live') return { ok: true, already: true, match_id: id };
-    const current = new Map(match.players.map(p => [String(p.steam_id), p]));
+    const current = new Map(match.players.map(p => [String(p.player_id), p]));
     if (current.size !== ids.length || ids.some(x => !current.has(x) || inMatch.get(x) !== id))
       return reject('assigned roster changed');
     // The host's actual PlayerStates/controllers are stronger evidence than a hub launch claim.
@@ -3624,6 +3752,90 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     goLive(match, { ok: true, agree: true, verified: true,
       mapping: [{ ingame: 0, side: 1 }, { ingame: 1, side: 2 }] });
     return { ok: true, started: true, match_id: id };
+  }
+
+  async function reconnectPenalty(match, id) {
+    if (noShowPenaltiesPaused()) return null;
+    return withRatingLocks([id], async () => {
+      for (let attempt=0; attempt<4; attempt++) {
+        await drainRatingWrites(id); await drainPenaltyWrites(id);
+        const rawRank=store?await store(['GET',ratingKey(id)],{strict:true}):null;
+        const rawPenalty=store?await store(['GET',penaltyKey(id)],{strict:true}):null;
+        const before=store?ratingLib.normalise(rawRank?identity.parse(rawRank):{}):ratingOf(id);
+        const prior=store?(rawPenalty?identity.parse(rawPenalty):{}):penalties.get(id)||{};
+        const count=effectiveCount(prior)+1, seconds=rungSeconds(count), now=Date.now();
+        const hit=progressLib.penalise(before,NO_SHOW_RR);
+        const rank={...before,progress:hit.progress,demoteArmed:hit.delta?false:before.demoteArmed,revision:(before.revision||0)+1};
+        const penalty={until:now+seconds*1000,last:now,reason:'reconnect_timeout',count,elo:(prior.elo||0)+Math.abs(hit.delta)};
+        const receipt={...penalty,seconds,rr:Math.abs(hit.delta),elo:Math.abs(hit.delta),match_id:match.id,player_id:id,rank,
+          next_seconds:rungSeconds(count+1)};
+        const penaltyJson=JSON.stringify(penalty);
+        try {
+          const saved=store?await require('./abandon-penalty.cjs').commit(store,prefix||'hub:',match.id,id,{
+            host:match.host,host_epoch:match.host_epoch||0,
+            expectedRank:before.revision||0,expectedPenalty:rawPenalty||'',rankJson:JSON.stringify(rank),penaltyJson,
+            guardJson:JSON.stringify({operationId:`reconnect:${match.id}`,json:penaltyJson}),
+            receiptJson:JSON.stringify(receipt),placing:ratingLib.isPlacing(rank),progress:boardScore(rank),
+            ttl:Math.max(LIVE_STATE_TTL_SECONDS,seconds+14*86400)
+          }):{receipt,replayed:false};
+          // A replay may be older than another result: reload the current values.
+          const currentRank=saved.replayed&&store?identity.parse(await store(['GET',ratingKey(id)],{strict:true})):saved.receipt.rank;
+          const currentPenalty=saved.replayed&&store?identity.parse(await store(['GET',penaltyKey(id)],{strict:true})):penalty;
+          ratings.set(id,currentRank); ratingLoaded.add(id); noteRating(id,currentRank);
+          penalties.set(id,currentPenalty); penaltyLoaded.add(id);
+          const {rank:_rank,...visible}=saved.receipt;
+          if(!saved.replayed)sendTo(id,{type:'penalty',...visible});
+          return visible;
+        } catch(e) { if(!e.conflict||attempt===3)throw e; }
+      }
+    });
+  }
+
+  function matchPresence(host, id, present) {
+    return matchOperation(id, async () => {
+      const match=matches.get(id);
+      if(!match || match.host!==host || inMatch.get(host)!==id)return {ok:false,error:'not the host'};
+      const observation=require('./reconnect.cjs').observe(match,present);
+      if(!observation.ok)return observation;
+      const previous=match.reconnect;
+      const changed=JSON.stringify(previous||{})!==JSON.stringify(observation.windows);
+      try {
+        match.reconnect=observation.windows;
+        // Save the deadline before a penalty can be applied; reloads cannot grant another five minutes.
+        if(changed) {
+          try { await persistLive(match); }
+          catch(e) { match.reconnect=previous; throw e; }
+        }
+        if(matches.get(id)!==match || match.state!=='live' || match.final_snapshot)return {ok:false,error:'match ended'};
+        const removed=[],departures=[];
+        const beforeRemoval={players:match.players,left:match.left,reconnect:{...match.reconnect}};
+        for(const player of observation.expired) {
+          const member=match.players.find(p=>p.player_id===player);
+          if(!member)continue;
+          const penalty=await reconnectPenalty(match,player);
+          const lastStats=match.stats?.players?.find(p=>p.steamId===player);
+          departures.push({...member,at:Date.now(),left_state:'live',disconnect_confirmed:true,
+            reason:'reconnect_timeout',penalty,last_stats:lastStats?structuredClone(lastStats):null});
+          removed.push(player);
+        }
+        if(removed.length) {
+          match.left=[...(match.left||[]),...departures];
+          match.players=match.players.filter(p=>!removed.includes(p.player_id));
+          match.reconnect={...match.reconnect};
+          for(const player of removed)delete match.reconnect[player];
+          try { await persistLive(match); }
+          catch(e) { Object.assign(match,beforeRemoval); throw e; }
+          if(matches.get(id)!==match || match.state!=='live' || match.final_snapshot)return {ok:false,error:'match ended'};
+          for(const player of removed) {
+            inMatch.delete(player); revokeJoinPermit(player);
+            sendTo(player,{type:'match_over',match_id:id,reason:'reconnect_timeout'});
+          }
+        }
+        const waiting=Object.entries(match.reconnect).map(([player_id,w])=>({player_id,deadline:w.deadline}));
+        for(const p of match.players)sendTo(p.player_id,{type:'match_reconnect',match_id:id,waiting});
+        return {ok:waiting.length===0,match_id:id,waiting,error:waiting.length?'waiting for reconnect':''};
+      } catch { return {ok:false,error:'reconnect state is not saved'}; }
+    });
   }
 
   /**
@@ -3644,8 +3856,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   function gameReportedTeam(hostId, report) {
     const host = String(hostId || '');
     const subject = String((report && report.subject) || '');
-    if (!/^\d{17}$/.test(host)) return { ok: false, error: 'not a steamid64' };
-    if (!/^\d{17}$/.test(subject)) return { ok: false, error: 'subject is not a steamid64' };
+    if (!identity.validPlayer(host)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(subject)) return { ok: false, error: 'subject is not a steamid64' };
     const team = Number.parseInt(String((report && report.team) !== undefined ? report.team : ''), 10);
     if (!Number.isFinite(team)) return { ok: false, error: 'no team id' };
 
@@ -3656,7 +3868,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       return { ok: false, error: 'match is not connecting or live' };
     }
     if (String(match.host || '') !== host) return { ok: false, error: 'not the host' };
-    if (!match.players.some((p) => p.steam_id === subject)) return { ok: false, error: 'not on the roster' };
+    if (!match.players.some((p) => p.player_id === subject)) return { ok: false, error: 'not on the roster' };
 
     if (match.state === 'live' && match.start_ready_verified) return { ok: true, ignored: true };
 
@@ -3711,7 +3923,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    * worst a stale name can do is be old; the worst a blank can do is be a 17-digit number. */
   function rememberProfile(steamId, persona, avatar) {
     const id = String(steamId || '');
-    if (!/^\d{17}$/.test(id)) return null;
+    if (!identity.validPlayer(id)) return null;
     const known = profiles.get(id) || { persona: '', avatar: '', updated: 0 };
     const next = { persona: String(persona || '').trim() || known.persona,
                    avatar: String(avatar || '').trim() || known.avatar,
@@ -3731,11 +3943,11 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
 
   async function loadProfile(steamId) {
     const id = String(steamId || '');
-    if (profileLoaded.has(id) || !store || !/^\d{17}$/.test(id)) return profiles.get(id) || null;
+    if (profileLoaded.has(id) || !store || !identity.validPlayer(id)) return profiles.get(id) || null;
     profileLoaded.add(id);
     try {
       const raw = await store(['GET', profileKey(id)]);
-      const parsed = raw && (typeof raw === 'string' ? JSON.parse(raw) : raw);
+      const parsed = raw && (typeof raw === 'string' ? identity.parse(raw) : identity.hydrate(structuredClone(raw)));
       const known = profiles.get(id);
       // Anything this process learned while the read was in flight came from a live client and is
       // newer by definition - the same rule loadRating uses.
@@ -3761,12 +3973,12 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    * answers blank and this is a no-op - the board is no worse than it is today. */
   async function loadProfiles(steamIds) {
     const ids = [...new Set((steamIds || []).map((x) => String(x || '')))]
-      .filter((id) => /^\d{17}$/.test(id));
+      .filter((id) => identity.validPlayer(id));
     if (!ids.length) return;
     await Promise.all(ids.map((id) => loadProfile(id).catch(() => null)));
     if (typeof profileOf !== 'function' || !PROFILE_BACKFILL) return;
     const missing = ids
-      .filter((id) => !profileAsked.has(id) && (!personaOf(id) || !avatarOf(id)))
+      .filter((id) => identity.validSteam(id) && !profileAsked.has(id) && (!personaOf(id) || !avatarOf(id)))
       .slice(0, PROFILE_BACKFILL);
     await Promise.all(missing.map(async (id) => {
       profileAsked.add(id);
@@ -3786,7 +3998,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     }
     const matchId = inMatch.get(steamId);
     const match = matchId && matches.get(matchId);
-    const p = match && everyone(match).find((x) => x.steam_id === steamId);
+    const p = match && everyone(match).find((x) => x.player_id === steamId);
     if (p && p.persona) return p.persona;
     return (profiles.get(String(steamId || '')) || {}).persona || '';
   }
@@ -3799,7 +4011,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     }
     const matchId = inMatch.get(steamId);
     const match = matchId && matches.get(matchId);
-    const p = match && everyone(match).find((x) => x.steam_id === steamId);
+    const p = match && everyone(match).find((x) => x.player_id === steamId);
     if (p && p.avatar) return p.avatar;
     return (profiles.get(String(steamId || '')) || {}).avatar || '';
   }
@@ -3824,7 +4036,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     bansLoaded.add(id);
     try {
       const raw = await store(['GET', banKey(id)]);
-      if (raw) bans.set(id, typeof raw === 'string' ? JSON.parse(raw) : raw);
+      if (raw) bans.set(id, typeof raw === 'string' ? identity.parse(raw) : identity.hydrate(structuredClone(raw)));
     } catch { /* an unreadable ban is no ban: fail OPEN, because failing closed on a storage
                  hiccup would lock out the whole player base */ }
     return bans.get(id) || null;
@@ -3840,8 +4052,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
 
   async function banAccount(adminId, body) {
     if (!isAdmin(adminId)) return { ok: false, error: 'not an admin' };
-    const target = String((body && body.steam_id) || '');
-    if (!/^\d{17}$/.test(target)) return { ok: false, error: 'not a steamid64' };
+    const target = String((body && (body.player_id || body.steam_id)) || '');
+    if (!identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
     if (isAdmin(target)) return { ok: false, error: 'that account is an admin' };
     const days = Number((body && body.days) || 0);
     const rec = {
@@ -3874,8 +4086,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
 
   async function unbanAccount(adminId, body) {
     if (!isAdmin(adminId)) return { ok: false, error: 'not an admin' };
-    const target = String((body && body.steam_id) || '');
-    if (!/^\d{17}$/.test(target)) return { ok: false, error: 'not a steamid64' };
+    const target = String((body && (body.player_id || body.steam_id)) || '');
+    if (!identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
     bans.delete(target);
     bansLoaded.add(target);
     if (store) Promise.resolve(store(['DEL', banKey(target)])).catch(() => {});
@@ -3911,7 +4123,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const reported = [...reports.entries()]
       .filter(([, list]) => list.length > 0)
       .map(([id, list]) => ({
-        steam_id: id,
+        player_id: id,
         persona: personaOf(id),
         total: list.length,
         reporters: new Set(list.map((r) => r.by)).size,
@@ -3949,8 +4161,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       rounds: (m.rounds || []).map((r) => ({ at: r.at, won: r.won, 1: r[1], 2: r[2] })),
       teams: m.teams || {},
       players: (m.players || []).map((p) => ({
-        steam_id: p.steam_id, persona: p.persona || '',
-        team: teamOf(m, p.steam_id), connected: Boolean(p.connected), left: Boolean(p.left),
+        player_id: p.player_id, game_steam_id: identity.gameFor(m, p.player_id), persona: p.persona || '',
+        team: teamOf(m, p.player_id), connected: Boolean(p.connected), left: Boolean(p.left),
       })),
       // The two things a moderator watching a live match actually wants flagged.
       team_kills: (m.teamkills || []).filter((k) => k.flags && k.flags.length).length,
@@ -3969,7 +4181,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       queue: { units: queue.length, players: queuedPlayers() },
       banned: [...bans.entries()]
         .filter(([, rec]) => !rec.until || rec.until > Date.now())
-        .map(([id, rec]) => ({ steam_id: id, persona: personaOf(id), at: rec.at, by: rec.by,
+        .map(([id, rec]) => ({ player_id: id, persona: personaOf(id), at: rec.at, by: rec.by,
                                reason: rec.reason || '', until: rec.until || 0 }))
         .sort((a2, b2) => b2.at - a2.at),
       online: bySteam.size,
@@ -4003,7 +4215,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    *  row never has to work out what a missing one meant. */
   function blankCareer(steamId) {
     return {
-      steam_id: String(steamId || ''),
+      player_id: String(steamId || ''),
       persona: '',
       first_seen: 0, last_seen: 0, sessions: 0,
       hub: '', mode: '',
@@ -4026,9 +4238,9 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    *  a directory that could not be saved must never cost anybody their match. */
   function saveCareer(steamId, record) {
     const id = String(steamId || '');
-    if (!/^\d{17}$/.test(id)) return record;
+    if (!identity.validPlayer(id)) return record;
     if (frozenCareers.has(id)) return careerOf(id);
-    const clean = { ...record, steam_id: id };
+    const clean = { ...record, player_id: id };
     careers.set(id, clean);
     if (store) {
       trackWrite(careerWrites, id, store(['EVAL', require('./result-commit.cjs').CAREER_SCRIPT,
@@ -4046,7 +4258,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    */
   function noteSeen(steamId, persona) {
     const id = String(steamId || '');
-    if (!/^\d{17}$/.test(id)) return null;
+    if (!identity.validPlayer(id)) return null;
     const rec = { ...careerOf(id) };
     const now = Date.now();
     if (!rec.first_seen) rec.first_seen = now;
@@ -4071,7 +4283,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    */
   function noteRating(steamId, record) {
     const id = String(steamId || '');
-    if (!/^\d{17}$/.test(id)) return;
+    if (!identity.validPlayer(id)) return;
     const rec = careerOf(id);
     const next = {
       ...rec,
@@ -4116,6 +4328,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   function creditMatch(match, opts = {}) {
     try {
       if (!match || match.credited) return;
+      identity.hydrate(match);
       if (!opts.dryRun) match.credited = true;
       const credited = {};
       const now = opts.now || Date.now();
@@ -4130,10 +4343,10 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         ? Math.max(0, Math.round((now - (match.live_at || match.created || now)) / 1000))
         : 0;
       const blamed = new Set(opts.blame || []);
-      const walked = new Set((match.left || []).map((p) => p.steam_id));
+      const walked = new Set((match.left || []).map((p) => p.player_id));
       for (const p of everyone(match)) {
-        const id = p.steam_id;
-        if (!/^\d{17}$/.test(id)) continue;
+        const id = p.player_id;
+        if (!identity.validPlayer(id)) continue;
         const rec = { ...careerOf(id) };
         const row = rows.get(id);
         if (feed.length) {
@@ -4193,14 +4406,14 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
           }
           for (const [field, value] of pairs) {
             const id = String(field);
-            if (!/^\d{17}$/.test(id)) continue;
+            if (!identity.validPlayer(id)) continue;
             // A record written by THIS process while the read was in flight is newer and wins -
             // the same rule loadRating and loadPenalty use.
             if (careers.has(id)) continue;
             let rec;
-            try { rec = typeof value === 'string' ? JSON.parse(value) : value; } catch { continue; }
+            try { rec = typeof value === 'string' ? identity.parse(value) : value; } catch { continue; }
             if (rec && typeof rec === 'object') {
-              careers.set(id, { ...blankCareer(id), ...rec, steam_id: id });
+              careers.set(id, { ...blankCareer(id), ...rec, player_id: id });
             }
           }
         } catch { /* an unreadable directory is an empty one, never a failed page */ }
@@ -4226,7 +4439,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       const ids = await store(['ZRANGE', boardKey(), '0', '-1']);
       for (const raw of (Array.isArray(ids) ? ids : [])) {
         const id = String(raw);
-        if (/^\d{17}$/.test(id) && !careers.has(id)) careers.set(id, blankCareer(id));
+        if (identity.validPlayer(id) && !careers.has(id)) careers.set(id, blankCareer(id));
       }
     } catch { /* no board, no adoption; the directory is simply the people we have seen */ }
   }
@@ -4253,7 +4466,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const live = reports.get(id) || null;
     const ratio = (a, b) => (b > 0 ? Math.round((a / b) * 100) / 100 : (a > 0 ? a : 0));
     return {
-      steam_id: id,
+      player_id: id,
       persona: c.persona || '',
       status: statusOf(id),
       online: bySteam.has(id),
@@ -4315,7 +4528,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // Whoever this process has touched but the directory has not heard of yet: somebody who
     // signed in before this shipped and has not since, a banned account, a reported one.
     for (const id of [...bySteam.keys(), ...ratings.keys(), ...bans.keys(), ...reports.keys()]) {
-      if (/^\d{17}$/.test(String(id)) && !careers.has(String(id))) {
+      if (identity.validPlayer(String(id)) && !careers.has(String(id))) {
         careers.set(String(id), blankCareer(id));
       }
     }
@@ -4333,7 +4546,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       // Name OR id, which is the whole ask - and the id matches on any part of it, because the
       // thing a moderator has in front of them is as often the last four digits off a screenshot
       // as it is the whole number.
-      rows = rows.filter((r) => r.steam_id.includes(q)
+      rows = rows.filter((r) => r.player_id.includes(q)
         || (r.persona && r.persona.toLowerCase().includes(q)));
     }
     const found = rows.length;
@@ -4351,7 +4564,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         cmp = (Number(x) || 0) - (Number(y) || 0);
       }
       // A stable tiebreak, so two players with the same figure do not swap places every refresh.
-      if (!cmp) cmp = a.steam_id.localeCompare(b.steam_id);
+      if (!cmp) cmp = a.player_id.localeCompare(b.player_id);
       return dir === 'asc' ? cmp : -cmp;
     });
     rows = rows.slice(0, limit);
@@ -4360,15 +4573,15 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // no name in the directory yet, and loadProfiles is one read per player: doing it for every
     // known account would be a thousand reads to draw fifty rows. Done here it is bounded by the
     // page, it writes the name back into the directory, and so each one is paid once ever.
-    const unnamed = rows.filter((r) => !r.persona).map((r) => r.steam_id);
+    const unnamed = rows.filter((r) => !r.persona).map((r) => r.player_id);
     if (unnamed.length) {
       await loadProfiles(unnamed.slice(0, PROFILE_BACKFILL));
       for (const row of rows) {
         if (row.persona) continue;
-        const name = (profiles.get(row.steam_id) || {}).persona || '';
+        const name = (profiles.get(row.player_id) || {}).persona || '';
         if (!name) continue;
         row.persona = name;
-        saveCareer(row.steam_id, { ...careerOf(row.steam_id), persona: name });
+        saveCareer(row.player_id, { ...careerOf(row.player_id), persona: name });
       }
     }
 
@@ -4421,8 +4634,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    *  rather than a default we would otherwise overwrite them with. */
   async function adminTarget(adminId, body) {
     if (!isAdmin(adminId)) return { error: 'not an admin' };
-    const target = String((body && body.steam_id) || '');
-    if (!/^\d{17}$/.test(target)) return { error: 'not a steamid64' };
+    const target = String((body && (body.player_id || body.steam_id)) || '');
+    if (!identity.validPlayer(target)) return { error: 'not a steamid64' };
     return { target };
   }
 
@@ -4442,7 +4655,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     refreshReaperCut(true);
     pushRating(target, clean);
     console.log('[admin] %s reset the rank of %s', adminId, target);
-    return { ok: true, steam_id: target, rating: clean.rating, progress: clean.progress };
+    return { ok: true, player_id: target, rating: clean.rating, progress: clean.progress };
   }
 
   /**
@@ -4468,7 +4681,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // The RR total is NOT touched: the player's visible rank is not this number and never was.
     console.log('[admin] %s set the mmr of %s to %d (was %d)',
                 adminId, target, clean.rating, was);
-    return { ok: true, steam_id: target, rating: clean.rating, was };
+    return { ok: true, player_id: target, rating: clean.rating, was };
   }
 
   /**
@@ -4514,7 +4727,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const now = progressLib.publicProgress(clean, { top: false });
     console.log('[admin] %s set the rank of %s to %s %s (%d rr)',
                 adminId, target, now.rank_name, now.division || '', clean.progress);
-    return { ok: true, steam_id: target, progress: clean.progress,
+    return { ok: true, player_id: target, progress: clean.progress,
              rank_name: now.rank_name, division: now.division };
   }
 
@@ -4662,10 +4875,10 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    */
   async function requestFriend(meId, body) {
     const me = String(meId || '');
-    if (!/^\d{17}$/.test(me)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(me)) return { ok: false, error: 'not a steamid64' };
     let target = String((body && body.target) || '');
     if (body && body.code) target = await ownerOfCode(body.code);
-    if (!/^\d{17}$/.test(target)) return { ok: false, error: 'no such friend code' };
+    if (!identity.validPlayer(target)) return { ok: false, error: 'no such friend code' };
     if (target === me) return { ok: false, error: 'that is your own code' };
 
     await Promise.all([loadFriends(me), loadFriends(target)]);
@@ -4682,7 +4895,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     }
     writeSet(reqOutKey(me), me, reqOut, target, true);
     writeSet(reqInKey(target), target, reqIn, me, true);
-    sendTo(target, { type: 'friend_request', from: { steam_id: me, persona: personaOf(me) } });
+    sendTo(target, { type: 'friend_request', from: { player_id: me, persona: personaOf(me) } });
     friendsChanged(me, target);
     return { ok: true, sent: true };
   }
@@ -4690,7 +4903,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   async function acceptFriend(meId, body) {
     const me = String(meId || '');
     const target = String((body && body.target) || '');
-    if (!/^\d{17}$/.test(me) || !/^\d{17}$/.test(target)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(me) || !identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
     await Promise.all([loadFriends(me), loadFriends(target)]);
     if (!setOf(reqIn, me).has(target)) return { ok: false, error: 'no request from them' };
     if (setOf(friends, me).size >= MAX_FRIENDS) return { ok: false, error: 'your friends list is full' };
@@ -4707,7 +4920,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   async function declineFriend(meId, body) {
     const me = String(meId || '');
     const target = String((body && body.target) || '');
-    if (!/^\d{17}$/.test(me) || !/^\d{17}$/.test(target)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(me) || !identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
     await Promise.all([loadFriends(me), loadFriends(target)]);
     writeSet(reqInKey(me), me, reqIn, target, false);
     writeSet(reqOutKey(target), target, reqOut, me, false);
@@ -4720,7 +4933,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   async function cancelFriendRequest(meId, body) {
     const me = String(meId || '');
     const target = String((body && body.target) || '');
-    if (!/^\d{17}$/.test(me) || !/^\d{17}$/.test(target)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(me) || !identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
     await Promise.all([loadFriends(me), loadFriends(target)]);
     writeSet(reqOutKey(me), me, reqOut, target, false);
     writeSet(reqInKey(target), target, reqIn, me, false);
@@ -4731,7 +4944,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   async function removeFriend(meId, body) {
     const me = String(meId || '');
     const target = String((body && body.target) || '');
-    if (!/^\d{17}$/.test(me) || !/^\d{17}$/.test(target)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(me) || !identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
     await Promise.all([loadFriends(me), loadFriends(target)]);
     writeSet(friendsKey(me), me, friends, target, false);
     writeSet(friendsKey(target), target, friends, me, false);
@@ -4742,14 +4955,14 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   /** The list, with presence. `online` is free: bySteam already knows who has a live stream. */
   async function friendList(meId) {
     const me = String(meId || '');
-    if (!/^\d{17}$/.test(me)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(me)) return { ok: false, error: 'not a steamid64' };
     await loadFriends(me);
     // A friend is OFFLINE most of the time - that is what a friends list is for - so this is the
     // screen the remembered names exist for. Load them before the rows are built, since `entry`
     // cannot await.
     const listed = [...setOf(friends, me), ...setOf(reqIn, me), ...setOf(reqOut, me)];
     await loadProfiles(listed);
-    const entry = (id) => ({ steam_id: id, persona: personaOf(id), avatar: avatarOf(id), online: bySteam.has(id) });
+    const entry = (id) => ({ player_id: id, persona: personaOf(id), avatar: avatarOf(id), online: bySteam.has(id) });
     return {
       ok: true,
       code: await friendCode(me),
@@ -4815,7 +5028,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       const capstone = placed && k.top;
       return {
         rank,
-        steam_id: steamId,
+        player_id: steamId,
         persona: personaOf(steamId),
         avatar: avatarOf(steamId),
         // The RR total the board is sorted on. NOT the Glicko-2 rating, which used to be sent
@@ -4867,7 +5080,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
           if (!Array.isArray(page) || !Array.isArray(page[1])) throw new Error('report scan failed');
           cursor = String(page[0]);
           const ids = page[1].filter((key) => typeof key === 'string' && key.startsWith(keyPrefix))
-            .map((key) => key.slice(keyPrefix.length)).filter((id) => /^\d{17}$/.test(id));
+            .map((key) => key.slice(keyPrefix.length)).filter((id) => identity.validPlayer(id));
           // Bound concurrent reads even if Redis returns more than COUNT keys.
           for (let i = 0; i < ids.length; i += 20) {
             await Promise.all(ids.slice(i, i + 20).map(loadReports));
@@ -4887,7 +5100,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     try {
       const raw = await store(['GET', reportKey(steamId)]);
       if (raw) {
-        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        const parsed = typeof raw === 'string' ? identity.parse(raw) : identity.hydrate(structuredClone(raw));
         if (Array.isArray(parsed)) {
           // Anything written in THIS process while the read was in flight is newer and wins, the
           // same rule loadRating and loadPenalty use.
@@ -4930,8 +5143,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     if (reason === 'other' && body.note !== undefined && !note) return { ok: false, error: 'Please describe what happened.' };
     if (note.length > 1000) return { ok: false, error: 'Please keep the explanation under 1,001 characters.' };
     const matchId = String((body && body.match_id) || '');
-    if (!/^\d{17}$/.test(by)) return { ok: false, error: 'not a steamid64' };
-    if (!/^\d{17}$/.test(target)) return { ok: false, error: 'that is not a player' };
+    if (!identity.validPlayer(by)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(target)) return { ok: false, error: 'that is not a player' };
     if (by === target) return { ok: false, error: 'you cannot report yourself' };
     if (!REPORT_REASONS.includes(reason)) return { ok: false, error: 'unknown reason' };
 
@@ -4940,13 +5153,13 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const liveId = inMatch.get(by);
     const live = liveId && matches.get(liveId);
     if (live && (!matchId || matchId === live.id)
-        && everyone(live).some((p) => p.steam_id === target)
-        && everyone(live).some((p) => p.steam_id === by)) {
+        && everyone(live).some((p) => p.player_id === target)
+        && everyone(live).some((p) => p.player_id === by)) {
       sharedMatch = live.id;
     } else if (matchId) {
       const rec = await readMatch(matchId, by);
       const players = (rec && rec.players) || [];
-      if (players.some((p) => p.steam_id === by) && players.some((p) => p.steam_id === target)) {
+      if (players.some((p) => p.player_id === by) && players.some((p) => p.player_id === target)) {
         sharedMatch = matchId;
       }
     }
@@ -4978,12 +5191,12 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    */
   async function reportsFor(steamId) {
     const id = String(steamId || '');
-    if (!/^\d{17}$/.test(id)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(id)) return { ok: false, error: 'not a steamid64' };
     const list = await loadReports(id);
     const byReason = {};
     for (const r of list) byReason[r.reason] = (byReason[r.reason] || 0) + 1;
     return {
-      ok: true, steam_id: id, total: list.length,
+      ok: true, player_id: id, total: list.length,
       reporters: new Set(list.map((r) => r.by)).size,
       by_reason: byReason,
       last: list.length ? list[0].at : 0,
@@ -4998,7 +5211,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     try {
       const raw = await store(['GET', bugsKey()]);
       if (raw) {
-        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        const parsed = typeof raw === 'string' ? identity.parse(raw) : identity.hydrate(structuredClone(raw));
         if (Array.isArray(parsed)) {
           // Anything filed in THIS process while the read was in flight is newer and must not be
           // lost to it - the same rule loadReports and loadRating follow.
@@ -5036,7 +5249,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    */
   async function submitBugReport(steamId, body) {
     const by = String(steamId || '');
-    if (!/^\d{17}$/.test(by)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(by)) return { ok: false, error: 'not a steamid64' };
     const text = String((body && body.text) || '').trim().slice(0, BUG_TEXT_MAX);
     if (!text) return { ok: false, error: 'empty' };
 
@@ -5081,7 +5294,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   async function commitCombat(id, previous, next, decision, match) {
     const now = Date.now();
     let receipt = null, rank = null, penalty = null;
-    const payload = { expected: previous.revision, history: next };
+    const payload = { expected: previous.revision, history: next,
+      authority:{match:match.id,host:reportScope.getStore()?.host||match.host,epoch:reportScope.getStore()?.epoch??match.host_epoch??0} };
     if (decision.classification === 'malicious' && tkEnforcing()) {
       await drainRatingWrites(id);
       await drainPenaltyWrites(id);
@@ -5089,8 +5303,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       // protects this process from another service instance settling the player.
       const rawRank = store ? await store(['GET', ratingKey(id)], { strict: true }) : null;
       const rawPenalty = store ? await store(['GET', penaltyKey(id)], { strict: true }) : null;
-      const before = store ? ratingLib.normalise(rawRank ? JSON.parse(rawRank) : {}) : ratingOf(id);
-      const priorPenalty = store ? (rawPenalty ? JSON.parse(rawPenalty) : {}) : penalties.get(id) || {};
+      const before = store ? ratingLib.normalise(rawRank ? identity.parse(rawRank) : {}) : ratingOf(id);
+      const priorPenalty = store ? (rawPenalty ? identity.parse(rawPenalty) : {}) : penalties.get(id) || {};
       const count = effectiveCount(priorPenalty) + 1;
       const seconds = rungSeconds(count);
       const hit = progressLib.penalise(before, NO_SHOW_RR);
@@ -5119,8 +5333,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         const [currentRank, currentPenalty] = await Promise.all([
           store(['GET', ratingKey(id)], { strict: true }), store(['GET', penaltyKey(id)], { strict: true }),
         ]);
-        latestRank = currentRank ? JSON.parse(currentRank) : null;
-        latestPenalty = currentPenalty ? JSON.parse(currentPenalty) : null;
+        latestRank = currentRank ? identity.parse(currentRank) : null;
+        latestPenalty = currentPenalty ? identity.parse(currentPenalty) : null;
         if (!latestRank || !latestPenalty) throw new Error('Committed combat state is unavailable');
       }
       if ((latestRank.revision || 0) >= (ratingOf(id).revision || 0)) {
@@ -5134,14 +5348,49 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   }
 
   const matchOperations = new Map();
+  const approvedClosures = new WeakSet();
+  const hostChecks = new Map();
+  const operationScope = new (require('node:async_hooks').AsyncLocalStorage)();
+  const reportScope = new (require('node:async_hooks').AsyncLocalStorage)();
   let stopping = false;
   function matchOperation(id, operation) {
+    if(operationScope.getStore()===id)return Promise.resolve().then(operation);
     if (stopping) return Promise.resolve({ ok: false, error: 'server is restarting',
       data_collected: false, close_allowed: false });
-    const pending = (matchOperations.get(id) || Promise.resolve()).catch(() => {}).then(operation);
+    const pending = (matchOperations.get(id) || Promise.resolve()).catch(() => {}).then(()=>operationScope.run(id,operation));
     matchOperations.set(id, pending);
     pending.finally(() => { if (matchOperations.get(id) === pending) matchOperations.delete(id); }).catch(() => {});
     return pending;
+  }
+
+  async function checkHostTimeouts() {
+    if(!store)return;
+    for(const m of matches.values()) {
+      if(m.state!=='live'||!m.migration_capabilities||Date.now()-(hostChecks.get(m.id)||0)<10000)continue;
+      hostChecks.set(m.id,Date.now());
+      await matchOperation(m.id,async()=>{
+        await refreshAuthority(m);
+        const raw=await store(['GET',authorityKey(m.id)],{strict:true});
+        const a=raw&&identity.parse(raw);
+        if(!a?.last_seen||Date.now()-a.last_seen<300000)return;
+        // A verified final snapshot remains retryable even if its reporter died.
+        if(m.final_snapshot) {
+          const f=JSON.parse(m.final_snapshot),[round,limit,s0,s1]=f.meta;
+          await applyFinalSnapshot(m.host,{match_id:m.id,meta:`${round};${limit};0;${s0};1;${s1}`,
+            combat_end:`${m.combat_end.epoch};${m.combat_end.seq}`,
+            rows:f.rows.map(r=>`${r.gameSteamId}|k=${r.kills};d=${r.deaths};sp=${r.spawnCount};t=${r.teamId};s=${r.teamScore};a=${r.alive}`).join(',')});
+          return;
+        }
+        const closed=await store(['EVAL',require('./migration.cjs').CLOSE,'2',authorityKey(m.id),settlementKey(m.id),
+          m.host,String(m.host_epoch||0),String(Date.now()),'300000',String(LIVE_STATE_TTL_SECONDS)],{strict:true});
+        if(closed!==1)return;
+        // No game was restored. Retain the partial decision/evidence, release
+        // everyone and never invent a winner or punish the innocent remainder.
+        if(m.collecting)m.interrupted_collection=m.collecting;
+        delete m.collecting;
+        approvedClosures.add(m);closeMatch(m,'stalled',[]);
+      });
+    }
   }
   function gameReportedCombat(hostId, report, auth = {}) {
     return matchOperation(String(report?.match || ''), () => applyCombat(hostId, report, auth));
@@ -5159,7 +5408,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
           events.some((e, i) => e?.terminal === 1 && i !== events.length - 1))
         return { ok: false, error: 'invalid combat batch' };
       if (!match.combatState) match.combatState = combatLib.createState();
-      if (match.combatState.matchId != null && (match.combatState.matchId !== match.id || match.combatState.hostId !== match.host))
+      if (match.combatState.matchId != null && (match.combatState.matchId !== match.id || match.combatState.hostId !== identity.gameFor(match, match.host)))
         return { ok: false, error: 'scope_mismatch' };
       const rejected = match.combatState.rejected ||= [];
       const rejectedBefore = rejected.length;
@@ -5227,11 +5476,11 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       return { ok: false, error: 'actual teams do not agree with the roster' }; }
     // Opening coverage can precede the slower verified-team sweep. It contains no
     // harm and grants no sanction; every health observation still requires agreement.
-    const roster = Object.fromEntries(match.players.map(p => [p.steam_id,
-      agreement.agree ? match.ingame.get(p.steam_id) : teamOf(match, p.steam_id) - 1]));
+    const roster = Object.fromEntries(match.players.map(p => [identity.gameFor(match, p.player_id),
+      agreement.agree ? match.ingame.get(p.player_id) : teamOf(match, p.player_id) - 1]));
     const ingested = combatLib.ingest(match.combatState, report.row, {
-      authenticated: true, validated, observationOnly: !validated, validatedShot: false,
-      hostId: match.host, matchId: match.id, now: Date.now(), roster, phase: event && event.phase,
+      authenticated: true, validated, observationOnly: !validated, validatedShot: false, authorityEpoch:match.host_epoch||0,
+      hostId: identity.gameFor(match, match.host), matchId: match.id, now: Date.now(), roster, phase: event && event.phase,
     });
     if (['malformed', 'sequence_conflict', 'old_sequence', 'scope_mismatch', 'invalid_context', 'event_limit'].includes(ingested.reason))
       return { ok: false, error: ingested.reason };
@@ -5247,11 +5496,16 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     let enforced = false, decision = null;
     // Revisit existing actors on a retry too: an accepted event followed by a failed
     // database write must not disappear merely because its sequence is now a duplicate.
-    const actors = [...new Set(match.combatState.incidents.map(i => i.actorId))];
+    const incidents = match.combatState.incidents.map(i => ({...i,
+      gameActorId:i.actorId, actorId:identity.playerFor(match,i.actorId),
+      victimIds:i.victimIds.map(id=>identity.playerFor(match,id)),
+      lethalVictimIds:(i.lethalVictimIds||[]).map(id=>identity.playerFor(match,id))}));
+    if (incidents.some(i=>!i.actorId||i.victimIds.some(id=>!id))) throw Error('Invalid combat ownership');
+    const actors = [...new Set(incidents.map(i => i.actorId))];
     for (const actor of actors) await withRatingLocks([actor], async () => {
       for (let attempt = 0; attempt < 4; attempt++) {
         const previous = await combatHistory(actor);
-        const next = combatLedger.merge(previous, match.combatState.incidents.filter(i => i.actorId === actor), Date.now());
+        const next = combatLedger.merge(previous, incidents.filter(i => i.actorId === actor), Date.now());
         if (next.warning && next.warning.at < Date.now() - combatLedger.KEEP_MS) delete next.warning;
         // Receipt time cannot establish capture order: queued attacks may predate
         // a visibly delivered warning. Keep delivery receipts for review, but
@@ -5277,7 +5531,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       }
     });
     const previousEnd = match.combat_end;
-    if (terminalEnd) match.combat_end = { ...terminalEnd, complete: terminalEnd.complete && !match.combatState.coverage.broken };
+    if (terminalEnd) match.combat_end = { ...terminalEnd, complete: terminalEnd.complete && !match.combatState.coverage.broken && !match.combat_migrated };
     try { await persistLive(match); }
     catch (error) {
       if (terminalEnd) {
@@ -5311,9 +5565,9 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const host = String(hostId || '');
     const killer = String((report && report.killer) || '');
     const victim = String((report && report.victim) || '');
-    if (!/^\d{17}$/.test(host)) return { ok: false, error: 'not a steamid64' };
-    if (!/^\d{17}$/.test(killer)) return { ok: false, error: 'killer is not a steamid64' };
-    if (!/^\d{17}$/.test(victim)) return { ok: false, error: 'victim is not a steamid64' };
+    if (!identity.validPlayer(host)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(killer)) return { ok: false, error: 'killer is not a steamid64' };
+    if (!identity.validPlayer(victim)) return { ok: false, error: 'victim is not a steamid64' };
     // The pak already refuses to send one, but a suicide reaching here must never become a ban.
     if (killer === victim) return { ok: false, error: 'a suicide is not a team kill' };
 
@@ -5325,7 +5579,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       return { ok: false, error: 'match is not connecting or live' };
     }
     if (String(match.host || '') !== host) return { ok: false, error: 'not the host' };
-    const onRoster = (id) => match.players.some((p) => p.steam_id === id);
+    const onRoster = (id) => match.players.some((p) => p.player_id === id);
     if (!onRoster(killer) || !onRoster(victim)) return { ok: false, error: 'not on the roster' };
 
     const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
@@ -5401,12 +5655,12 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    */
   function gameReportedIn(steamId, event) {
     const id = String(steamId || '');
-    if (!/^\d{17}$/.test(id)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(id)) return { ok: false, error: 'not a steamid64' };
     const matchId = inMatch.get(id);
     const match = matchId && matches.get(matchId);
     if (!match || match.state !== 'connecting') return { ok: false, error: 'no connecting match' };
     if (String(match.host || '') !== id) return { ok: false, error: 'not the host' };
-    const player = match.players.find((p) => p.steam_id === id);
+    const player = match.players.find((p) => p.player_id === id);
     const name = String(event || '');
 
     // ARRIVAL IS THE RELEASE AGAIN (2026-09-16), because the reason it stopped being one is gone.
@@ -5540,7 +5794,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
 
   function gameReportedScore(steamId, fields) {
     const id = String(steamId || '');
-    if (!/^\d{17}$/.test(id)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(id)) return { ok: false, error: 'not a steamid64' };
     const matchId = inMatch.get(id);
     const match = matchId && matches.get(matchId);
     if (!match) return { ok: false, error: 'no match' };
@@ -5671,7 +5925,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // and the players can see this on their own screens anyway. It is sent so the hub can show
     // the match it is sitting behind.
     for (const p of match.players) {
-      sendTo(p.steam_id, { type: 'match_score', match_id: match.id, score, limit });
+      sendTo(p.player_id, { type: 'match_score', match_id: match.id, score, limit });
     }
 
     // SAM'S RULE, and the whole point: first to the limit wins.
@@ -5817,7 +6071,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const seen = (match.stats && match.stats.seenAt) || {};
     const rounds = Number(match.collecting.score[1]) + Number(match.collecting.score[2]);
     const seenRounds = (match.stats && match.stats.seenRounds) || {};
-    return match.players.every((p) => Number(seen[p.steam_id]) >= since && Number(seenRounds[p.steam_id]) >= rounds);
+    return match.players.every((p) => Number(seen[p.player_id]) >= since && Number(seenRounds[p.player_id]) >= rounds);
   }
 
   /** Called whenever a stats row lands, to end the window early once there is nothing to wait for. */
@@ -5988,7 +6242,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    */
   function gameReportedStats(steamId, fields) {
     const id = String(steamId || '');
-    if (!/^\d{17}$/.test(id)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(id)) return { ok: false, error: 'not a steamid64' };
     const match = matches.get(inMatch.get(id));
     if (!match) return { ok: false, error: 'no match' };
     if (match.state !== 'live' && match.state !== 'connecting') {
@@ -5998,7 +6252,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     if (echoMismatch(fields, match)) return { ok: false, error: 'wrong match id' };
 
     if (match.final_snapshot) return { ok: true, ignored: true };
-    const roster = new Set(match.players.map((p) => p.steam_id));
+    const roster = new Set(match.players.map((p) => p.player_id));
     match.stats = match.stats || { players: [] };
     const rounds = Number(String((fields && fields.rounds) || '').trim());
     // A HIGH-WATER MARK, so it can never go backwards. Reports are independent HTTP calls and do
@@ -6023,7 +6277,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       if (!m) continue;
       // A steamId that was not in this match is DROPPED, not recorded - the same rule
       // adoptLobby uses, and for the same reason: the roster is not the host's to edit.
-      if (!roster.has(m[1])) continue;
+      const playerId = identity.playerFor(match, m[1]);
+      if (!roster.has(playerId)) continue;
       // Read the tail by position. A field that may not be negative and is, means the report is
       // corrupt rather than early - drop the whole row rather than guess which field slipped.
       //
@@ -6054,6 +6309,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       // A bot that says so is dropped here rather than relying on its id being blank. The pak
       // skips them at the source, but an older pak does not, and a bot must never reach a ladder.
       if (row.isBot) continue;
+      if(m[1]!==playerId)row.gameSteamId = m[1];
+      row.steamId = playerId;
       // Keep older rounds as historical evidence, but never let their delayed
       // arrival replace the current totals or satisfy final-stat collection.
       const samples = match.stats.series && match.stats.series[row.steamId];
@@ -6156,7 +6413,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    */
   function gameReportedRound(steamId, fields) {
     const id = String(steamId || '');
-    if (!/^\d{17}$/.test(id)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(id)) return { ok: false, error: 'not a steamid64' };
     const match = matches.get(inMatch.get(id));
     if (!match) return { ok: false, error: 'no match' };
     if (match.final_snapshot) return { ok: true, ignored: true };
@@ -6258,7 +6515,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    */
   function gameReportedKill(steamId, fields) {
     const id = String(steamId || '');
-    if (!/^\d{17}$/.test(id)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(id)) return { ok: false, error: 'not a steamid64' };
     const match = matches.get(inMatch.get(id));
     if (!match) return { ok: false, error: 'no match' };
     if (match.final_snapshot) return { ok: true, ignored: true };
@@ -6277,11 +6534,17 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       const raw = pair.slice(at + 1).trim();
       if (raw === '') continue;
       if (key === 'killer' || key === 'victim') {
-        if (/^\d{17}$/.test(raw)) out[key] = raw;      // anything else is not an account
+        if (identity.validSteam(raw)) out[key] = raw;      // anything else is not an account
       } else {
         const value = Number(raw);
         if (Number.isFinite(value) && value >= 0) out[key] = value;
       }
+    }
+    for (const key of ['killer', 'victim']) if (out[key]) {
+      const player = identity.playerFor(match, out[key]);
+      if (!player) return {ok:false,error:key+' not on the roster'};
+      if(out[key]!==player)out[key + 'GameSteamId'] = out[key];
+      out[key] = player;
     }
     // Without a victim there is no death to record. A missing KILLER is fine - that is a world
     // kill - and a victim we never put in this match is not the host's to add.
@@ -6390,7 +6653,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     if (!store) return null;
     const raw = await store(['GET', settlementKey(id)], { strict: true });
     if (!raw) return null;
-    const receipt = await combatStorage.unpack(store, typeof raw === 'string' ? JSON.parse(raw) : raw, settlementKey(id));
+    const receipt = await combatStorage.unpack(store, typeof raw === 'string' ? identity.parse(raw) : identity.hydrate(structuredClone(raw)), settlementKey(id));
     if (receipt.match_id !== id || receipt.data_collected !== true) throw Error('invalid receipt');
     resultReceipts.set(id, receipt);
     return receipt;
@@ -6456,7 +6719,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   async function applyFinalSnapshot(hostId, fields) {
     const host = String(hostId || ''), id = String(fields?.match_id || '');
     const reject = error => ({ ok: false, error, data_collected: false, close_allowed: false });
-    if (!/^\d{17}$/.test(host) || !/^[0-9a-f]{16}$/.test(id)) return reject('invalid identity');
+    if (!identity.validPlayer(host) || !/^[0-9a-f]{16}$/.test(id)) return reject('invalid identity');
     try {
       const receipt = await readReceipt(id);
       if (receipt) {
@@ -6471,7 +6734,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         return reject('combat capture is still draining');
       const assigned = match.assigned_teams;
       const ids = [...(assigned?.[1] || []), ...(assigned?.[2] || [])];
-      if (ids.length < 2 || ids.length > 10 || new Set(ids).size !== ids.length) return reject('invalid assignment');
+      if (ids.length < (soloMatch(match)?1:2) || ids.length > 10 || new Set(ids).size !== ids.length) return reject('invalid assignment');
       const side = new Map([...assigned[1].map(x => [x, 0]), ...assigned[2].map(x => [x, 1])]);
       const meta = /^(\d{1,2});(\d{1,2});([01]);(\d{1,2});([01]);(\d{1,2})$/.exec(String(fields.meta || ''));
       if (!meta || meta[3] === meta[5]) return reject('invalid final score');
@@ -6485,21 +6748,37 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       if (match.collecting && (match.collecting.winner !== winner || match.collecting.score[1] !== score[1] || match.collecting.score[2] !== score[2]))
         return reject('final score disagrees with decision');
       let text = String(fields.rows || ''); if (text.endsWith(',')) text = text.slice(0, -1);
-      const encoded = text.split(',');
-      if (encoded.length !== ids.length) return reject('incomplete final roster');
+      const encoded = soloMatch(match)?require('./private-solo.cjs').finalHumans(text.split(','),privateSoloSteam):text.split(',');
+      if(!encoded)return reject('invalid private bot roster');
+      if (encoded.length < 1 || encoded.length > ids.length) return reject('incomplete final roster');
       const seen = new Set(), finalRows = [];
-      if (match.players.length !== ids.length || ids.some(x => !match.players.some(p => p.steam_id === x) || inMatch.get(x) !== id))
+      const reconnect = require('./reconnect.cjs');
+      const current = new Set(match.players.map(p => p.player_id));
+      const left = new Set(ids.filter(x => reconnect.confirmedLeft(match,x)));
+      const ended=match.final_ended_at||match.collecting?.since||Date.now();
+      if(ids.some(x=>current.has(x) && match.reconnect?.[x]?.deadline<=ended))
+        return reject('expired reconnect must be adjudicated');
+      const absent = new Set(ids.filter(x => {
+        const w=match.reconnect?.[x];
+        return current.has(x) && w && Number.isSafeInteger(w.since) && w.deadline===w.since+reconnect.GRACE_MS && w.deadline>ended;
+      }));
+      const unavailable=new Set([...left,...absent]);
+      const all=everyone(match).map(p=>p.player_id);
+      if (all.length !== ids.length || new Set(all).size !== ids.length || ids.some(x => !all.includes(x)) ||
+          ids.some(x => !current.has(x) && !left.has(x)) || [...current].some(x => inMatch.get(x) !== id))
         return reject('assigned roster changed');
       for (const line of encoded) {
         // Every required value must be explicit and bounded. No partial parser success.
         const m = /^(\d{17})\|k=(-?\d{1,5});d=(\d{1,5});sp=(\d{1,5});t=([01]);s=(-?\d{1,5});a=(true|false)$/i.exec(line);
-        if (!m || !side.has(m[1]) || seen.has(m[1]) || Number(m[5]) !== side.get(m[1])) return reject('invalid final row');
-        seen.add(m[1]);
-        finalRows.push({ steamId: m[1], kills: Number(m[2]), deaths: Number(m[3]), spawnCount: Number(m[4]),
+        const player = m && identity.playerFor(match, m[1]);
+        if (!m || !side.has(player) || seen.has(player) || Number(m[5]) !== side.get(player)) return reject('invalid final row');
+        seen.add(player);
+        finalRows.push({ steamId: player, gameSteamId: m[1], kills: Number(m[2]), deaths: Number(m[3]), spawnCount: Number(m[4]),
           teamId: Number(m[5]), teamScore: Number(m[6]), alive: m[7].toLowerCase() === 'true' });
       }
+      if(ids.some(x => !seen.has(x) && !left.has(x) && !absent.has(x)))return reject('incomplete final roster');
       finalRows.sort((a, b) => a.steamId.localeCompare(b.steamId));
-      const fingerprint = JSON.stringify({ meta: [round, limit, score[1], score[2]], rows: finalRows });
+      const fingerprint = JSON.stringify({ meta: [round, limit, score[1], score[2]], rows: finalRows.filter(row=>!unavailable.has(row.steamId)) });
       if (match.final_snapshot && match.final_snapshot !== fingerprint) return reject('final snapshot changed');
       if (resultSaves.has(id)) return await resultSaves.get(id);
       match.final_snapshot = fingerprint;
@@ -6507,9 +6786,18 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       clearTimeout(match.timer); match.timer = null; match.deadline = 0; match.expiry = '';
       for (const sid of ids) frozenCareers.add(sid);
       const priorRows = new Map((match.stats?.players || []).map(row => [row.steamId, row]));
-      const mergedRows = finalRows.map(row => ({ ...(priorRows.get(row.steamId) || {}), ...row }));
+      const freshRows = new Map(finalRows.map(row=>[row.steamId,row]));
+      const mergedRows = ids.map(sid => {
+        // A departed PlayerState may linger in the final array. Its stale counters cannot
+        // overwrite the last totals frozen when the server confirmed the departure.
+        if(unavailable.has(sid) || !freshRows.has(sid))return {
+          ...(reconnect.confirmedLeft(match,sid)?.last_stats || priorRows.get(sid) || {}),
+          steamId:sid,gameSteamId:identity.gameFor(match,sid),teamId:side.get(sid),disconnected:true,stats_complete:false};
+        return {...(priorRows.get(sid)||{}),...freshRows.get(sid),stats_complete:true};
+      });
       const series = structuredClone(match.stats?.series || {});
       for (const row of finalRows) {
+        if(unavailable.has(row.steamId))continue;
         const samples = series[row.steamId] ||= {};
         samples[total - 1] = {...(samples[total - 1] || {}), ...row};
       }
@@ -6521,7 +6809,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         await Promise.all(ids.map(async sid => {
           await readRating(sid, false);
           const raw = await store(['HGET', rosterKey(), sid], { strict: true });
-          if (raw) careers.set(sid, { ...blankCareer(sid), ...JSON.parse(raw) });
+          if (raw) careers.set(sid, { ...blankCareer(sid), ...identity.parse(raw) });
         }));
         const settled = winner ? settleMatch(match, winner, { calculate: true }) : ids.map(steamId => {
           const after = ratingOf(steamId), rank = progressLib.publicProgress(after);
@@ -6538,10 +6826,12 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         const record = { ended: match.final_ended_at, outcome: 'played', host, map: match.map, sides: match.sides || {} };
         const full = fullRecord(match, record);
         Object.assign(full, { won_team: winner || null, draw, score, final_stats: mergedRows, combat_end: match.combat_end, data_collected: true });
-        const canonical = { version: settlementLib.VERSION, matchId: id, at: now, winner, draw, score, limit,
+        const canonical = { version: settlementLib.VERSION, matchId: id,host_epoch:match.host_epoch||0, at: now, winner, draw, score, limit,
+          report_digest: /^[a-f0-9]{64}$/.test(match.reportToken || '') ? crypto.createHash('sha256').update(match.reportToken).digest('hex') : null,
           analytics_context: analyticsContext(match),
           rules: Object.fromEntries(Object.entries(process.env).filter(([key]) => /^COMP_(RR_|PERF_|RANK_|RATING_|LEVEL_THRESHOLDS$|ARROW_|PLACEMENT_|REAPER_|W_|WEIGHT_|DECISIVE_|INT_|PRESENCE_|EXPECT_|PARTY_PREMIUM$|QUALITY_SCALE$)/.test(key))),
           inputs: { round_index_base: 0, players: everyone(match), teams: match.teams, mm: match.mm, stats: combatStats(match), combatState: match.combatState,
+            combat_segments:match.combat_segments,host_migrations:match.host_migrations,
             rounds: match.rounds, kills: match.kills, left: match.left },
           board: scoreboardOf(match), publicMatch: full, rows: settled,
           match_id: id, host, participants: ids, collected_at: now, close_after: now + 5000,
@@ -6553,6 +6843,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
           result_index: add(resultKey(id), 'string'),
           live: add(liveMatchKey(id), 'string'), live_index: add(liveIndexKey(), 'set'),
           analytics_outbox: add(`${prefix || 'hub:'}analytics:outbox`, 'set') };
+        plan.authority=add(authorityKey(id),'string');plan.host=host;plan.host_epoch=match.host_epoch||0;
         plan.writes.push({ index: add(matchKey(id), 'string'), value: JSON.stringify(full), ttl: MATCH_TTL_SECONDS });
         const boardIndex = add(boardKey(), 'zset');
         for (const row of settled) {
@@ -6591,7 +6882,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       try { return await save; } finally { resultSaves.delete(id); }
     } catch (err) {
       if (String(err.message).includes('result rank conflict')) {
-        for (const p of matches.get(id)?.players || []) { ratingLoaded.delete(p.steam_id); ratings.delete(p.steam_id); }
+        for (const p of matches.get(id)?.players || []) { ratingLoaded.delete(p.player_id); ratings.delete(p.player_id); }
       }
       console.error('[result] save pending %s: %s', id, err.message);
       return reject('final data is not saved yet');
@@ -6625,7 +6916,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // active commit, so an older snapshot cannot resurrect a completed match.
     const snapshot = persistLive(match);
     snapshot.catch(() => {}); // observed below after any preceding rank operation
-    const ids = everyone(match).map(p => p.steam_id);
+    const ids = everyone(match).map(p => p.player_id);
     match.settling = withRatingLocks(ids, async () => {
       await snapshot;
       // A different container may already have durably decided this match.
@@ -6637,7 +6928,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         for (const row of calculated) row.after.revision = (row.before.revision || 0) + 1;
         const receipt = {
           analytics_context: analyticsContext(match),
-          version: settlementLib.VERSION, matchId: match.id, at: Date.now(), winner, score, limit,
+          version: settlementLib.VERSION, matchId: match.id, host:match.host,host_epoch:match.host_epoch||0, at: Date.now(), winner, score, limit,
           inputs: { players: everyone(match), teams: match.teams, mm: match.mm, stats: match.stats, rounds: match.rounds,
                     kills: match.kills, left: match.left },
           rules: Object.fromEntries(Object.entries(process.env).filter(([key]) => /^COMP_(RR_|PERF_|RANK_|RATING_|LEVEL_THRESHOLDS$|ARROW_|PLACEMENT_|REAPER_|W_|WEIGHT_|DECISIVE_|INT_|PRESENCE_|EXPECT_|PARTY_PREMIUM$|QUALITY_SCALE$)/.test(key))),
@@ -6650,7 +6941,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         let committed;
         try {
           committed = await settlementLib.commit(store,
-            [settlementKey(match.id), boardKey(), liveMatchKey(match.id), liveIndexKey(), ...calculated.map(r => ratingKey(r.steamId)), `${prefix || 'hub:'}analytics:outbox`],
+            [settlementKey(match.id), boardKey(), liveMatchKey(match.id), liveIndexKey(), ...calculated.map(r => ratingKey(r.steamId)), `${prefix || 'hub:'}analytics:outbox`,authorityKey(match.id)],
             receipt, updates);
         } catch (error) {
           if (!error.conflict || attempt === 2) throw error;
@@ -6694,12 +6985,12 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     match.collecting = null;
     match.state = 'over';
 
-    for (const p of match.players) if (inMatch.get(p.steam_id) === match.id) inMatch.delete(p.steam_id);
+    for (const p of match.players) if (inMatch.get(p.player_id) === match.id) inMatch.delete(p.player_id);
     matches.delete(match.id);
     forgetMatch(match.id);          // and the live copy, so no boot can bring it back
     for (const p of match.players) {
-      sendTo(p.steam_id, { type: 'match_over', match_id: match.id,
-                           won: teamOf(match, p.steam_id) === winner, score });
+      sendTo(p.player_id, { type: 'match_over', match_id: match.id,
+                           won: teamOf(match, p.player_id) === winner, score });
     }
     // The record was written as `played` with null score and null winner the moment the match
     // went live. Now it can say what happened. Best effort, like every other history write.
@@ -6748,13 +7039,13 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         full.round_index_base = 0;
         full.rounds_played = full.round_details.length || null;
         for (const p of full.players || []) {
-          const team = teamOf(match, p.steam_id);
+          const team = teamOf(match, p.player_id);
           p.won = team === winner;
-          Object.assign(p, moveOf(p.steam_id));
+          Object.assign(p, moveOf(p.player_id));
         }
       }
       const lineOf = (steamId) => {
-        const mine = board.find((r) => r.steam_id === steamId);
+        const mine = board.find((r) => r.player_id === steamId);
         return mine ? { kills: mine.kills, deaths: mine.deaths, team_kills: mine.team_kills }
                     : { kills: null, deaths: null, team_kills: null };
       };
@@ -6773,14 +7064,14 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
                            'EX', String(MATCH_TTL_SECONDS)]));
       }
       for (const p of everyone(match)) {
-        const steamId = p.steam_id;
+        const steamId = p.player_id;
         const key = historyKey(steamId);
         writes.push(Promise.resolve(store(['LRANGE', key, '0', String(HISTORY_KEEP - 1)]))
           .then((raw) => {
             if (!Array.isArray(raw)) return null;
             for (let i = 0; i < raw.length; i += 1) {
               let row;
-              try { row = typeof raw[i] === 'string' ? JSON.parse(raw[i]) : raw[i]; } catch { continue; }
+              try { row = typeof raw[i] === 'string' ? identity.parse(raw[i]) : raw[i]; } catch { continue; }
               if (!row || row.id !== match.id) continue;
               const mine = teamOf(match, steamId);
               Object.assign(row, lineOf(steamId));
@@ -6827,7 +7118,13 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const mm = match.mm || {};
     const teams = match.teams || (mm.teams || {});
     const before = new Map();
-    for (const p of everyone(match)) before.set(p.steam_id, ratingOf(p.steam_id));
+    for (const p of everyone(match)) before.set(p.player_id, ratingOf(p.player_id));
+    if(soloMatch(match)) {
+      const steamId=match.host, was=before.get(steamId), victory=teamOf(match,steamId)===won;
+      const now={...was,matches:(was.matches||0)+1,wins:(was.wins||0)+(victory?1:0),losses:(was.losses||0)+(victory?0:1)};
+      const rows=[{steamId,before:was,after:now,delta:0,rr:{delta:0,progress:was.progress||0},won:victory}];
+      return calculate?rows:publishSettlement(match,won,rows,0);
+    }
 
     // The two sides as the matchmaker saw them when it made the match. Falling back to the
     // roster's ratings NOW is the reconstruction this function exists to avoid, but it is
@@ -6917,10 +7214,12 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // Empty when the gamemode reported nothing, which is what the card's honest "no scoreboard"
     // line is for. Never a row of zeroes.
     const board = scoreboardOf(match).map((r) => ({
-      steam_id: r.steam_id,
-      persona: personaOf(r.steam_id),
+      player_id: r.player_id,
+      persona: personaOf(r.player_id),
       team: r.team,
       reported: r.reported,
+      disconnected: r.disconnected,
+      stats_complete: r.stats_complete,
       kills: r.kills,
       deaths: r.deaths,
       team_kills: r.team_kills,
@@ -7043,7 +7342,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     return {
       type: 'party_update', code, leader_id: party.leaderId,
       members: party.members.map((id) => ({
-        steam_id: id, persona: personaOf(id), avatar: avatarOf(id),
+        player_id: id, persona: personaOf(id), avatar: avatarOf(id),
         level: ratingLib.levelOf(ratingOf(id)),
         ping: null,
       })),
@@ -7107,18 +7406,18 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   }
 
   function handlePartyCreate(res, account) {
-    clearOwnGrace(account.steam_id);
-    const existing = partyOf.get(account.steam_id);
+    clearOwnGrace(account.player_id);
+    const existing = partyOf.get(account.player_id);
     if (existing && parties.has(existing)) {
       // Already in a party: hand it back idempotently rather than minting a second code and
       // orphaning the first. broadcastParty is not needed - nothing changed.
       return sendJson(res, 200, { ok: true, code: existing });
     }
-    if (inMatch.has(account.steam_id)) return sendJson(res,409,{ok:false,error:'Finish your match before changing parties.'});
-    cancelQueuedFor([account.steam_id]);
+    if (inMatch.has(account.player_id)) return sendJson(res,409,{ok:false,error:'Finish your match before changing parties.'});
+    cancelQueuedFor([account.player_id]);
     const code = freshPartyCode();
-    parties.set(code, { code, leaderId: account.steam_id, members: [account.steam_id], created: Date.now() });
-    partyOf.set(account.steam_id, code);
+    parties.set(code, { code, leaderId: account.player_id, members: [account.player_id], created: Date.now() });
+    partyOf.set(account.player_id, code);
     broadcastParty(code);
     return sendJson(res, 200, { ok: true, code });
   }
@@ -7156,13 +7455,13 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   }
 
   async function handlePartyJoin(req, res, account) {
-    clearOwnGrace(account.steam_id);
+    clearOwnGrace(account.player_id);
     let body = {};
     try {
       const raw = await readBody(req, 1024);
-      if (raw && raw.length) body = JSON.parse(raw.toString('utf8'));
+      if (raw && raw.length) body = identity.parse(raw.toString('utf8'));
     } catch { body = {}; }
-    const joined = joinPartyByCode(account.steam_id, body && body.code);
+    const joined = joinPartyByCode(account.player_id, body && body.code);
     return sendJson(res, joined.status, joined.body);
   }
 
@@ -7210,7 +7509,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         const party = parties.get(invite.code);
         if (invite.expires <= now || !party) { dropInvite(steamId, from, false); continue; }
         invites.push({
-          from: { steam_id: from, persona: personaOf(from) },
+          from: { player_id: from, persona: personaOf(from) },
           code: invite.code,
           size: party.members.length,
           max: MAX_PARTY,
@@ -7234,7 +7533,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   async function inviteToParty(meId, body) {
     const me = String(meId || '');
     const target = String((body && body.target) || '');
-    if (!/^\d{17}$/.test(me) || !/^\d{17}$/.test(target)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(me) || !identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
     if (target === me) return { ok: false, error: 'That is you.' };
 
     const code = partyOf.get(me) || '';
@@ -7263,7 +7562,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     sendTo(target, invitePayload(target));
     // A cue as well as the list: the inbox is on the Competitive screen and the invitee may be
     // looking at any of them, so this is what a toast is drawn from.
-    sendTo(target, { type: 'party_invite', from: { steam_id: me, persona: personaOf(me) }, code });
+    sendTo(target, { type: 'party_invite', from: { player_id: me, persona: personaOf(me) }, code });
     return { ok: true, sent: true, expires_in: PARTY_INVITE_SECONDS };
   }
 
@@ -7271,7 +7570,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   function acceptPartyInvite(meId, body) {
     const me = String(meId || '');
     const from = String((body && body.from) || '');
-    if (!/^\d{17}$/.test(me) || !/^\d{17}$/.test(from)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(me) || !identity.validPlayer(from)) return { ok: false, error: 'not a steamid64' };
     const box = partyInvites.get(me);
     const invite = box && box.get(from);
     if (!invite) return { ok: false, error: 'That invite has expired.' };
@@ -7302,25 +7601,25 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   function declinePartyInvite(meId, body) {
     const me = String(meId || '');
     const from = String((body && body.from) || '');
-    if (!/^\d{17}$/.test(me) || !/^\d{17}$/.test(from)) return { ok: false, error: 'not a steamid64' };
+    if (!identity.validPlayer(me) || !identity.validPlayer(from)) return { ok: false, error: 'not a steamid64' };
     const had = dropInvite(me, from, true);
     return { ok: true, declined: had };
   }
 
   function handlePartyLeave(res, account) {
-    if (inMatch.has(account.steam_id)) return sendJson(res,409,{ok:false,error:'Finish your match before changing parties.'});
-    clearOwnGrace(account.steam_id);
-    const was = Boolean(partyOf.get(account.steam_id));
-    leaveParty(account.steam_id);
-    sendTo(account.steam_id, { type: 'party_update', code: null });    // you are solo now
+    if (inMatch.has(account.player_id)) return sendJson(res,409,{ok:false,error:'Finish your match before changing parties.'});
+    clearOwnGrace(account.player_id);
+    const was = Boolean(partyOf.get(account.player_id));
+    leaveParty(account.player_id);
+    sendTo(account.player_id, { type: 'party_update', code: null });    // you are solo now
     return sendJson(res, 200, { ok: true, was_in_party: was });
   }
 
   function handlePartyRefresh(res, account) {
-    const code = partyOf.get(account.steam_id);
+    const code = partyOf.get(account.player_id);
     const party = code && parties.get(code);
     if (!party) return sendJson(res, 404, { ok: false, error: 'You are not in a party.' });
-    if (party.leaderId !== account.steam_id) {
+    if (party.leaderId !== account.player_id) {
       return sendJson(res, 403, { ok: false, error: 'Only the leader can do that.' });
     }
     if (party.members.some(id=>inMatch.has(id))) return sendJson(res,409,{ok:false,error:'Finish your match before changing parties.'});
@@ -7355,25 +7654,26 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // `account` is whoami's answer, which is auth's day-cached Steam profile - so every hub that
     // opens its stream refreshes its owner's name for everybody else's leaderboard and friends
     // list, whether or not that player ever queues.
-    rememberProfile(account.steam_id, account.persona, account.avatar);
+    rememberProfile(account.player_id, account.persona, account.avatar);
     // ...and into the admin directory, which is what makes "every player that has ever logged
     // on" a row rather than only every player who has ever played.
-    noteSeen(account.steam_id, account.persona);
-    clients.set(clientId, { res, steamId: account.steam_id, persona: account.persona || '',
+    noteSeen(account.player_id, account.persona);
+    clients.set(clientId, { res, steamId: account.player_id, gameSteamId: account.game_steam_id, token: bearer(req),
+                            accountId:account.account_id, authMethod:account.auth_method, sourceSteamId:account.steam_id, persona: account.persona || '',
                             // The Steam avatar URL, alongside the persona and for the same reason:
                             // it is the only place the rest of the process can learn what someone
                             // looks like. `whoami` already fetched both from the Steam Web API.
                             avatar: account.avatar || '', since: Date.now() });
-    if (!bySteam.has(account.steam_id)) bySteam.set(account.steam_id, new Set());
-    bySteam.get(account.steam_id).add(clientId);
+    if (!bySteam.has(account.player_id)) bySteam.set(account.player_id, new Set());
+    bySteam.get(account.player_id).add(clientId);
     // They are back inside the grace window, so the pending "remove from party" never fires: a
     // brief drop is a no-op, and the party replay below hands them the roster again.
-    if (partyGrace.has(account.steam_id)) {
-      clearTimeout(partyGrace.get(account.steam_id));
-      partyGrace.delete(account.steam_id);
+    if (partyGrace.has(account.player_id)) {
+      clearTimeout(partyGrace.get(account.player_id));
+      partyGrace.delete(account.player_id);
     }
 
-    send(clientId, { type: 'hello', steam_id: account.steam_id, persona: account.persona || '',
+    send(clientId, { type: 'hello', player_id: account.player_id, game_steam_id: account.game_steam_id, persona: account.persona || '',
                      match_size: MATCH_SIZE, accept_seconds: ACCEPT_SECONDS,
                      connect_seconds: CONNECT_SECONDS, lobby_seconds: LOBBY_SECONDS,
                      ban_seconds: BAN_SECONDS,
@@ -7415,8 +7715,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
                                     early_seconds: TK_EARLY_SECONDS },
                      } });
     send(clientId, stats());
-    if (isQueued(account.steam_id)) {
-      send(clientId, { type: 'queued', position: queuePosition(account.steam_id),
+    if (isQueued(account.player_id)) {
+      send(clientId, { type: 'queued', position: queuePosition(account.player_id),
                        size: queuedPlayers() });
     }
     // Their rank, as soon as the stream is up - which is also what warms `ratings` for the
@@ -7430,14 +7730,14 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     //
     // The event is still called `rating` on the wire. It is the installed hub's handler name and
     // renaming it server-side would leave every copy in the field without a rank until it updated.
-    loadRating(account.steam_id).then((record) => {
+    loadRating(account.player_id).then((record) => {
       // The capstone is a seat on the leaderboard rather than a band of the ladder, so the badge
       // needs the cut as well as the player's RR. Refreshed here for the same reason the rank is
       // sent here: this is the one place every signed-in hub passes through.
       refreshReaperCut();
       send(clientId, { type: 'rating',
                        ...progressLib.publicProgress(record,
-                                                     { top: isReaper(account.steam_id,
+                                                     { top: isReaper(account.player_id,
                                                                      record.progress) }),
                        matches: record.matches, wins: record.wins, losses: record.losses });
     }).catch(() => { /* an unreadable rank is not a reason to lose the stream */ });
@@ -7451,15 +7751,15 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // elsewhere" - re-running it locally would show this player a coin flip and a veto that
     // nobody else is having. `live` is replayed for the same reason the others are: the hub
     // may have been closed, updated or offline, and the match is still running without it.
-    const rejoin = matches.get(inMatch.get(account.steam_id));
+    const rejoin = matches.get(inMatch.get(account.player_id));
     if (rejoin && (rejoin.state === 'found' || rejoin.state === 'ready')) {
-      const acceptedIds = rejoin.players.filter((p) => p.accepted).map((p) => p.steam_id);
+      const acceptedIds = rejoin.players.filter((p) => p.accepted).map((p) => p.player_id);
       // accepted_ids lets the reconnecting client restore ITS OWN accepted state from server
       // truth rather than resetting it; accept_seconds is what is really left on the clock.
       send(clientId, {
         type: 'match_found', match_id: rejoin.id, resumed: true,
         accept_seconds: Math.max(0, Math.round((rejoin.deadline - Date.now()) / 1000)),
-        players: rejoin.players.map((p) => ({ steam_id: p.steam_id, persona: p.persona, avatar: p.avatar || '' })),
+        players: rejoin.players.map((p) => ({ player_id: p.player_id, game_steam_id: identity.gameFor(rejoin, p.player_id), persona: p.persona, avatar: p.avatar || '' })),
         accepted: acceptedIds.length,
         total: rejoin.players.length,
         accepted_ids: acceptedIds,
@@ -7468,31 +7768,31 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         send(clientId, {
           type: 'match_ready', match_id: rejoin.id, resumed: true,
           lobby_seconds: Math.max(0, Math.round((rejoin.deadline - Date.now()) / 1000)),
-          players: rejoin.players.map((q) => ({ steam_id: q.steam_id, persona: q.persona })),
+          players: rejoin.players.map((q) => ({ player_id: q.player_id, game_steam_id: identity.gameFor(rejoin, q.player_id), persona: q.persona })),
           // The lobby lives here now, so a reconnecting client drops back into the real stage -
           // the toss, the choice, whatever has been banned - instead of waiting blind.
           ...(rejoin.lobby ? lobbyPayload(rejoin) : {}),
         });
       }
     } else if (rejoin && rejoin.state === 'connecting') {
-      send(clientId, { ...connectPayload(rejoin, account.steam_id), resumed: true });
+      send(clientId, { ...connectPayload(rejoin, account.player_id), resumed: true });
     } else if (rejoin && rejoin.state === 'live') {
-      send(clientId, { ...livePayload(rejoin, account.steam_id), resumed: true });
+      send(clientId, { ...livePayload(rejoin, account.player_id), resumed: true });
     }
     // Survives a brief reconnect: a member whose stream dropped and came back inside the grace
     // is still in the party (see drop()), so hand them the current roster. This is the whole
     // "party survives a reconnect" contract on the server side.
-    if (partyOf.has(account.steam_id)) send(clientId, partyPayload(partyOf.get(account.steam_id)));
+    if (partyOf.has(account.player_id)) send(clientId, partyPayload(partyOf.get(account.player_id)));
     // ...and the invite inbox, for the same reason: it lives only in this process's memory and on
     // the invitee's screen, so a hub that has just (re)connected has to be handed it or an invite
     // sent while it was away is invisible until somebody sends another one.
-    if (partyInvites.has(account.steam_id)) send(clientId, invitePayload(account.steam_id));
+    if (partyInvites.has(account.player_id)) send(clientId, invitePayload(account.player_id));
     // Whether or not a ban is running, a player with a record is told what the NEXT no-show
     // would cost. The connect screen warns with that number, so a repeat offender is not
     // promised five minutes and then handed thirty.
-    loadPenalty(account.steam_id).then(() => {
-      const record = penalties.get(account.steam_id);
-      const live = livePenalty(account.steam_id);
+    loadPenalty(account.player_id).then(() => {
+      const record = penalties.get(account.player_id);
+      const live = livePenalty(account.player_id);
       if (!record && !live) return;
       send(clientId, {
         type: 'penalty',
@@ -7500,14 +7800,24 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         reason: (live && live.reason) || (record && record.reason) || '',
         seconds: live ? Math.max(0, Math.round((live.until - Date.now()) / 1000)) : 0,
         count: effectiveCount(record),
-        next_seconds: nextNoShowSeconds(account.steam_id),
+        next_seconds: nextNoShowSeconds(account.player_id),
       });
     }).catch(() => { /* a store hiccup must not break the stream */ });
     broadcast(stats());
 
-    const beat = setInterval(() => {
+    let checking = false;
+    const beat = setInterval(async () => {
       const client = clients.get(clientId);
       if (!client) return clearInterval(beat);
+      if (checking) return;
+      checking = true;
+      try {
+        const current = await whoami(client.token);
+        if (!current || identity.playerOf(current) !== client.steamId || identity.gameOf(current) !== client.gameSteamId) {
+          client.res.end(); clearInterval(beat); drop(clientId); return;
+        }
+      } catch { client.res.end(); clearInterval(beat); drop(clientId); return; }
+      finally { checking = false; }
       try { client.res.write(': ping\n\n'); } catch { clearInterval(beat); drop(clientId); }
     }, HEARTBEAT_MS);
 
@@ -7525,20 +7835,21 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    * form a ten-player match that cannot be accepted, and burn somebody else's accept window
    * finding that out.
    */
-  async function handleQueueJoin(res, account) {
+  async function handleQueueJoin(res, account, callerToken) {
     const intent = {};
-    queueIntents.set(account.steam_id,intent);
+    queueIntents.set(account.player_id,intent);
     try {
-    if (inMatch.has(account.steam_id)) {
+    if (inMatch.has(account.player_id)) {
       return sendJson(res, 409, { ok: false, error: 'You are already in a match.' });
     }
-    const code = partyOf.get(account.steam_id) || '';
+    const code = partyOf.get(account.player_id) || '';
     const party = code ? parties.get(code) : null;
-    if (party && party.leaderId !== account.steam_id) {
+    if (party && party.leaderId !== account.player_id) {
       return sendJson(res, 403, { ok: false, error: 'Only the party leader starts the search.',
                                   not_leader: true });
     }
-    const members = party ? party.members.slice() : [account.steam_id];
+    const members = party ? party.members.slice() : [account.player_id];
+    if (bindingConflict(members)) return sendJson(res,409,{ok:false,error:'Each player must use a different verified game account.'});
 
     const busy = members.filter((id) => inMatch.has(id));
     if (busy.length) {
@@ -7548,7 +7859,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // The CALLER is obviously present - they are making this request - so only the others are
     // checked for a stream. A member who has closed the hub cannot press Accept, and a party
     // searching with a hole in it is searching for a match it will cancel twenty seconds later.
-    const away = members.filter((id) => id !== account.steam_id && !bySteam.has(id));
+    const away = members.filter((id) => id !== account.player_id && !bySteam.has(id));
     if (away.length) {
       return sendJson(res, 409, { ok: false, error: 'Somebody in your party is not connected.',
                                   who: away });
@@ -7563,7 +7874,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // refusal take six seconds to appear.
     const stale = members.map((id) => [id, versionProblem(id)]).filter(([, problem]) => problem);
     if (stale.length) {
-      const mine = stale.find(([id]) => id === account.steam_id);
+      const mine = stale.find(([id]) => id === account.player_id);
       const [who, problem] = mine || stale[0];
       return sendJson(res, 426, {
         ok: false,
@@ -7582,7 +7893,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     catch { return sendJson(res, 503, { ok: false, error: 'Could not verify queue eligibility. Please try again.' }); }
     const blocked = bans.filter(([, p]) => Boolean(p));
     if (blocked.length) {
-      const mine = blocked.find(([id]) => id === account.steam_id);
+      const mine = blocked.find(([id]) => id === account.player_id);
       const [who, penalty] = mine || blocked[0];
       const seconds = Math.max(1, Math.round((penalty.until - Date.now()) / 1000));
       return sendJson(res, 403, {
@@ -7602,15 +7913,35 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     catch {
       return sendJson(res, 503, { ok: false, error: 'Could not load your rank. Please try again.' });
     }
+    // An open stream is presence, not proof that its credential is still valid.
+    // Recheck every participant after storage reads, then do all state checks below
+    // without another await before enqueueing the party.
+    try {
+      const active = await Promise.all(members.map(async id => {
+        if (id === account.player_id) {
+          const fresh = await whoami(callerToken);
+          return fresh && identity.playerOf(fresh) === id && identity.gameOf(fresh) === gameOfPlayer(id);
+        }
+        for (const clientId of [...(bySteam.get(id) || [])]) {
+          const client = clients.get(clientId);
+          const fresh = client?.token && await whoami(client.token);
+          if (fresh && identity.playerOf(fresh) === id && identity.gameOf(fresh) === gameOfPlayer(id)) return true;
+          if (client) { try {client.res.end();} catch {} drop(clientId); }
+        }
+        return false;
+      }));
+      if (active.some(ok=>!ok)) return sendJson(res,409,{ok:false,error:'Somebody in your party needs to sign in again.'});
+    } catch { return sendJson(res,503,{ok:false,error:'Could not verify your party. Please try again.'}); }
     // Every await above admits party, cancellation, moderation and match events.
     // Revalidate synchronously before mutating the queue.
-    const currentCode = partyOf.get(account.steam_id) || '';
+    const currentCode = partyOf.get(account.player_id) || '';
     const currentParty = currentCode ? parties.get(currentCode) : null;
-    const currentMembers = currentParty ? currentParty.members : [account.steam_id];
-    if (queueIntents.get(account.steam_id) !== intent || currentCode !== code
-        || (currentParty && currentParty.leaderId !== account.steam_id)
+    const currentMembers = currentParty ? currentParty.members : [account.player_id];
+    if (bindingConflict(members)) return sendJson(res,409,{ok:false,error:'A game account is already playing or searching.'});
+    if (queueIntents.get(account.player_id) !== intent || currentCode !== code
+        || (currentParty && currentParty.leaderId !== account.player_id)
         || currentMembers.length !== members.length || members.some(id=>!currentMembers.includes(id))
-        || members.some(id=>inMatch.has(id) || (id !== account.steam_id && !bySteam.has(id)))) {
+        || members.some(id=>inMatch.has(id) || (id !== account.player_id && !bySteam.has(id)))) {
       return sendJson(res,409,{ok:false,error:'Your party or queue state changed. Please try again.'});
     }
     if (members.some(id=>versionProblem(id) || livePenalty(id) || banOf(id))) {
@@ -7629,7 +7960,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         error:'Every member of a mixed-region party must allow cross-region matchmaking in Settings.'});
     }
 
-    const queuedUnit = queueOf.get(account.steam_id);
+    const queuedUnit = queueOf.get(account.player_id);
     if (queuedUnit && (queuedUnit.code !== code || queuedUnit.members.length !== members.length
         || members.some(id=>queueOf.get(id)!==queuedUnit))) {
       cancelQueuedFor(members);
@@ -7644,10 +7975,10 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     }
     broadcast(stats());
     const match = tryFormMatch();
-    sendJson(res, 200, { ok: true, position: queuePosition(account.steam_id),
+    sendJson(res, 200, { ok: true, position: queuePosition(account.player_id),
                          size, matched: Boolean(match), party: members.length > 1 ? members.length : 0 });
     } finally {
-      if (queueIntents.get(account.steam_id) === intent) queueIntents.delete(account.steam_id);
+      if (queueIntents.get(account.player_id) === intent) queueIntents.delete(account.player_id);
     }
   }
 
@@ -7661,7 +7992,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
 
   // Session markers identify one app generation. They are random, short-lived, and never IPs.
   async function handleNetwork(req,res,account,pathname,method) {
-    const id = account.steam_id;
+    const id = account.player_id;
     const now = Date.now();
     if (pathname === '/api/network/relay' && method === 'GET') {
       try { return sendJson(res,200,await credentialIssuer.issue(id)); }
@@ -7687,13 +8018,13 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       const rows = rotated.slice(offset,offset + networkLib.MAX_PEERS);
       return sendJson(res,200,{ok:true,queued:true,revision:mine.revision,
         next_offset:offset + rows.length < rotated.length ? offset + rows.length : null,
-        peers:rows.map(p => ({steam_id:p.id,location:p.location,revision:p.revision}))});
+        peers:rows.map(p => ({player_id:p.id,location:p.location,revision:p.revision}))});
     }
     if (method !== 'POST' || pathname === '/api/network/peers' || pathname === '/api/network/relay') {
       return sendJson(res,405,{ok:false,error:'Method not allowed.'});
     }
     let body;
-    try { body = JSON.parse((await readBody(req,131072)).toString('utf8')); }
+    try { body = identity.parse((await readBody(req,131072)).toString('utf8')); }
     catch { return sendJson(res,400,{ok:false,error:'Invalid connection data.'}); }
     if (pathname === '/api/network/signal') {
       try { signalLimiter.take(id); }
@@ -7731,7 +8062,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
             broadcast(stats());
           }
         }
-        return sendJson(res,200,{ok:true,ready:true,steam_id:id,transport:networkLib.TRANSPORT,
+        return sendJson(res,200,{ok:true,ready:true,player_id:id,transport:networkLib.TRANSPORT,
           region:profile.region,revision:profile.revision,
           target_ping_ms:networkLib.TARGET_PING,max_ping_ms:networkLib.MAX_PING});
       }
@@ -7769,8 +8100,8 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
         return sendJson(res,404,{ok:false,error:'Not found.'});
       }
       if (!isQueued(id) || !bySteam.has(id) || !Array.isArray(body?.peers)
-          || body.peers.some((r) => !isQueued(r?.steam_id) || !bySteam.has(r?.steam_id)
-            || inMatch.has(r?.steam_id))) {
+          || body.peers.some((r) => !isQueued(r?.player_id || r?.steam_id) || !bySteam.has(r?.player_id || r?.steam_id)
+            || inMatch.has(r?.player_id || r?.steam_id))) {
         return sendJson(res,409,{ok:false,error:'Relay peer is no longer available.'});
       }
       networkRegistry.report(id,body,now);
@@ -7785,10 +8116,10 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    * The whole unit comes out (removeFromQueue) and everybody in it is told.
    */
   function handleQueueLeave(res, account) {
-    const pendingParty = parties.get(partyOf.get(account.steam_id));
-    for (const id of pendingParty ? pendingParty.members : [account.steam_id]) queueIntents.delete(id);
-    const unit = removeFromQueue(account.steam_id);
-    for (const id of (unit ? unit.members : [account.steam_id])) {
+    const pendingParty = parties.get(partyOf.get(account.player_id));
+    for (const id of pendingParty ? pendingParty.members : [account.player_id]) queueIntents.delete(id);
+    const unit = removeFromQueue(account.player_id);
+    for (const id of (unit ? unit.members : [account.player_id])) {
       sendTo(id, { type: 'unqueued' });
     }
     broadcast(stats());
@@ -7811,9 +8142,9 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     try {
       // Python JSON escapes non-ASCII; allow the full 1,000-character explanation.
       const raw = await readBody(req, 16384);
-      if (raw && raw.length) body = JSON.parse(raw.toString('utf8'));
+      if (raw && raw.length) body = identity.parse(raw.toString('utf8'));
     } catch { body = {}; }
-    const result = await reportPlayer(account.steam_id, body);
+    const result = await reportPlayer(account.player_id, body);
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
@@ -7829,36 +8160,51 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       // A bigger cap than the 4096 every other body gets: this one is prose a person typed, and
       // BUG_TEXT_MAX is 2000 characters that may each be four bytes of UTF-8.
       const raw = await readBody(req, 16384);
-      if (raw && raw.length) body = JSON.parse(raw.toString('utf8'));
+      if (raw && raw.length) body = identity.parse(raw.toString('utf8'));
     } catch { body = {}; }
-    const result = await submitBugReport(account.steam_id, body);
+    const result = await submitBugReport(account.player_id, body);
     sendJson(res, result.ok ? 200 : (result.error === 'too_fast' ? 429 : 400), result);
   }
 
-  function handleMatchLeave(res, account) {
-    const matchId = inMatch.get(account.steam_id);
+  async function handleMatchLeave(res, account) {
+    const matchId = inMatch.get(account.player_id);
+    if(matches.get(matchId)?.state==='live')return matchOperation(matchId,async()=>{
+      const match=matches.get(matchId);
+      if(!match||match.state!=='live'||match.final_snapshot)return sendJson(res,409,{ok:false,error:'Match is finishing.'});
+      const before=match.reconnect;
+      const since=Date.now();
+      match.reconnect={...(before||{}),[account.player_id]:before?.[account.player_id]||{since,deadline:since+300000}};
+      try { await persistLive(match); }
+      catch { match.reconnect=before; return sendJson(res,503,{ok:false,error:'Reconnect window could not be saved.'}); }
+      if(matches.get(matchId)!==match || match.state!=='live' || match.final_snapshot)
+        return sendJson(res,409,{ok:false,error:'Match is finishing.'});
+      revokeJoinPermit(account.player_id);
+      const waiting=Object.entries(match.reconnect).map(([player_id,w])=>({player_id,deadline:w.deadline}));
+      for(const p of match.players)sendTo(p.player_id,{type:'match_reconnect',match_id:matchId,waiting});
+      return sendJson(res,200,{ok:true,was_in_match:true,reconnect:true,deadline:match.reconnect[account.player_id].deadline});
+    });
     const match = matchId && matches.get(matchId);
     if (!match) return sendJson(res, 200, { ok: true, was_in_match: false });
     if (match.final_snapshot) return sendJson(res, 409, { ok: false, error: 'Final match data is being saved.' });
 
     if (match.state === 'found') {
-      closeMatch(match, 'declined', [account.steam_id]);
+      closeMatch(match, 'declined', [account.player_id]);
       return sendJson(res, 200, { ok: true, was_in_match: true, declined: true });
     }
 
     if (match.state === 'connecting') {
-      const me = match.players.find((p) => p.steam_id === account.steam_id);
+      const me = match.players.find((p) => p.player_id === account.player_id);
       if (me && !me.connected) {
-        const punished = { [account.steam_id]: applyNoShow(account.steam_id) };
-        closeMatch(match, 'no_show', [account.steam_id], punished);
+        const punished = { [account.player_id]: applyNoShow(account.player_id) };
+        closeMatch(match, 'no_show', [account.player_id], punished);
         return sendJson(res, 200, { ok: true, was_in_match: true, no_show: true,
-                                    penalty: punished[account.steam_id] });
+                                    penalty: punished[account.player_id] });
       }
     }
 
-    if ((match.host || (match.network && match.network.host)) === account.steam_id
+    if ((match.host || (match.network && match.network.host)) === account.player_id
         && ['ready','connecting','live'].includes(match.state)) {
-      closeMatch(match,match.state === 'live' ? 'abandoned' : 'declined',[account.steam_id]);
+      closeMatch(match,match.state === 'live' ? 'abandoned' : 'declined',[account.player_id]);
       return sendJson(res,200,{ok:true,was_in_match:true,declined:true});
     }
 
@@ -7869,15 +8215,16 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     // match these nine go on to play from ever being recorded at all. Instead the leaver is
     // remembered on the match, so they appear on the record whenever it is finally written,
     // marked as having left. That is what the abandon ladder will read.
-    const me = match.players.find((p) => p.steam_id === account.steam_id);
+    revokeJoinPermit(account.player_id);
+    const me = match.players.find((p) => p.player_id === account.player_id);
     if (me) {
       match.left = match.left || [];
       match.left.push({ ...me, at: Date.now(), left_state: match.state });
     }
-    inMatch.delete(account.steam_id);
-    match.players = match.players.filter((p) => p.steam_id !== account.steam_id);
+    inMatch.delete(account.player_id);
+    match.players = match.players.filter((p) => p.player_id !== account.player_id);
     for (const p of match.players) {
-      sendTo(p.steam_id, { type: 'match_left', match_id: match.id, steam_id: account.steam_id,
+      sendTo(p.player_id, { type: 'match_left', match_id: match.id, player_id: account.player_id,
                            remaining: match.players.length });
     }
     if (!match.players.length) {
@@ -7887,13 +8234,13 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       forgetMatch(match.id);
       archiveMatch(match, { outcome: 'cancelled', reason: 'abandoned' });
     }
-    sendTo(account.steam_id, { type: 'match_over', match_id: match.id });
+    sendTo(account.player_id, { type: 'match_over', match_id: match.id });
     broadcast(stats());
     return sendJson(res, 200, { ok: true, was_in_match: true, declined: false });
   }
 
   function handleAccept(res, account) {
-    const result = acceptMatch(account.steam_id);
+    const result = acceptMatch(account.player_id);
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
@@ -7901,14 +8248,14 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     let body = {};
     try {
       const raw = await readBody(req, 4096);
-      if (raw && raw.length) body = JSON.parse(raw.toString('utf8'));
+      if (raw && raw.length) body = identity.parse(raw.toString('utf8'));
     } catch { body = {}; }
-    const result = beginConnect(account.steam_id, body);
+    const result = beginConnect(account.player_id, body);
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
   function handleConnected(res, account) {
-    const result = reportConnected(account.steam_id);
+    const result = reportConnected(account.player_id);
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
@@ -7916,7 +8263,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     try {
       const raw = await readBody(req, 4096);
       if (raw && raw.length) {
-        const parsed = JSON.parse(raw.toString('utf8'));
+        const parsed = identity.parse(raw.toString('utf8'));
         return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
       }
     } catch { /* a bad body is an empty one */ }
@@ -7924,27 +8271,27 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
   }
 
   async function handleCoin(req, res, account) {
-    const result = flipCoin(account.steam_id, await readJsonBody(req));
+    const result = flipCoin(account.player_id, await readJsonBody(req));
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
   async function handleChoose(req, res, account) {
-    const result = chooseAdvantage(account.steam_id, await readJsonBody(req));
+    const result = chooseAdvantage(account.player_id, await readJsonBody(req));
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
   async function handleSide(req, res, account) {
-    const result = pickSide(account.steam_id, await readJsonBody(req));
+    const result = pickSide(account.player_id, await readJsonBody(req));
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
   async function handleBan(req, res, account) {
-    const result = banMap(account.steam_id, await readJsonBody(req));
+    const result = banMap(account.player_id, await readJsonBody(req));
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
   async function handleChat(req, res, account) {
-    const result = sendChat(account.steam_id, await readJsonBody(req));
+    const result = sendChat(account.player_id, await readJsonBody(req));
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
@@ -7966,7 +8313,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     const personas = {};
     const record = archived.get(id) || null;
     for (const p of (live ? live.players : (record && record.players) || [])) {
-      personas[p.steam_id] = p.persona || '';
+      personas[p.player_id] = p.persona || '';
     }
     return { ok: true, match_id: id, kept_seconds: CHAT_TTL_SECONDS, lines, personas };
   }
@@ -7992,11 +8339,11 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     }
     const wanted = (query && query.get('id')) || '';
     if (wanted) {
-      const full = await readMatch(String(wanted).slice(0, 64), account.steam_id);
+      const full = await readMatch(String(wanted).slice(0, 64), account.player_id);
       if (!full) return sendJson(res, 404, { ok: false, error: 'No such match.' });
       return sendJson(res, 200, { ok: true, match: full });
     }
-    const matches_ = await readHistory(account.steam_id);
+    const matches_ = await readHistory(account.player_id);
     sendJson(res, 200, { ok: true, matches: matches_, keep: HISTORY_KEEP });
   }
 
@@ -8006,6 +8353,11 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
    * paying for a second parse, but the route works without it (test_wire.py calls it with
    * four arguments) by parsing req.url itself. */
   async function route(req, res, method, pathname, url) {
+    if(activityGate && owns(pathname) && pathname !== '/api/live/stats')
+      return activityGate.read(()=>routeAdmitted(req,res,method,pathname,url));
+    return routeAdmitted(req,res,method,pathname,url);
+  }
+  async function routeAdmitted(req, res, method, pathname, url) {
     if (pathname === '/api/live/stats' && (method === 'GET' || method === 'HEAD')) {
       handleStats(res);
       return true;
@@ -8025,41 +8377,62 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       return true;
     }
 
-    const account = await whoami(bearer(req));
-    if (!account) {
+    const verified = await whoami(bearer(req));
+    const account = verified && {...verified, player_id: identity.playerOf(verified), game_steam_id: identity.gameOf(verified)};
+    if (!account || !identity.validPlayer(account.player_id) || !identity.validSteam(account.game_steam_id)) {
       sendJson(res, 401, { ok: false, error: 'Not signed in.' });
       return true;
     }
-    req.analyticsActor = account.steam_id;
-    req.analyticsMatch = inMatch.get(account.steam_id) || null;
+    const prior = verifiedPlayers.get(account.player_id);
+    const frozen = identity.gameFor(matches.get(inMatch.get(account.player_id)), account.player_id);
+    if ((frozen && frozen !== account.game_steam_id) ||
+        (queueOf.has(account.player_id) && prior && prior.game_steam_id !== account.game_steam_id)) {
+      sendJson(res,409,{ok:false,error:'Finish your match or leave the queue before changing game accounts.'}); return true;
+    }
+    verifiedPlayers.set(account.player_id, account);
+    if(pathname.startsWith('/api/admin/')&&(account.auth_method!=='steam' || !isAdmin(account.steam_id))) {
+      sendJson(res,403,{ok:false,error:'Steam administrator sign-in is required.'});
+      return true;
+    }
+    req.analyticsActor = account.player_id;
+    req.analyticsMatch = inMatch.get(account.player_id) || null;
     // The same choke point records what the caller is running. Every authenticated route, the
     // stream included - which is what makes a party member's version knowable without asking
     // them for it. It only RECORDS; the one place that refuses anything is handleQueueJoin.
-    noteVersions(req, account.steam_id);
+    noteVersions(req, account.player_id);
     // ONE CHOKE POINT. Every competitive route is behind this check, including the stream, so a
     // banned account cannot queue, accept, report, add friends or even watch - and there is no
     // second place to forget. 403 with the reason, because a player who does not know they are
     // banned files a bug against the hub instead.
-    await loadBan(account.steam_id);
-    const ban = banOf(account.steam_id);
+    await Promise.all([loadBan(account.player_id), loadBan(account.game_steam_id)]);
+    const ban = banOf(account.player_id) || banOf(account.game_steam_id);
     if (ban) {
       sendJson(res, 403, { ok: false, error: 'banned', reason: ban.reason || '',
                            until: ban.until || 0 });
       return true;
     }
+    // Opening the stream writes the durable profile directory as well as
+    // connection state, so it needs the same ownership claim as player actions.
+    if(admitGameplay && (pathname==='/api/live' || method==='POST') && !pathname.startsWith('/api/network/') && !pathname.startsWith('/api/admin/')) {
+      try {
+        if(!await admitGameplay(bearer(req),account)) {
+          sendJson(res,401,{ok:false,error:'Your account changed. Sign in again.'});return true;
+        }
+      } catch {sendJson(res,503,{ok:false,error:'Account verification is temporarily unavailable.'});return true;}
+    }
     if (pathname === '/api/live' && method === 'GET') { await handleStream(req, res, account); return true; }
     if (pathname.startsWith('/api/network/')) { await handleNetwork(req,res,account,pathname,method); return true; }
-    if (pathname === '/api/queue/join' && method === 'POST') { await handleQueueJoin(res, account); return true; }
+    if (pathname === '/api/queue/join' && method === 'POST') { await handleQueueJoin(res, account, bearer(req)); return true; }
     if (pathname === '/api/queue/leave' && method === 'POST') { handleQueueLeave(res, account); return true; }
     if (pathname === '/api/match/combat-warning' && method === 'POST') {
-      try { const body = JSON.parse((await readBody(req, 1024)).toString('utf8'));
-        const result = await acknowledgeCombatWarning(account.steam_id, body);
+      try { const body = identity.parse((await readBody(req, 1024)).toString('utf8'));
+        const result = await acknowledgeCombatWarning(account.player_id, body);
         sendJson(res, result.ok ? 200 : 409, result);
       } catch { sendJson(res, 503, { ok: false, error: 'Warning receipt unavailable.' }); }
       return true;
     }
     if (pathname === '/api/match/accept' && method === 'POST') { handleAccept(res, account); return true; }
-    if (pathname === '/api/match/leave' && method === 'POST') { handleMatchLeave(res, account); return true; }
+    if (pathname === '/api/match/leave' && method === 'POST') { await handleMatchLeave(res, account); return true; }
     if (pathname === '/api/report' && method === 'POST') { await handleReport(req, res, account); return true; }
     if (pathname === '/api/bug' && method === 'POST') { await handleBugReport(req, res, account); return true; }
     if (pathname === '/api/admin/chat' && (method === 'GET' || method === 'HEAD')) {
@@ -8079,7 +8452,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       let body = {};
       try {
         const raw = await readBody(req, 4096);
-        if (raw && raw.length) body = JSON.parse(raw.toString('utf8'));
+        if (raw && raw.length) body = identity.parse(raw.toString('utf8'));
       } catch { body = {}; }
       const fn = pathname.endsWith('/ban') ? banAccount : unbanAccount;
       const result = await fn(account.steam_id, body);
@@ -8088,16 +8461,16 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     }
     if (pathname === '/api/admin/player' && (method === 'GET' || method === 'HEAD')) {
       if (!isAdmin(account.steam_id)) { sendJson(res, 403, { ok: false, error: 'not an admin' }); return true; }
-      const who = (url && url.searchParams.get('steam_id')) || '';
+      const who = (url && url.searchParams.get('player_id')) || '';
       sendJson(res, 200, await reportsFor(who));
       return true;
     }
     if (pathname === '/api/friends/list' && (method === 'GET' || method === 'HEAD')) {
-      sendJson(res, 200, await friendList(account.steam_id));
+      sendJson(res, 200, await friendList(account.player_id));
       return true;
     }
     if (pathname === '/api/friends/code' && method === 'POST') {
-      sendJson(res, 200, { ok: true, code: await refreshFriendCode(account.steam_id) });
+      sendJson(res, 200, { ok: true, code: await refreshFriendCode(account.player_id) });
       return true;
     }
     if (pathname.startsWith('/api/friends/') && method === 'POST') {
@@ -8108,14 +8481,14 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       let body = {};
       try {
         const raw = await readBody(req, 4096);
-        if (raw && raw.length) body = JSON.parse(raw.toString('utf8'));
+        if (raw && raw.length) body = identity.parse(raw.toString('utf8'));
       } catch { body = {}; }
-      const result = await fn(account.steam_id, body);
+      const result = await fn(account.player_id, body);
       sendJson(res, result.ok ? 200 : 409, result);
       return true;
     }
     if (pathname === '/api/leaderboard' && (method === 'GET' || method === 'HEAD')) {
-      const result = await leaderboard(account.steam_id, url && url.searchParams.get('limit'));
+      const result = await leaderboard(account.player_id, url && url.searchParams.get('limit'));
       sendJson(res, 200, result);
       return true;
     }
@@ -8134,12 +8507,12 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       let body = {};
       try {
         const raw = await readBody(req, 1024);
-        if (raw && raw.length) body = JSON.parse(raw.toString('utf8'));
+        if (raw && raw.length) body = identity.parse(raw.toString('utf8'));
       } catch { body = {}; }
       let result;
-      if (pathname === '/api/party/invite') result = await inviteToParty(account.steam_id, body);
-      else if (pathname === '/api/party/invite/accept') result = acceptPartyInvite(account.steam_id, body);
-      else if (pathname === '/api/party/invite/decline') result = declinePartyInvite(account.steam_id, body);
+      if (pathname === '/api/party/invite') result = await inviteToParty(account.player_id, body);
+      else if (pathname === '/api/party/invite/accept') result = acceptPartyInvite(account.player_id, body);
+      else if (pathname === '/api/party/invite/decline') result = declinePartyInvite(account.player_id, body);
       else return false;
       // 409 for every refusal, as the friends verbs do: these are all "the world says no"
       // (not in a party, not a friend, party full, invite gone), never a malformed request.
@@ -8147,7 +8520,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
       return true;
     }
     if (pathname === '/api/match/completion' && method === 'GET') {
-      const result = await completion(account.steam_id, url?.searchParams.get('id'));
+      const result = await completion(account.player_id, url?.searchParams.get('id'));
       sendJson(res, result.ok ? 200 : 409, result); return true;
     }
     if (pathname === '/api/match/history' && (method === 'GET' || method === 'HEAD')) {
@@ -8189,25 +8562,120 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     for (const clientId of [...clients.keys()]) drop(clientId);
   }
 
+  async function prepareOwnership(ids) {
+    await ensureRecovery();
+    if(ids.some(id=>inMatch.has(id))) {
+      const {AccountError}=require('./account-security.cjs');
+      throw new AccountError(409,'active_match','Finish your match before changing account links.');
+    }
+  }
+  function ownershipChanged({ids,accountId,steamId}) {
+    cancelQueuedFor(ids);
+    for(const id of ids) {queueIntents.delete(id);verifiedPlayers.delete(id);}
+    for(const [key,client] of [...clients]) {
+      if(ids.includes(client.steamId) || client.accountId===accountId ||
+        (client.authMethod==='steam'&&client.sourceSteamId===steamId)) {
+        try {client.res.end();}catch {}
+        drop(key);
+      }
+    }
+  }
+  function nativePlayer(game, matchId) {
+    if (!identity.validSteam(game)) return '';
+    const candidates = matchId ? [matches.get(matchId)].filter(Boolean) : [...matches.values()];
+    const found = candidates.flatMap(m => {
+      const player = identity.playerFor(m,game);
+      return player && inMatch.get(player) === m.id && m.players.some(p=>p.player_id===player) ? [player] : [];
+    });
+    return found.length === 1 ? found[0] : '';
+  }
+  const nativeHost = fn => (game, ...args) => {
+    const player = nativePlayer(game);
+    if (!player) return {ok:false,error:'unverified game identity'};
+    return fn(player,...args);
+  };
+  const nativePermit = fn => (game, ...args) => {
+    const player=nativePlayer(game); return player ? fn(player,...args) : false;
+  };
+  function nativeTeamRuling(game, subject, ask) {
+    if (!identity.validSteam(subject)) return {ok:false,error:'invalid game identity'};
+    const host=nativePlayer(game), match=matches.get(inMatch.get(host));
+    if (!match || match.host!==host || !['connecting','live'].includes(match.state)) return {ok:false,error:'no match'};
+    const player=identity.playerFor(match,subject);
+    if (!player) return ['member','stranger'].includes(ask)
+      ? {ok:true,match_id:match.id,subject,ask,member:false,yes:ask==='stranger'}
+      : {ok:false,error:'not on the roster'};
+    return {...teamRuling(host,player,ask),subject};
+  }
+  function nativeStartReady(game, id, rows) {
+    const host=nativePlayer(game,id), match=matches.get(id);
+    if (!host || !Array.isArray(rows)) return {ok:false,error:'invalid roster'};
+    if(soloMatch(match)) {
+      rows=require('./private-solo.cjs').humans(rows,privateSoloSteam);
+      if(!rows)return {ok:false,error:'private test requires the assigned human and nine active bots'};
+    }
+    return startReady(host,id,rows.map(row=>({...row,player_id:identity.playerFor(match,row?.steam_id)})));
+  }
+  function nativePresence(game,id,rows) {
+    const host=nativePlayer(game,id), match=matches.get(id);
+    if(!host||!Array.isArray(rows)||rows.length>10)return {ok:false,error:'invalid presence roster'};
+    const present=[];
+    for(const row of rows) {
+      if(!row?.steam_id) { if(soloMatch(match))continue; return {ok:false,error:'invalid presence identity'}; }
+      const player=identity.playerFor(match,row.steam_id);
+      if(!player||![0,1].includes(row.active))return {ok:false,error:'invalid presence identity'};
+      if(row.active===1)present.push(player);
+    }
+    return matchPresence(host,id,present);
+  }
+  function nativeTeam(game, report) {
+    const host=nativePlayer(game), match=matches.get(inMatch.get(host));
+    return gameReportedTeam(host,{...report,subject:identity.playerFor(match,report?.subject)});
+  }
+  function nativeTeamKill(game, report) {
+    const host=nativePlayer(game), match=matches.get(inMatch.get(host));
+    return teamKillReported(host,{...report,killer:identity.playerFor(match,report?.killer),victim:identity.playerFor(match,report?.victim)});
+  }
+  async function nativeFinal(game, fields) {
+    if (!identity.validSteam(game)) return {ok:false,error:'invalid identity'};
+    const id=fields?.match_id;
+    let player=nativePlayer(game,id);
+    if (!player) {
+      const receipt=await readReceipt(id);
+      const full=receipt?.publicMatch;
+      if (full) {identity.freezeMatch(full); player=identity.playerFor(full,game);}
+      if (!player || receipt.host!==player) return {ok:false,error:'no match'};
+    }
+    return finalSnapshot(player,fields);
+  }
+  function combatSummary(match, player, rounds) {
+    return identity.combatSummary(match, combatLib.summaryAcross([...(match.combat_segments||[]),match.combatState], identity.gameFor(match,player), rounds));
+  }
+
+  const publicResult = fn => (...args) => {
+    const result=fn(...args);
+    return result?.then ? result.then(identity.wire) : identity.wire(result);
+  };
   return {
     route,
+    prepareOwnership, ownershipChanged,
     owns,
     shutdown,
     settleMatch,
-    gameReportedIn,
-    teamRuling, startReady, finalSnapshot, completion, combatBatch,
-    gameReportedTeam,
-    teamsAgree,
-    teamKillReported,
-    gameReportedCombat,
+    gameReportedIn: nativeHost(gameReportedIn),
+    teamRuling: nativeTeamRuling, startReady: nativeStartReady, matchPresence: nativePresence, finalSnapshot: nativeFinal, completion, combatBatch: nativeHost(combatBatch),
+    gameReportedTeam: nativeTeam,
+    teamsAgree: publicResult(teamsAgree),
+    teamKillReported: nativeTeamKill,
+    gameReportedCombat: nativeHost(gameReportedCombat),
     acknowledgeCombatWarning,
     reportPlayer,
-    reportsFor,
+    reportsFor: publicResult(reportsFor),
     submitBugReport,
-    bugReports,
-    leaderboard,
-    adminOverview,
-    adminPlayers,
+    bugReports: publicResult(bugReports),
+    leaderboard: publicResult(leaderboard),
+    adminOverview: publicResult(adminOverview),
+    adminPlayers: publicResult(adminPlayers),
     resetRank,
     setElo,
     setRank,
@@ -8216,7 +8684,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     unbanAccount,
     banOf,
     loadBan,
-    friendList,
+    friendList: publicResult(friendList),
     requestFriend,
     acceptFriend,
     declineFriend,
@@ -8227,19 +8695,21 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
     inviteToParty,
     acceptPartyInvite,
     declinePartyInvite,
-    gameReportedScore,
+    gameReportedScore: nativeHost(gameReportedScore),
     authoriseReport,
+    authoriseReportFresh, migrationReport, withReportAuthority,
+    authoriseFinalReport,
     authoriseLegacyReport,
-    gameReportedStats,
-    gameReportedRound,
-    gameReportedKill,
-    grantHostPermit,
-    takeHostPermit,
-    noteHostLaunching,
-    revokeHostPermit,
+    gameReportedStats: nativeHost(gameReportedStats),
+    gameReportedRound: nativeHost(gameReportedRound),
+    gameReportedKill: nativeHost(gameReportedKill),
+    grantHostPermit: nativePermit(grantHostPermit),
+    takeHostPermit: nativePermit(takeHostPermit),
+    noteHostLaunching: nativePermit(noteHostLaunching),
+    revokeHostPermit: nativePermit(revokeHostPermit),
     grantJoinPermits,
-    takeJoinPermit,
-    revokeJoinPermit,
+    takeJoinPermit: nativePermit(takeJoinPermit),
+    revokeJoinPermit: nativePermit(revokeJoinPermit),
     _internals: { networkRegistry, hostPermits,   // exposed for focused policy tests
                   clients, bySteam, queue, queueOf, matches, inMatch, penalties, history, archived,
                   parties, partyOf, partyGrace, partyInvites, ratings,
@@ -8254,17 +8724,17 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
                   gameReportedScore, finishMatch, patchResult, DEFAULT_SCORE_LIMIT,
                   gameReportedTeam, teamsAgree, goLiveIfReady, expireTeamsGate, startReady,
                   teamKillReported, gameReportedCombat, acknowledgeCombatWarning, combatHistories, TK_EARLY_SECONDS, TK_MATCH_LIMIT, tkEnforcing,
-                  reportPlayer, reportsFor, reports, REPORT_REASONS,
-                  submitBugReport, bugReports, loadBugs, saveBugs, bugCooldown,
-                  leaderboard, personaOf, avatarOf, boardKey,
+                  reportPlayer, reportsFor: publicResult(reportsFor), reports, REPORT_REASONS,
+                  submitBugReport, bugReports: publicResult(bugReports), loadBugs, saveBugs, bugCooldown,
+                  leaderboard: publicResult(leaderboard), personaOf, avatarOf, boardKey,
                   // The capstone cut: who is seated, and the read that decides it.
                   isReaper, refreshReaperCut, REAPER_AT, REAPER_SLOTS,
                   reaperState: () => ({ ...reaperCut, ids: [...reaperCut.ids] }),
                   // the remembered names: what makes an offline player a person and not a number
                   rememberProfile, loadProfiles, profiles,
-                  adminOverview, isAdmin, ADMIN_IDS,
+                  adminOverview: publicResult(adminOverview), isAdmin, ADMIN_IDS,
                   resetRank, setElo, setRank, pushRating, ELO_CEILING,
-                  adminPlayers, careers, careerOf, saveCareer, noteSeen, noteRating, noteReport,
+                  adminPlayers: publicResult(adminPlayers), careers, careerOf, saveCareer, noteSeen, noteRating, noteReport,
                   creditMatch, loadRoster, rosterKey, directoryRow, statusOf,
                   PLAYER_COLUMNS, DIRECTORY_PAGE, DIRECTORY_MAX,
                   banAccount, unbanAccount, banOf, loadBan, bans,
@@ -8286,7 +8756,7 @@ function create({ whoami, bearer, sendJson, badRequest, readBody, upstashCmd, pr
                   versions, noteVersions, versionProblem, requireVersions,
                   VERSION_GATE, GATE_MODE, GATED_MODE_ID,
                   // surviving a redeploy
-                  serialiseMatch, reviveMatch, flushMatches, forgetMatch, restoreMatches,
+                  serialiseMatch, reviveMatch, flushMatches, forgetMatch, restoreMatches,checkHostTimeouts,
                   rearm, persisted, ready, ensureRecovery, LIVE_STATES, LIVE_STATE_TTL_SECONDS,
                   RECOVERY_GRACE_SECONDS,
                   liveMatchKey, liveIndexKey,

@@ -77,10 +77,12 @@ class _Telemetry:
             return True
         except Exception: return False
 
-    def identify(self, token):
+    def identify(self, token, player_id=None):
         try:
+            from .player_identity import valid_player
             clean = token if isinstance(token, str) and 0 < len(token) <= 8192 else None
-            owner = hashlib.sha256(clean.encode("utf-8")).hexdigest() if clean else None
+            owner_key = ("player:" + player_id) if valid_player(player_id) else clean
+            owner = hashlib.sha256(owner_key.encode("utf-8")).hexdigest() if clean else None
             with self._lock:
                 if not self._started: return False
                 if clean and not self._ever_identified:
@@ -244,7 +246,7 @@ def start():
         previous_thread(args)
     threading.excepthook = thread_exception
     return True
-def identify(token): return _client.identify(token)
+def identify(token, player_id=None): return _client.identify(token, player_id=player_id)
 def emit(kind, **fields): return _client.emit(kind, **fields)
 def shutdown(): return _client.shutdown()
 atexit.register(shutdown)

@@ -68,9 +68,10 @@ LOBBY_PAK_NAME = "CommunityLobby_P.pak"
 # cached chlobby32 replacement. Parent host flow, map and report-token retargeting are retained.
 # chlobby36 starts native hosting once, waits for its listen range, then commits
 # one authenticated match travel. The stage survives map loads in the GameInstance.
-SEED_SHA256 = "29dd3119ddbe87808dec8af33b2e0b1d4c1e4032184c8333d9c0f94282ec3b82"
-SEED_BASENAME = "CommunityLobby_chlobby36_P.pak"
-JOIN_SEED_BASENAME = "CommunityJoin_chjoin2_P.pak"
+# chlobby37/chjoin3 retain a private participant migration capability and five-minute reconnect timeout.
+SEED_SHA256 = "b8f015804f78609f3cb431d6210dffa3025857963e9b02f1bb9f829e5f452144"
+SEED_BASENAME = "CommunityLobby_chlobby37_P.pak"
+JOIN_SEED_BASENAME = "CommunityJoin_chjoin3_P.pak"
 
 # WHICH COOKED CLASS EACH ROLE PACKS. build_lobby_override.py takes these straight through as
 # --class-pkg / --class, which is how one tool builds both paks from one cooked tree.
@@ -287,6 +288,8 @@ def install(game, variant_path):
     os.makedirs(game_mod.mods_dir(game, create=True), exist_ok=True)
     tmp = dest + ".tmp"
     shutil.copyfile(variant_path, tmp)
+    from . import recording
+    recording.before_write(game, LOBBY_PAK_NAME, tmp)
     os.replace(tmp, dest)
     return dest
 
@@ -296,6 +299,12 @@ def remove(game):
 
     Called on every failure path and on match cancellation, because a stale pak is worse than no pak:
     it sends the host to the last match's map."""
+    from . import recording
+    if recording.enabled() and os.path.isfile(installed_path(game)):
+        try:
+            recording.before_write(game, LOBBY_PAK_NAME, None)
+        except (OSError, RuntimeError):
+            return False
     for path in (installed_path(game), installed_path(game) + ".tmp"):
         try:
             if os.path.isfile(path):

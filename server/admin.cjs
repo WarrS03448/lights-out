@@ -88,10 +88,10 @@ const PRESET_NAME_MAX = 48;
 function defaultPresets() {
   return [
     { id: 'overview', name: 'Overview', sort: 'last_seen', dir: 'desc',
-      columns: ['persona', 'steam_id', 'status', 'rank_name', 'matches', 'win_rate', 'kd',
+      columns: ['persona', 'player_id', 'status', 'rank_name', 'matches', 'win_rate', 'kd',
                 'seconds', 'last_seen', 'actions'] },
     { id: 'moderation', name: 'Moderation', sort: 'reports', dir: 'desc',
-      columns: ['persona', 'steam_id', 'reports', 'reporters', 'reports_made', 'team_kills',
+      columns: ['persona', 'player_id', 'reports', 'reporters', 'reports_made', 'team_kills',
                 'abandons', 'no_shows', 'banned', 'last_seen', 'actions'] },
     { id: 'performance', name: 'Performance', sort: 'progress', dir: 'desc',
       columns: ['persona', 'rank_name', 'rr', 'mmr', 'played', 'kills', 'deaths', 'kd', 'kpr',
@@ -116,7 +116,7 @@ function cleanPrefs(raw) {
     const id = String((row && row.id) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
     const name = String((row && row.name) || '').trim().slice(0, PRESET_NAME_MAX);
     const columns = [...new Set(((row && Array.isArray(row.columns)) ? row.columns : [])
-      .map(String))].filter((k) => known.has(k));
+      .map(k => String(k) === 'steam_id' ? 'player_id' : String(k)))].filter((k) => known.has(k));
     // A preset with no columns would draw a blank page that looks like a broken console.
     if (!id || !name || !columns.length) continue;
     if (presets.some((p) => p.id === id)) continue;
@@ -228,10 +228,10 @@ const PLAYERS_JS = `
       // Straight to their Steam profile: the next thing a moderator does with a name is look at
       // the account behind it. rel=noreferrer, because this page is a signed-in console.
       var a = document.createElement('a');
-      a.href = 'https://steamcommunity.com/profiles/' + row.steam_id;
+      if (/^[0-9]{17}$/.test(row.game_steam_id || '')) a.href = 'https://steamcommunity.com/profiles/' + row.game_steam_id;
       a.target = '_blank';
       a.rel = 'noreferrer noopener';
-      a.textContent = v || row.steam_id;
+      a.textContent = v || row.player_id;
       if (!v) a.className = 'unnamed';
       td.appendChild(a);
       if (row.admin) td.appendChild(tag('admin', 'strong'));
@@ -359,7 +359,7 @@ const PLAYERS_JS = `
   }
 
   function actions(td, row) {
-    var who = row.persona || row.steam_id;
+    var who = row.persona || row.player_id;
     if (row.admin) {
       // An admin cannot be banned (live.cjs refuses it), and a console that offers a button it
       // knows will be refused is a console nobody trusts the rest of.
@@ -373,7 +373,7 @@ const PLAYERS_JS = `
               body: 'They can sign into competitive again straight away.',
               confirm: 'Unban' }).then(function (answer) {
           if (answer === null) return;
-          act({ action: 'unban', steam_id: row.steam_id }, who + ' is unbanned.');
+          act({ action: 'unban', steam_id: row.player_id }, who + ' is unbanned.');
         });
       }));
     } else {
@@ -388,7 +388,7 @@ const PLAYERS_JS = `
                        field: 'reason', value: 'admin console', confirm: 'Ban', danger: true })
             .then(function (why) {
               if (why === null) return;
-              act({ action: 'ban', steam_id: row.steam_id, days: Number(days), reason: why },
+              act({ action: 'ban', steam_id: row.player_id, days: Number(days), reason: why },
                   who + (Number(days) ? ' is banned for ' + days + ' days.'
                                       : ' is banned permanently.'));
             });
@@ -402,13 +402,13 @@ const PLAYERS_JS = `
           if (answer === null) return;
           var flat = /^r\\s*(\\d{1,6})$/i.exec(answer);
           if (flat) {
-            act({ action: 'rank', steam_id: row.steam_id, progress: Number(flat[1]) },
+            act({ action: 'rank', steam_id: row.player_id, progress: Number(flat[1]) },
                 who + ' set to ' + flat[1] + ' RR.');
             return;
           }
           var parts = answer.split(/[^0-9]+/).filter(Boolean);
           if (!parts.length) { say('That is not a rank.', true); return; }
-          act({ action: 'rank', steam_id: row.steam_id,
+          act({ action: 'rank', steam_id: row.player_id,
                 rank: Number(parts[0]), division: Number(parts[1] || 1) },
               who + ' set to ' + (boot.ladder.names[Number(parts[0]) - 1] || 'rank ' + parts[0])
                 + ' ' + (parts[1] || 1) + '.');
@@ -422,7 +422,7 @@ const PLAYERS_JS = `
             field: 'mmr', value: row.mmr || '', confirm: 'Set MMR' }).then(function (answer) {
         if (answer === null) return;
         if (!/^\\d{1,5}$/.test(answer)) { say('That is not a rating.', true); return; }
-        act({ action: 'elo', steam_id: row.steam_id, rating: Number(answer) },
+        act({ action: 'elo', steam_id: row.player_id, rating: Number(answer) },
             who + ' set to ' + answer + ' MMR.');
       });
     }));
@@ -432,7 +432,7 @@ const PLAYERS_JS = `
               + 'matches, kills, hours and reports are not touched.',
             confirm: 'Reset rank', danger: true }).then(function (answer) {
         if (answer === null) return;
-        act({ action: 'reset', steam_id: row.steam_id }, who + ' is back on placements.');
+        act({ action: 'reset', steam_id: row.player_id }, who + ' is back on placements.');
       });
     }));
   }
@@ -929,11 +929,11 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
         <button class="btn" name="days" value="0">Permanent</button></form>`;
 
     const reported = (d.reported || []).map((p) => `<div class="row">
-      ${named(p.persona, p.steam_id)}
+      ${named(p.persona, (p.player_id || p.steam_id))}
       <span class="tag strong">${plural(p.reporters, 'reporter', 'reporters')}</span>
       <span class="tag">${plural(p.total, 'report', 'reports')}</span>
       ${Object.entries(p.by_reason || {}).map(([k, v]) => `<span class="tag">${esc(k)} ${n(v)}</span>`).join('')}
-      <span class="acts">${banBtns(p.steam_id)}</span></div>
+      <span class="acts">${banBtns((p.player_id || p.steam_id))}</span></div>
       ${(p.reports || []).filter(r => r.note).map(r => `<div class="bug">
         <div class="bug-who">Something else &middot; reported by ${esc(r.by)}
         &middot; ${esc(new Date(n(r.at)).toISOString())}</div>
@@ -951,7 +951,7 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
       ${(m.rounds || []).length ? `<div class="strip">${m.rounds.map((r, i) =>
         `<span class="rd t${n(r.won)}" title="R${i + 1} ${n(r[1])}:${n(r[2])}">${i + 1}</span>`).join('')}</div>` : ''}
       <div class="players">${(m.players || []).map((p) =>
-        `<span>${esc(p.persona || p.steam_id)}${p.team ? ' (' + n(p.team) + ')' : ''}</span>`).join('')}</div>
+        `<span>${esc(p.persona || (p.player_id || p.steam_id))}${p.team ? ' (' + n(p.team) + ')' : ''}</span>`).join('')}</div>
     </div>`).join('') || '<div class="empty">No matches running.</div>';
 
     const kills = (d.team_kills || []).map((k) => `<div class="row">
@@ -963,12 +963,12 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
       || '<div class="empty">No flagged team kills.</div>';
 
     const banned = (d.banned || []).map((b) => `<div class="row">
-      ${named(b.persona, b.steam_id)}
+      ${named(b.persona, (b.player_id || b.steam_id))}
       ${b.reason ? `<span class="tag">${esc(b.reason)}</span>` : ''}
       <span class="tag">by ${esc(b.by)}</span>
       <span class="tag">${b.until ? esc(new Date(b.until).toISOString().slice(0, 10)) : 'permanent'}</span>
       <span class="acts"><form method="post" action="/admin/unban" style="margin:0">
-        <input type="hidden" name="steam_id" value="${esc(b.steam_id)}">
+        <input type="hidden" name="steam_id" value="${esc((b.player_id || b.steam_id))}">
         <button class="btn">Unban</button></form></span></div>`).join('')
       || '<div class="empty">Nobody is banned.</div>';
 

@@ -392,6 +392,7 @@ def live_snapshot(session) -> dict:
              "no": int(vote.get("no") or 0), "needed": VOTE_NEEDED, "voted": bool(vote.get("voted"))}
     return {
         "map": getattr(session, "map", None),
+        "reconnect_waiting": [dict(row) for row in getattr(session, "reconnect_waiting", [])],
         "host": {"name": host.get("name") or "", "ping": host.get("ping"), "estimated": bool(host.get("ping_estimated"))},
         "vote": v,
         # host-gated join (additive), same fields as the connect slice: in `live` everyone has
@@ -594,7 +595,16 @@ def _toggle_rank_info(panel):
     panel.post(apply_)
 
 
+def _account_policy(panel, page=""):
+    # Only these fixed public documents can be opened from the sign-in screen.
+    if page not in ("privacy", "terms"):
+        return
+    import webbrowser
+    panel.post(lambda: webbrowser.open("https://lightsoutranked.com/" + page))
+
+
 register_verbs("competitive", {
+    "account_policy": _account_policy,
     "toggle_rank_info": _toggle_rank_info,
     "toggle_penalties": _toggle_penalties,
     # This verb only exists so core.js can prove the localized warning reached the rendered DOM
@@ -609,6 +619,7 @@ register_verbs("competitive", {
                         lambda: panel.session.report_player(str(sid or ""), str(reason or ""), str(mid or ""), str(note or ""))),
     # sign in / out
     "sign_in":          lambda panel: panel.post(panel.session.sign_in),
+    "account_action":   lambda panel, action="", fields=None: panel.post(lambda: panel.session.account_action(str(action), fields)),
     "sign_out":         lambda panel: panel.post(panel.session.sign_out),
     "open_link_again":  lambda panel: panel.post(panel.session.open_link_again),
     "cancel_sign_in":   lambda panel: panel.post(panel.session.cancel_sign_in),

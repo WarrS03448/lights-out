@@ -272,10 +272,11 @@ class WebPanel:
     def save_auth(self, payload):
         """Persist (dict) or clear (None) the signed-in account in state.json (as the Tk panel)."""
         try:
-            self.app.state["auth"] = payload
             state_mod.update_fields({"auth": payload})
+            self.app.state["auth"] = payload
+            return True
         except Exception:                # noqa: BLE001 — a read-only state dir must not break sign-in
-            pass
+            return False
 
     def map_pool(self):
         """The ranked pool: the gamemode's maps (from the catalogue when listed), minus the
@@ -492,34 +493,7 @@ class WebPanel:
 
     # ------------------------------------------------------------ account restore
     def _restore_account(self):
-        """Come back signed in, mirroring CompetitivePanel._restore_account: trust the saved
-        token immediately (usable offline), then verify in the background and drop it if the
-        server disowns it."""
-        import threading
-        from .. import auth as auth_mod
-        saved = (getattr(self.app, "state", {}) or {}).get("auth") or {}
-        if not saved.get("token") or not saved.get("steam_id"):
-            return
-        self.session.adopt_account(saved)
-        self.session.token = saved["token"]
-        self.session.phase = "idle"
-
-        marker = (self.session._account_epoch, self.session.token)
-        def deliver(callback):
-            if marker == (self.session._account_epoch, self.session.token):
-                callback()
-
-        def check():
-            fresh = auth_mod.me(saved["token"])
-            if fresh is None:
-                return                   # offline / hiccup: keep the session
-            if not fresh.get("ok"):
-                self.post(lambda: deliver(self.session.sign_out))
-                return
-            self.post(lambda: deliver(lambda: self.session.adopt_account(
-                {**fresh, "token": saved["token"]}, save=True) or self.on_change()))
-
-        threading.Thread(target=check, daemon=True).start()
+        self.session.restore_account((getattr(self.app, "state", {}) or {}).get("auth") or {})
 
     # ------------------------------------------------------------ logging
     def _log(self, where, exc):

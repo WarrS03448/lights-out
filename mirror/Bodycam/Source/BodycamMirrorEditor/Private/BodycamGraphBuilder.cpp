@@ -20,6 +20,7 @@
 #include "K2Node_ExecutionSequence.h"
 #include "K2Node_MacroInstance.h"
 #include "K2Node_ConstructObjectFromClass.h"
+#include "K2Node_SetFieldsInStruct.h"
 #include "K2Node_SpawnActorFromClass.h"
 #include "BlueprintNodeSpawner.h"
 #include "K2Node_BreakStruct.h"
@@ -265,6 +266,22 @@ UEdGraphNode* MakeNode(FBuildCtx& C, const TSharedPtr<FJsonObject>& J, int32 Ind
         N->ReconstructNode();
         return N;
     }
+    if (Type == TEXT("setmembers")) {
+        UScriptStruct* S = LoadStructPath(J->GetStringField(TEXT("struct")));
+        if (!S) { C.Err(TEXT("setmembers: struct not found")); return nullptr; }
+        UK2Node_SetFieldsInStruct* N = NewNode<UK2Node_SetFieldsInStruct>(C);
+        N->StructType = S;
+        FinishNode(N, Index);
+        const FString Field=J->GetStringField(TEXT("field"));
+        bool Found=false;
+        for (FOptionalPinFromProperty& Pin : N->ShowPinForProperties) {
+            Pin.bShowPin=Pin.PropertyName.ToString()==Field;
+            Found |= Pin.bShowPin;
+        }
+        if (!Found) C.Err(TEXT("setmembers: field not found: ")+Field);
+        N->ReconstructNode();
+        return N;
+    }
     if (Type == TEXT("break") || Type == TEXT("make")) {
         UScriptStruct* S = LoadStructPath(J->GetStringField(TEXT("struct")));
         if (!S) { C.Err(FString::Printf(TEXT("%s: struct not found"), *Id)); return nullptr; }
@@ -478,6 +495,18 @@ bool UBodycamMirrorTools::SetVariableReplicated(UBlueprint* Blueprint, const FSt
         if (Var.VarName == Name) {
             if (bReplicated) Var.PropertyFlags |= CPF_Net; else Var.PropertyFlags &= ~(CPF_Net | CPF_RepNotify);
             if (bReplicated && !RepNotifyFunction.IsEmpty()) { Var.PropertyFlags |= CPF_RepNotify; Var.RepNotifyFunc = FName(*RepNotifyFunction); }
+            FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool UBodycamMirrorTools::SetVariableSaveGame(UBlueprint* Blueprint, const FString& VariableName) {
+    if (!Blueprint) return false;
+    for (FBPVariableDescription& Var : Blueprint->NewVariables) {
+        if (Var.VarName == FName(*VariableName)) {
+            Var.PropertyFlags |= CPF_SaveGame;
             FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
             return true;
         }

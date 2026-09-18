@@ -27,6 +27,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 env = dict(os.environ,
            PORT=str(PORT), NODE_ENV="test",
            COMP_MATCH_SIZE="2", COMP_ACCEPT_SECONDS="10",
+           COMP_NETWORK_TEST_BYPASS="1",
            COMP_LOBBY_SECONDS="120", COMP_CONNECT_SECONDS="8",
            COMP_NO_SHOW_BAN_SECONDS="6", COMP_NO_SHOW_ELO="25",
            HUB_TEST_TOKENS="tok-a=76561198000000001,tok-b=76561198000000002")
@@ -99,6 +100,7 @@ def make(name, token, steam_id):
     p = Panel(name)
     p.app = current_app()
     s = C.LiveSession(p)
+    s._network_config = None  # Hardware relay admission has its own integration suite.
     # These simulated players have no game; the developer may be playing while tests run.
     s.game_is_open = lambda: False
     s.adopt_account({"steam_id": steam_id, "persona": name, "token": token})

@@ -193,6 +193,9 @@ class CloseToTray:
     def start(self) -> bool:
         """Put the icon in the tray and take over the window's X. False (and the X keeps quitting)
         when there is no tray to hide to."""
+        from .. import recording
+        if recording.enabled():
+            self.window.events.closing += self.on_closing
         if not self.tray_available():
             return False
         try:
@@ -202,7 +205,8 @@ class CloseToTray:
         except Exception:                # noqa: BLE001 — no tray, the X closes normally
             self.tray = None
             return False
-        self.window.events.closing += self.on_closing
+        if not recording.enabled():
+            self.window.events.closing += self.on_closing
         return True
 
     def on_closing(self):
@@ -211,12 +215,16 @@ class CloseToTray:
         Takes no arguments on purpose: pywebview passes the window to any handler with a `window`
         parameter (webview/event.py), and a bound method with none is called bare.
         """
-        if self.tray is None or self._quitting:
-            return None                  # nothing to hide to, or we asked for this: really close
+        if self._quitting:
+            return None
+        if self.tray is None:
+            from .. import recording
+            return None if recording.ensure_exit() else False
         try:
             self.window.hide()
         except Exception:                # noqa: BLE001
-            return None                  # could not hide: close rather than leave a dead X
+            from .. import recording
+            return None if recording.ensure_exit() else False
         if not self._hinted:
             self._hinted = True
             self.tray.notify(i18n.t("tray_hint"), APP_NAME)
@@ -231,6 +239,9 @@ class CloseToTray:
 
     def quit(self):
         """Tray menu "Close Lights Out" (pystray's thread): end the hub for real."""
+        from .. import recording
+        if not recording.ensure_exit():
+            return
         self._quitting = True
         self.stop()                      # the icon goes now, so the click has visible effect
         try:

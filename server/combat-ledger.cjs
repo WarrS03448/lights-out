@@ -77,6 +77,14 @@ if p.receipt then
   if receipt then return {'replayed', redis.call('GET', KEYS[1]) or '{}', receipt} end
 end
 local current = redis.call('GET', KEYS[1])
+if p.authority then
+  local raw=redis.call('GET',KEYS[6])
+  if redis.call('GET',KEYS[7]) then return {'authority'} end
+  if raw then
+    local a=cjson.decode(raw)
+    if a.closed or a.epoch~=p.authority.epoch or a.host~=p.authority.host then return {'authority'} end
+  elseif p.authority.epoch>0 then return {'authority'} end
+end
 local revision = 0
 if current then revision = cjson.decode(current).revision or 0 end
 if revision ~= p.expected then return {'conflict'} end
@@ -107,6 +115,7 @@ async function commit(store, prefix, id, payload) {
   const suffix = crypto.createHash('sha256').update(String(receiptId || 'none')).digest('hex');
   const keys = [`${prefix}combat:history:${id}`, `${prefix}rating:${id}`, `${prefix}penalty:${id}`,
     `${prefix}leaderboard:rr`, `${prefix}combat:sanction:${id}:${suffix}`];
+  if(payload.authority)keys.push(`${prefix}live:authority:${payload.authority.match}`,`${prefix}settlement:${payload.authority.match}`);
   const encoded = { ...payload, player: id, historyJson: JSON.stringify(payload.history),
     ...(payload.receipt ? { receiptJson: JSON.stringify(payload.receipt) } : {}) };
   const out = await store(['EVAL', COMMIT, String(keys.length), ...keys, JSON.stringify(encoded)], { strict: true });

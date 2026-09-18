@@ -1,7 +1,7 @@
 # Lights Out
 
 An open-source Windows community client and matchmaking service for **Bodycam**.
-Install community gamemodes, sign in with Steam, play with friends, queue for
+Install community gamemodes, sign in with Steam or a Lights Out account, play with friends, queue for
 Bodybomb 5v5, and review match results and ranks.
 
 **Lights Out is an unofficial community project, not affiliated with or endorsed
@@ -18,13 +18,13 @@ The official Windows installer is digitally signed by **Samuel Warren**.
 
 ## What is included
 
-This public source release corresponds to **Lights Out 2.3.87**,
-**Bodybomb 5v5 1.0.27**, and **Capture the Flag 1.0.4**.
+This public source release corresponds to **Lights Out 2.3.88**,
+**Bodybomb 5v5 1.0.28**, and **Capture the Flag 1.0.4**.
 
 | Folder | Contents |
 | --- | --- |
 | `hub/` | Python desktop client, local web bridge, HTML/CSS/JavaScript interface |
-| `server/` | Node.js website, Steam authentication, matchmaking, ratings and analytics |
+| `server/` | Node.js website, account and Steam authentication, matchmaking, ratings and analytics |
 | `gamemodes/` | Authored manifests and translations |
 | `mirror/Bodycam/Scripts/` | Authored Blueprint graph generators |
 | `mirror/Bodycam/Source/BodycamMirrorEditor/` | Authored Unreal Editor graph-building helpers |
@@ -40,10 +40,11 @@ are silent in a source build unless you supply appropriately licensed replacemen
 
 ## Run the website and service locally
 
-Install Node.js **20 or newer**. The server has no npm runtime dependencies.
+Install Node.js **20 or newer**. Install the pinned server dependencies before starting.
 
 ```sh
 cd server
+npm ci
 npm start
 ```
 
@@ -73,9 +74,10 @@ to the official service. Do not use the official service for automated testing.
 ## Test
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install pytest
+.\.venv\Scripts\python.exe -m pip install pytest -r server/scripts/account-test-requirements.txt
 .\.venv\Scripts\python.exe -m pytest -q
 cd server
+npm ci
 npm test
 ```
 
@@ -104,3 +106,9 @@ License](LICENSE). Bundled fonts and the CityHash implementation retain their
 upstream notices; dependencies and the game have separate licenses. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The MIT license grants no rights
 to Bodycam, Reissad Studio's assets, or third-party trademarks.
+
+## Accounts and match recovery
+
+Create a Lights Out email/password account [on the website](https://lightsoutranked.com/account) or in the app. Each new email-account sign-in requires an emailed code; remember-device sessions can be revoked. Gameplay verifies the active Bodycam Steam identity independently of optional Steam sign-in linking. Progress belongs to the player profile. User-facing linking, disconnection and password-recovery controls remain pending; creating a separate account does not transfer existing Steam-profile progress.
+
+Confirmed missing players have five minutes to reconnect before the existing missed-match penalty applies. Host migration preserves the match roster and rankings; restored matches can count as ranked results, and final scoreboards may omit confirmed disconnected players. Automated tests passed, but a live host-crash/migration test was not performed for this release. See [release notes](docs/release-2.3.88.md).

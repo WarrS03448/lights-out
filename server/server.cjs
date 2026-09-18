@@ -3,8 +3,8 @@
 /**
  * Lights Out — download page + gamemode catalogue service.
  *
- * Plain Node.js (>=20), CommonJS, no npm dependencies. Only built-in
- * modules are used: http, fs, path, crypto.
+ * Plain Node.js (>=20), CommonJS. Optional account email uses Nodemailer;
+ * routing and the game services use built-in modules.
  */
 
 const http = require('http');
@@ -43,6 +43,10 @@ const PKG = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'ut
 
 const BODY_LIMIT_BYTES = 4 * 1024; // 4 KB
 const STORE_PREFIX = process.env.HUB_STORE_PREFIX || 'hub:';
+const recordingModule=require('./recording.cjs');
+const recording=recordingModule.config();
+const ACCOUNT_PREFIX=process.env.HUB_ACCOUNT_STORE_PREFIX||STORE_PREFIX;
+const privateAccounts=recording?.mode==='account-test';
 let analyticsService;
 function analytics() {
   if (!analyticsService) analyticsService = analyticsModule.create({
@@ -55,7 +59,7 @@ const telemetryLimits = new Map();
 async function handleTelemetry(req, res) {
   const account = await auth().whoami(auth().bearer(req));
   if (!account) return sendJson(res, 401, { ok:false, error:'Sign in required.' });
-  const now = Date.now(), id = account.steam_id;
+  const now = Date.now(), id = account.player_id || account.steam_id;
   let limit = telemetryLimits.get(id);
   if (!limit || now-limit.at>60000) { limit={at:now,count:0}; telemetryLimits.set(id,limit); }
   if (telemetryLimits.size>10000) for (const [key,value] of telemetryLimits) if(now-value.at>60000) telemetryLimits.delete(key);
@@ -90,7 +94,7 @@ const probeLog = [];                        // newest first; also mirrored to Up
 const STATIC_ALLOWED_EXTENSIONS = new Set([
   '.exe', '.zip', '.json',
   // ...and the site's own presentation, served from /assets/.
-  '.css', '.woff2', '.svg', '.png', '.txt',
+  '.css', '.js', '.woff2', '.svg', '.png', '.txt',
 ]);
 
 const CONTENT_TYPES = {
@@ -99,6 +103,7 @@ const CONTENT_TYPES = {
   '.json': 'application/json',
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
   '.woff2': 'font/woff2',
   '.svg': 'image/svg+xml',
@@ -135,7 +140,7 @@ function badRequest(res, message, extraHeaders) {
 
 function readCatalogue() {
   const raw = fs.readFileSync(CATALOGUE_JSON_PATH, 'utf8');
-  return JSON.parse(raw);
+  return JSON.parse(recording?recording.catalogue(raw):raw);
 }
 
 /**
@@ -582,7 +587,7 @@ function rulesOverride() {
  * of its own because the only way to test a counter is to move it, and server.cjs listens on
  * import. Here it is wired to the store and to the two places a version is published.
  */
-const RULES_BUILD_KEY = 'comp:gamemode-build';
+const RULES_BUILD_KEY = recording?`${STORE_PREFIX}comp:gamemode-build`:'comp:gamemode-build';
 const rulesBuilds = rulesBuildModule.createRulesBuilds(
   (id, value) => upstashCmd(['HSET', RULES_BUILD_KEY, id, value]));
 
@@ -633,7 +638,8 @@ function applyRulesOverride(raw) {
 }
 
 function handleCatalogueJson(req, res) {
-  const raw = applyRulesOverride(fs.readFileSync(CATALOGUE_JSON_PATH, 'utf8'));
+  const source=fs.readFileSync(CATALOGUE_JSON_PATH,'utf8');
+  const raw = applyRulesOverride(recording?recording.catalogue(source):source);
   const body = Buffer.from(raw, 'utf8');
   res.writeHead(200, {
     'content-type': 'application/json; charset=utf-8',
@@ -686,6 +692,14 @@ function handleHealth(req, res) {
  * distinguish a missing key from an unavailable store before trusting a default rating.
  */
 async function upstashCmd(args, { strict = false, timeout } = {}) {
+  if(recording)recordingModule.assertStoreCommand(args,STORE_PREFIX);
+  return rawUpstashCmd(args,{strict,timeout});
+}
+async function accountStore(args,options) {
+  if(recording)recordingModule.assertAccountCommand(args,ACCOUNT_PREFIX+'accounts:');
+  return rawUpstashCmd(args,options);
+}
+async function rawUpstashCmd(args, { strict = false, timeout } = {}) {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
@@ -788,7 +802,7 @@ async function hostTravelIdentity(req) {
     const service = live();
     await service._internals.ready;
     await service._internals.ensureRecovery();
-    const authorised = service.authoriseReport(match[1]);
+    const authorised = await (service.authoriseReportFresh||service.authoriseReport)(match[1]);
     return authorised ? authorised.steamId : '';
   } catch { return ''; }
 }
@@ -841,9 +855,9 @@ function parseStartReady(body) {
   const encoded = tail ? tail.split(';') : [];
   if (encoded.length !== n) throw Error('wrong count');
   const seen = new Set(), rows = encoded.map(text => {
-    const m = /^(\d{17}):([01]):([01])$/.exec(text);
-    if (!m || seen.has(m[1])) throw Error('bad row');
-    seen.add(m[1]); return { steam_id: m[1], team: Number(m[2]), active: Number(m[3]) };
+    const m = (privateAccounts?/^(\d{17}|):([01]):([01])$/:/^(\d{17}):([01]):([01])$/).exec(text);
+    if (!m || (m[1]&&seen.has(m[1]))) throw Error('bad row');
+    if(m[1])seen.add(m[1]); return { steam_id: m[1], team: Number(m[2]), active: Number(m[3]) };
   });
   return { host: String(body.user_id || ''), matchId: token[1], rows };
 }
@@ -854,27 +868,38 @@ async function handleStartReady(req, res) {
   let ruling;
   try {
     if (req.method !== 'POST') throw Error('POST required');
-    const data = parseStartReady(JSON.parse((await readBody(req, PROBE_BODY_LIMIT_BYTES)).toString('utf8')));
+    const body = JSON.parse((await readBody(req, PROBE_BODY_LIMIT_BYTES)).toString('utf8'));
+    const presence = body?.event_name === 'ch_match_presence';
+    let data;
+    if(presence) {
+      const key=/^chm-([0-9a-f]{16})$/.exec(String(body.storefront||''));
+      const roster=/^([1-9]|10)\|((?:\d{17};)+)$/.exec(String(body.platform||''));
+      const ids=roster?roster[2].slice(0,-1).split(';'):[];
+      if(!key||!roster||body.first_session_timestamp!=='chpresence-1'||ids.length!==Number(roster[1])||new Set(ids).size!==ids.length)throw Error('invalid presence');
+      data={matchId:key[1],rows:ids.map(steam_id=>({steam_id,active:1}))};
+    } else data=parseStartReady(body);
     if (data.matchId !== cap.authorised.matchId) throw Error('wrong match');
-    ruling = cap.service.startReady(cap.authorised.steamId, data.matchId, data.rows);
+    ruling = await runAuthorised(cap,()=>presence ? cap.service.matchPresence(cap.authorised.steamId, data.matchId, data.rows)
+      : cap.service.startReady(cap.authorised.steamId, data.matchId, data.rows));
     if (ruling.started) console.log('[match] complete roster approved %s', data.matchId);
   } catch { ruling = { ok: false, error: 'invalid start snapshot' }; }
   return sendJson(res, ruling.ok ? 200 : 409, ruling);
 }
 
 async function handleFinalSnapshot(req, res) {
-  const cap = await authoriseRankedReport(req, res);
+  const incoming = await readRankedReport(req, res);
+  if (!incoming) return;
+  const key = /^chm-([0-9a-f]{16})$/.exec(String(incoming.body.storefront || ''));
+  if (req.method !== 'POST' || !key || incoming.body.event_name !== 'ch_final_snapshot' || incoming.body.first_session_timestamp !== 'chfinal-1')
+    return sendJson(res,409,{ok:false,error:'invalid final snapshot',data_collected:false});
+  const cap = await authoriseRankedReport(req, res, key[1]);
   if (!cap) return;
-  let result, raw = Buffer.alloc(0);
+  let result, raw = incoming.raw;
   try {
-    if (req.method !== 'POST') throw Error('POST required');
-    raw = await readBody(req, PROBE_BODY_LIMIT_BYTES);
-    const body = JSON.parse(raw.toString('utf8'));
-    const key = /^chm-([0-9a-f]{16})$/.exec(String(body.storefront || ''));
-    if (!key || body.event_name !== 'ch_final_snapshot' || body.first_session_timestamp !== 'chfinal-1') throw Error('bad final snapshot');
+    const body = incoming.body;
     if (key[1] !== cap.authorised.matchId) throw Error('wrong match');
-    result = await cap.service.finalSnapshot(cap.authorised.steamId, {
-      match_id: key[1], rows: body.platform, meta: body.timestamp, combat_end: body.ip });
+    result = await runAuthorised(cap,()=>cap.service.finalSnapshot(cap.authorised.steamId, {
+      match_id: key[1], rows: body.platform, meta: body.timestamp, combat_end: body.ip }));
   } catch { result = { ok: false, error: 'invalid final snapshot', data_collected: false }; }
   await recordReport(req, raw, { report: { event: 'ch_final_snapshot', match: cap.authorised.matchId,
     status: result.ok ? 200 : 409, error: result.error || '', data_collected: result.data_collected === true } });
@@ -1284,7 +1309,7 @@ function dispatchRankedReport(body, reportAuth, service = live()) {
   return { status: 200, result };
 }
 
-async function authoriseRankedReport(req, res) {
+async function authoriseRankedReport(req, res, finalMatchId) {
   const service = live();
   try {
     await service._internals.ready;
@@ -1293,13 +1318,39 @@ async function authoriseRankedReport(req, res) {
     sendJson(res, 503, { ok: false, error: 'Ranked state is recovering.' });
     return null;
   }
-  const match = /^Bearer ([0-9a-f]{64})$/.exec(String(req.headers.authorization || ''));
-  const authorised = match ? service.authoriseReport(match[1]) : null;
+  const match = /^Bearer ([0-9a-f]{64})(?:\.(0|[1-9]\d{0,5}))?$/.exec(String(req.headers.authorization || ''));
+  let authorised;
+  try {
+    authorised = match ? (finalMatchId && service.authoriseFinalReport
+      ? await service.authoriseFinalReport(match[1],finalMatchId) : await (service.authoriseReportFresh||service.authoriseReport)(match[1])) : null;
+  } catch { sendJson(res,503,{ok:false,error:'Match receipt is temporarily unavailable.'}); return null; }
   if (!authorised) {
     sendJson(res, 401, { ok: false, error: 'Invalid match report credential.' });
     return null;
   }
+  if((authorised.epoch||0)!==Number(match[2]||0)) {
+    sendJson(res,401,{ok:false,error:'Superseded host authority.'});return null;
+  }
   return { service, authorised };
+}
+
+async function handleHostMigration(req,res) {
+  const cap=/^Bearer ([a-f0-9]{64})\.(0|[1-9]\d{0,5})$/.exec(String(req.headers.authorization||''));
+  if(req.method!=='POST'||!cap)return sendJson(res,401,{ok:false});
+  const parsed=await readRankedReport(req,res);if(!parsed)return;
+  const b=parsed.body,key=/^chm-([a-f0-9]{16})$/.exec(String(b.storefront||''));
+  const operation=b.event_name==='ch_host_activate'?'activate':b.event_name==='ch_host_endorse'?'endorse':'';
+  if(!key||!operation||b.first_session_timestamp!=='chmigration-1' ||
+     (b.platform!==''&&!/^\d{17}$/.test(String(b.platform||''))))return sendJson(res,409,{ok:false});
+  try {
+    const service=live();await service._internals.ready;await service._internals.ensureRecovery();
+    const result=await service.migrationReport(cap[1],{match_id:key[1],operation,epoch:Number(cap[2]),candidate:b.platform});
+    return sendJson(res,result.ok?200:409,result);
+  } catch {return sendJson(res,503,{ok:false,error:'Host handoff could not be saved.'});}
+}
+
+function runAuthorised(cap,operation) {
+  return cap.service.withReportAuthority ? cap.service.withReportAuthority(cap.authorised,operation) : operation();
 }
 
 async function readRankedReport(req, res) {
@@ -1339,8 +1390,11 @@ async function handleMatchReport(req, res) {
   if (!parsed) return;
   let applied;
   try {
-    applied = dispatchRankedReport(parsed.body, cap.authorised, cap.service);
-    if (applied.result && typeof applied.result.then === 'function') applied.result = await applied.result;
+    applied = await runAuthorised(cap,async()=>{
+      const out=dispatchRankedReport(parsed.body,cap.authorised,cap.service);
+      if(out.result?.then)out.result=await out.result;
+      return out;
+    });
     if (applied.result && applied.result.ok === false) { applied.status = 409; applied.error = applied.result.error; }
   } catch {
     sendJson(res, 500, { ok: false, error: 'Report processing failed.' });
@@ -1363,7 +1417,7 @@ async function handleMatchReportTeam(req, res) {
   const subject = String(parsed.body.storefront || '');
   const ask = String(parsed.body.platform || 'member');
   let ruling = { ok: false, error: 'live not up' };
-  try { ruling = cap.service.teamRuling(cap.authorised.steamId, subject, ask); } catch { /* fail closed */ }
+  try { ruling = await runAuthorised(cap,()=>cap.service.teamRuling(cap.authorised.steamId, subject, ask)); } catch { /* fail closed */ }
   const status = ruling && ruling.ok ? (ruling.yes ? 200 : 404) : 409;
   await recordReport(req, parsed.raw, { ruling: {
     ask, host: cap.authorised.steamId, subject, status, ...(ruling || {}),
@@ -1379,7 +1433,7 @@ async function handleCombatBatch(req, res) {
   let result, status;
   try {
     if (parsed.body.event_name !== 'ch_combat_batch') throw Error('invalid batch event');
-    result = await cap.service.combatBatch(cap.authorised.steamId, cap.authorised.matchId, parsed.body.platform);
+    result = await runAuthorised(cap,()=>cap.service.combatBatch(cap.authorised.steamId, cap.authorised.matchId, parsed.body.platform));
     status = result.ok ? 200 : 409;
   } catch { status = 503; result = { ok: false, error: 'Combat data is not saved yet.' }; }
   // Ordinary batches are frequent. Keep only errors, newly quarantined samples,
@@ -1470,6 +1524,7 @@ async function handleProbe(req, res, opts) {
 // Steam sign-in (Sam's decision C1). Built once, lazily, because it closes over
 // upstashCmd/sendJson which are defined above but only exist at call time.
 let authRouter = null;
+const accountActivity = require('./account-activity.cjs').create();
 function auth() {
   if (!authRouter) {
     authRouter = authModule.create({
@@ -1477,6 +1532,19 @@ function auth() {
       prefix: STORE_PREFIX,
       sendJson,
       badRequest,
+      accountPrefix:ACCOUNT_PREFIX,
+      accountStore:privateAccounts?accountStore:upstashCmd,
+      allowSteamId:recording?.allowed,
+      privateGameplay:privateAccounts,
+      accounts:privateAccounts?{...require('./accounts.cjs').configuration(),allowEmail:recording.allowEmail,allowGame:recording.allowed}:undefined,
+      ownershipTransaction: ({account,pending},finish) => accountActivity.write(async()=>{
+        const ledger=await require('./account-ownership.cjs').readSteam({upstashCmd,prefix:ACCOUNT_PREFIX},pending.steam_id);
+        const ids=[...new Set([account.player_id||account.id,ledger?.player_id||pending.steam_id])];
+        await live().prepareOwnership(ids);
+        const result=await finish();
+        if(result===1)live().ownershipChanged({ids,accountId:account.id,steamId:pending.steam_id});
+        return result;
+      }),
     });
   }
   return authRouter;
@@ -1520,6 +1588,8 @@ function live() {
     liveRouter = liveModule.create({
       analytics: analytics(),
       whoami: (token) => auth().whoami(token),
+      admitGameplay: (token,identity) => auth().admitGameplay(token,identity),
+      activityGate: accountActivity,
       bearer: (req) => auth().bearer(req),
       sendJson,
       badRequest,
@@ -1535,6 +1605,7 @@ function live() {
       // version gate). A match already running is not.
       requiredVersions,
       expectedRules: expectedCompetitiveRules,
+      privateSoloSteam:privateAccounts?process.env.COMP_PRIVATE_STEAM_IDS:'',
       // A name for somebody who is not signed in. Reused, never reimplemented, for the same
       // reason verifyWithSteam is: this is auth's day-cached Steam profile lookup, and a second
       // copy of it would be a second cache to keep warm.
@@ -1552,7 +1623,33 @@ async function router(req, res) {
   } catch {
     return badRequest(res);
   }
-  const pathname = url.pathname;
+  let pathname = url.pathname;
+  if(recording) {
+    res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');
+    res.setHeader('Referrer-Policy','no-referrer');
+    const privatePath=recording.publicPath(pathname);
+    if(privatePath){pathname=privatePath;url.pathname=privatePath;}
+    else if(!pathname.startsWith('/api/')&&!pathname.startsWith('/auth/')&&!pathname.startsWith('/admin')&&!pathname.startsWith('/assets/'))
+      return sendJson(res,404,{error:'Not found.'});
+  }
+
+  if ((method === 'GET' || method === 'HEAD') && (pathname === '/account' || pathname === '/account.html')) {
+    // Browser account POSTs must originate on the one configured HTTPS origin.
+    // Redirect website aliases before a user enters any credentials.
+    try {
+      const canonical = new URL(process.env.HUB_ACCOUNT_ORIGIN);
+      if (canonical.protocol === 'https:' && canonical.origin === process.env.HUB_ACCOUNT_ORIGIN &&
+          String(req.headers.host || '').toLowerCase() !== canonical.host.toLowerCase()) {
+        res.writeHead(302, {location:canonical.origin + '/account', 'cache-control':'no-store', 'referrer-policy':'no-referrer'});
+        return res.end();
+      }
+    } catch {} // Unconfigured accounts still render the page and fail closed at the API.
+    res.setHeader('cache-control', 'no-store');
+    res.setHeader('referrer-policy', 'no-referrer');
+    res.setHeader('x-content-type-options', 'nosniff');
+    res.setHeader('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
+    return handleHtmlPage(req, res, path.join(PUBLIC_DIR, 'account.html'));
+  }
 
   if (method === 'POST' && pathname === '/api/telemetry') return handleTelemetry(req,res);
 
@@ -1656,7 +1753,7 @@ async function router(req, res) {
     if (await admin().route(req, res, method, pathname, url)) return;
   }
 
-  // Steam sign-in: /api/auth/*, /auth/steam/*
+  // Steam sign-in and independent Lights Out accounts: /api/auth/*, /auth/steam/*
   if (pathname.startsWith('/api/auth/') || pathname.startsWith('/auth/steam/')) {
     res.setHeader('cache-control', 'no-store');
     if (await auth().route(req, res, method, pathname, url)) return;
@@ -1676,6 +1773,9 @@ async function router(req, res) {
 
   if (pathname.startsWith('/api/')) {
     res.setHeader('cache-control', 'no-store');
+  }
+  if (pathname === '/api/match-report/migration') {
+    res.setHeader('cache-control','no-store');return handleHostMigration(req,res);
   }
 
   return notFound(res);
@@ -1720,6 +1820,7 @@ function createServer(options = {}) {
 }
 
 function start() {
+  if(recording)recordingModule.validateDeployment();
   if (process.env.HUB_TEST_TOKENS) {
     // Loud on purpose: this variable lets anyone who can set it mint an identity. It exists
     // for the test suite and must never be set on Railway.

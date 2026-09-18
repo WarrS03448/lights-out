@@ -1113,6 +1113,9 @@ class HubApp:
             if not messagebox.askokcancel(t("quit_match_title"), t("quit_match_body"),
                                           parent=self.root):
                 return
+        from . import recording
+        if not recording.ensure_exit():
+            return
         if self.tray is not None:
             self.tray.stop()
             self.tray = None
@@ -1374,13 +1377,25 @@ def main():
     # reboot. Placed here because the lock name depends on --local (a checkout run alongside the
     # installed hub is legitimate) and because nothing has been drawn yet, so the exit is silent.
     if not singleton_mod.claim(LOCAL_REPO):
+        from . import recording
+        if recording.enabled():
+            recording.notify('Close Lights Out first', 'Quit the other Lights Out client from its tray menu, then open Lights Out Recording.')
         singleton_mod.focus_existing()           # best effort: make the running hub reappear
         raise SystemExit(0)                      # 0, not an error: this is the hub working
+
+    from . import recording
+    if not recording.ensure_start():
+        raise SystemExit(1)
 
     from . import match_cleanup
     from . import telemetry
     telemetry.start()
     match_cleanup.resume_pending_jobs()
+    # Capture the directory before scheduling; only the app lifecycle retries revocations.
+    from . import auth as auth_mod
+    import threading
+    signout_folder = paths.state_dir() / "pending-signouts"
+    threading.Thread(target=auth_mod.retry_signouts, args=(signout_folder,), daemon=True).start()
 
     # --lang xx  (testing: skip/override the saved language for this run)
     language = None

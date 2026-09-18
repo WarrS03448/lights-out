@@ -120,7 +120,7 @@ class Registry {
       throw new Error('Refresh your connection profile before reporting estimates.');
     }
     // Validate the full request before changing state. Null/string/negative RTTs are not zero.
-    if (body.peers.some(r => !r || typeof r.steam_id !== 'string' || typeof r.revision !== 'string'
+    if (body.peers.some(r => !r || typeof (r.player_id || r.steam_id) !== 'string' || typeof r.revision !== 'string'
         || r.transport !== TRANSPORT || !/^[0-9a-f]{32}$/.test(String(r.attempt || ''))
         || typeof r.ping !== 'number' || !Number.isFinite(r.ping) || r.ping <= 0 || r.ping > 10000
         || !Number.isInteger(r.samples) || r.samples < 5 || r.samples > 1000
@@ -129,13 +129,13 @@ class Registry {
       throw new Error('Invalid peer connection estimate.');
     }
     const accepted = body.peers.map((r) => {
-      const peer = this.player(r.steam_id);
-      if (r.steam_id === id || !ready(peer,now) || peer.revision !== r.revision
+      const peer = this.player((r.player_id || r.steam_id));
+      if ((r.player_id || r.steam_id) === id || !ready(peer,now) || peer.revision !== r.revision
           || !compatible([p,peer])
-          || !this.authorized(id,r.steam_id,p.revision,peer.revision,r.attempt,now)) {
+          || !this.authorized(id,(r.player_id || r.steam_id),p.revision,peer.revision,r.attempt,now)) {
         throw new Error('Peer relay attempt is not authorized.');
       }
-      return [r.steam_id,{ ms:r.ping,at:now - r.age_seconds * 1000,
+      return [(r.player_id || r.steam_id),{ ms:r.ping,at:now - r.age_seconds * 1000,
         localRevision:p.revision,remoteRevision:peer.revision,transport:TRANSPORT,
         samples:r.samples,attempt:r.attempt }];
     });

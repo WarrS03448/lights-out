@@ -116,7 +116,7 @@ function storage() {
       const [row]=JSON.parse(cmd[3+Number(cmd[2])]);values.set(cmd[3],row.json);return ['written',row.json];
     }
     if(op==='EVAL'&&key.startsWith('-- combat-ledger-v1')) {
-      const keys=cmd.slice(3,8),p=JSON.parse(cmd[8]);
+      const keys=cmd.slice(3,3+Number(cmd[2])),p=JSON.parse(cmd[3+Number(cmd[2])]);
       if(db.beforeCommit) await db.beforeCommit(p,keys);
       if(p.receipt&&values.has(keys[4])) return ['replayed',values.get(keys[0]),values.get(keys[4])];
       values.set(keys[0],p.historyJson);

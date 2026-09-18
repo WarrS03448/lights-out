@@ -64,6 +64,9 @@ async function transform(store,document,owner,fn,ttl) {
   const out={...document};
   if(document.combatState)out.combatState=await fn(store,document.combatState,owner,ttl);
   if(document.inputs?.combatState)out.inputs={...document.inputs,combatState:await fn(store,document.inputs.combatState,owner,ttl)};
+  if(document.combat_segments)out.combat_segments=await Promise.all(document.combat_segments.map(s=>fn(store,s,owner,ttl)));
+  if(document.inputs?.combat_segments)out.inputs={...(out.inputs||document.inputs),
+    combat_segments:await Promise.all(document.inputs.combat_segments.map(s=>fn(store,s,owner,ttl)))};
   return out;
 }
 module.exports={pack:(store,document,owner,{ttl}={})=>transform(store,document,owner,encode,ttl),

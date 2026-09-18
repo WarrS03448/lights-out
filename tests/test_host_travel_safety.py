@@ -71,8 +71,8 @@ def test_shipped_host_bytecode_cannot_launch_search_or_join():
     guarded_parent = re.search(
         r"JumpIfNot -> ([0-9a-f]+)\n[^\n]*\$Local ([^\n]+)\n"
         r"[^\n]*LocalFinalFunction ReceiveBeginPlay@GM_Host_C[^\n]*\n"
-        r"[^\n]*\n[^\n]*Jump -> ([0-9a-f]+)", calls)
-    assert guarded_parent and guarded_parent[1] == guarded_parent[3]
+        r"[^\n]*\n(?:[^\n]*Jump -> ([0-9a-f]+)|([0-9a-f]+): PushExecutionFlow)", calls)
+    assert guarded_parent and guarded_parent[1] == (guarded_parent[3] or guarded_parent[4])
     assert 'BooleanAND' in guarded_parent[2]
 
 

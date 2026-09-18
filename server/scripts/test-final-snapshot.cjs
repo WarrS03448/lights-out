@@ -152,6 +152,96 @@ test('missing, malformed, duplicate and wrong-team final rows cannot complete', 
   }
 });
 
+test('one through ten remaining players can finish; confirmed leavers retain their data and history', async t => {
+  for(let remaining=1;remaining<=10;remaining++) {
+    const {L,match,fields,plan}=fixture(t,10);
+    const original=match.players.slice(), gone=original.slice(remaining);
+    match.stats={players:gone.map(p=>({steamId:p.player_id,kills:2,deaths:1,teamId:match.assigned_teams[1].includes(p.player_id)?0:1}))};
+    match.left=gone.map(p=>({...p,at:Date.now(),left_state:'live',disconnect_confirmed:true,reason:'reconnect_timeout'}));
+    match.players=original.slice(0,remaining);
+    gone.forEach(p=>L._internals.inMatch.delete(p.player_id));
+    fields.rows=fields.rows.split(',').slice(0,remaining).join(',');
+    assert.equal((await L.finalSnapshot(match.host,fields)).ok,true,`remaining=${remaining}`);
+    assert.equal(plan().receipt.participants.length,10);
+    assert.equal(Object.keys(plan().receipt.history).length,10);
+    for(const p of gone) {
+      const row=plan().receipt.full.final_stats.find(r=>r.steamId===p.player_id);
+      assert.equal(row.kills,2); assert.equal(row.deaths,1); assert.equal(row.stats_complete,false);
+    }
+  }
+});
+
+test('a confirmed disconnect in the last round does not hold results for the unused reconnect window',async t=>{
+  const {L,match,fields,plan}=fixture(t);
+  const id=match.players.at(-1).player_id, since=Date.now();
+  match.reconnect={[id]:{since,deadline:since+300000}};
+  fields.rows=fields.rows.split(',').slice(0,3).join(',');
+  assert.equal((await L.finalSnapshot(match.host,fields)).ok,true);
+  const row=plan().receipt.full.final_stats.find(r=>r.steamId===id);
+  assert.equal(row.stats_complete,false);
+  assert.equal(row.kills,undefined,'unknown totals must not be invented');
+  assert.equal(plan().receipt.participants.length,4);
+});
+
+test('a missing final row cannot itself establish a disconnect',async t=>{
+  const {L,match,fields}=fixture(t);
+  const gone=match.players.pop(); match.left=[{...gone,left_state:'live'}];
+  fields.rows=fields.rows.split(',').slice(0,3).join(',');
+  assert.equal((await L.finalSnapshot(match.host,fields)).ok,false);
+});
+
+test('failed presence persistence cannot authorize missing final data',async t=>{
+  const {L,match,fields,store}=fixture(t);
+  store.before=async args=>{if(args[0]==='EVAL')throw Error('offline');};
+  const rows=match.players.slice(0,3).map(p=>({steam_id:p.game_steam_id,active:1}));
+  assert.equal((await L.matchPresence(match.host,match.id,rows)).ok,false);
+  assert.equal(match.reconnect,undefined);
+  store.before=null;
+  fields.rows=fields.rows.split(',').slice(0,3).join(',');
+  assert.equal((await L.finalSnapshot(match.host,fields)).ok,false);
+});
+
+test('an expired missing player must be adjudicated before an incomplete final can save',async t=>{
+  const {L,match,fields}=fixture(t);
+  const id=match.players.at(-1).player_id,since=Date.now()-300001;
+  match.reconnect={[id]:{since,deadline:since+300000}};
+  fields.rows=fields.rows.split(',').slice(0,3).join(',');
+  assert.equal((await L.finalSnapshot(match.host,fields)).ok,false);
+  assert.equal(match.final_snapshot,undefined);
+});
+
+test('optional departed ghost rows cannot change the effective final fingerprint on retry',async t=>{
+  const {L,match,fields,fail,plan}=fixture(t);
+  const p=match.players.pop();
+  match.left=[{...p,left_state:'live',disconnect_confirmed:true,last_stats:{steamId:p.player_id,kills:2,deaths:1}}];
+  L._internals.inMatch.delete(p.player_id);
+  fail(true);assert.equal((await L.finalSnapshot(match.host,fields)).ok,false);
+  fields.rows=fields.rows.split(',').slice(0,3).join(',');
+  fail(false);assert.equal((await L.finalSnapshot(match.host,fields)).ok,true);
+  assert.equal(plan().receipt.full.final_stats.find(r=>r.steamId===p.player_id).kills,2);
+});
+
+test('a last-round disconnect with a lingering PlayerState stays incomplete across final retries',async t=>{
+  const {L,match,fields,fail,plan}=fixture(t);
+  const id=match.players.at(-1).player_id,since=Date.now();
+  match.reconnect={[id]:{since,deadline:since+300000}};
+  match.stats={players:[{steamId:id,kills:1,deaths:1}]};
+  fail(true);assert.equal((await L.finalSnapshot(match.host,fields)).ok,false);
+  fields.rows=fields.rows.split(',').slice(0,3).join(',');
+  fail(false);assert.equal((await L.finalSnapshot(match.host,fields)).ok,true);
+  const row=plan().receipt.full.final_stats.find(r=>r.steamId===id);
+  assert.equal(row.kills,1);assert.equal(row.disconnected,true);assert.equal(row.stats_complete,false);
+  assert.equal(plan().receipt.inputs.stats.series[id],undefined);
+});
+
+test('a lingering PlayerState cannot bypass an expired reconnect penalty',async t=>{
+  const {L,match,fields}=fixture(t);
+  const id=match.players.at(-1).player_id,since=Date.now()-300001;
+  match.reconnect={[id]:{since,deadline:since+300000}};
+  assert.equal((await L.finalSnapshot(match.host,fields)).ok,false);
+  assert.equal(match.final_snapshot,undefined);
+});
+
 test('storage failure never releases players or updates ratings; retry commits once', async t => {
   const { L, match, fields, fail } = fixture(t); fail(true);
   const before = structuredClone(L._internals.ratingOf(match.host));

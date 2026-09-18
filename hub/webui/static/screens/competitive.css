@@ -61,7 +61,7 @@
 .btn-find:hover { transform: translateY(-1px); }
 .btn-find:disabled { opacity: .5; cursor: default; transform: none; }
 .hero-ready { font-size: 12.5px; line-height: 1.5; color: #fff; opacity: .92; }
-.hero-link { font-size: 12px; text-decoration: underline; cursor: pointer; opacity: .95; }
+.hero-link { font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; opacity: .95; color: inherit; background: none; border: 0; padding: 0; text-align: left; }
 .hero-error { background: rgba(0,0,0,.28); padding: 10px 12px; font-size: 12.5px; line-height: 1.4; }
 
 /* searching / found overlays inside the hero action area */
@@ -633,3 +633,14 @@ button.veto-map:focus-visible { outline-color: var(--accent); }
 .comp-network :focus-visible { outline: 2px solid white; outline-offset: 3px; }
 .comp-network :disabled { opacity: .6; cursor: not-allowed; }
 .comp-network-status { margin-top: 6px; opacity: .82; font-size: 11px; }
+
+.account-form {display:grid;gap:12px;max-width:360px;margin:16px auto;text-align:left;}
+.account-choices {display:grid;gap:12px;}
+.account-choices .btn-find {margin:0;font-size:18px;letter-spacing:.10em;white-space:nowrap;}
+.account-field {display:grid;gap:5px;}
+.account-field input {padding:10px;border:1px solid #555;border-radius:6px;background:#16191d;color:#fff;width:100%;box-sizing:border-box;}
+.account-remember {display:flex;gap:8px;align-items:center;}
+
+/* Account disclosures remain readable beside the sign-in controls. */
+.account-disclosure{font-size:12px;line-height:1.45;opacity:.85;max-width:430px;margin:18px 0 0}
+.account-policies{display:flex;gap:18px;flex-wrap:wrap}

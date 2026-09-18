@@ -9,8 +9,8 @@ from hub import match_cleanup as cleanup
 def setup_worker(monkeypatch, receipt_after=0, identity_error=False):
     job_id = 'a' * 32
     identity = {'pid': 42, 'created': 1234, 'exe': 'bodycam.exe'}
-    job = {'schema': 1, 'job_id': job_id, 'match_id': '1' * 16, 'steam_id': '76561198000000001',
-           'token': 'test-only', 'expected_exe': 'bodycam.exe', 'identity': identity}
+    job = {'schema': 2, 'job_id': job_id, 'match_id': '1' * 16, 'steam_id': '76561198000000001',
+           'credential': 'fixture-only', 'expected_exe': 'bodycam.exe', 'identity': identity}
     cleanup._write(cleanup._job_path(job_id), job)
     clock = [0.0]; calls = []; checks = [0]; exited = [False]
 
@@ -90,6 +90,17 @@ def test_receipt_must_confirm_exact_match_and_complete_data():
 
 def test_job_argument_cannot_be_a_path():
     with pytest.raises(ValueError): cleanup._job_path('../state')
+
+
+def test_signout_waits_only_for_own_unfinished_cleanup():
+    player = 'a1111111-1111-4111-8111-111111111111'
+    job_id = 'b' * 32
+    cleanup._write(cleanup._job_path(job_id), {'steam_id': player})
+    assert cleanup.pending_for(player)
+    assert not cleanup.pending_for('76561198000000001')
+    for terminal in cleanup.TERMINAL:
+        cleanup._status(job_id, terminal)
+        assert not cleanup.pending_for(player)
 
 
 def test_dispatch_does_not_import_the_ui(monkeypatch):

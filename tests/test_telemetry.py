@@ -17,6 +17,16 @@ def make(tmp_path, sender=None, **limits):
 def rows(tmp_path):
     return json.loads((tmp_path / "telemetry.json").read_text(encoding="utf-8"))["events"]
 
+
+def test_gameplay_token_renewal_preserves_the_same_players_pending_events(tmp_path):
+    a = make(tmp_path); a.start()
+    player = 'a1111111-1111-4111-8111-111111111111'
+    a.identify('first-game-token', player_id=player)
+    a.emit('ui.action', action='find_match')
+    original = [r['id'] for r in rows(tmp_path) if r['type'] == 'ui.action']
+    a.identify('renewed-game-token', player_id=player)
+    assert [r['id'] for r in rows(tmp_path) if r['type'] == 'ui.action'] == original
+
 def test_inactive_then_unclean_restart_preserves_ids(tmp_path):
     a = make(tmp_path)
     assert a.emit("ui.action", action="find_match") is False

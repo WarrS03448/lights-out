@@ -4170,6 +4170,37 @@ def _match_ready_to_close():
     return s, panel, closed, restore
 
 
+def test_old_match_completion_cannot_close_a_new_match():
+    s, panel, closed, restore = _match_ready_to_close()
+    try:
+        s.match_id = "new-match"
+        for kind in ("match_result", "match_over", "match_cancelled"):
+            s.on_live_event({"type": kind, "match_id": "old-match"})
+        assert s.phase == "live"
+        assert not closed
+        assert s.history_stale
+    finally:
+        restore()
+
+
+def test_migrated_host_replay_keeps_original_host_as_a_joiner():
+    s, panel, closed, restore = _match_ready_to_close()
+    try:
+        s.match_id = "match"
+        old_host = s.host["steam_id"]
+        successor = next(p["steam_id"] for p in s.players if p["steam_id"] != old_host)
+        s.host_pak_done = s.pak_done = True
+        s.on_live_event({"type": "match_live", "match_id": "match", "host": successor,
+                         "host_epoch": 1, "migration_token": "ab" * 32})
+        assert s.phase == "live"
+        assert not s._i_am_host()
+        assert not s.host_pak_done and not s.pak_done
+        assert s.migration_token == "ab" * 32
+        assert not closed
+    finally:
+        restore()
+
+
 def test_game_closes_only_after_the_hub_registers_the_match_complete():
     """Sam, 2026-09-15: "make sure the game only closes after flashbang registers the game as
     complete." The hub IS Flashbang, so the gate is register_match_complete() and nothing else.

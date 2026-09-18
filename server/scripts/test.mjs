@@ -35,6 +35,11 @@ function rankScript(script, args, { strings, sets, boards }) {
     if (row.placing) boards.get(key).delete(row.id);
     else boards.get(key).set(row.id, Number(row.progress));
   };
+  if(script.includes('host-forget-v1')) {
+    const authority=JSON.parse(strings.get(keys[2])||'null');
+    if(authority&&!authority.closed&&!strings.has(keys[3]))return 0;
+    strings.delete(keys[0]);sets.get(keys[1])?.delete(argv[0]);return 1;
+  }
   if (script.includes('rank-snapshot-v1')) {
     const receipt = strings.get(keys[0]);
     if (receipt) {
@@ -131,7 +136,7 @@ async function openStream(base, token, versions) {
             const event = JSON.parse(line.slice(6));
             events.push(event);
             for (let i = waiters.length - 1; i >= 0; i -= 1) {
-              if (waiters[i].type === event.type) { waiters[i].resolve(event); waiters.splice(i, 1); }
+              if (waiters[i].type === event.type && waiters[i].predicate(event)) { waiters[i].resolve(event); waiters.splice(i, 1); }
             }
           }
         }
@@ -142,11 +147,11 @@ async function openStream(base, token, versions) {
   return {
     events,
     close: () => controller.abort(),
-    wait(type, ms = 8000) {
-      const already = events.find((e) => e.type === type);
+    wait(type, ms = 8000, predicate = () => true) {
+      const already = events.find((e) => e.type === type && predicate(e));
       if (already) return Promise.resolve(already);
       return new Promise((resolve, reject) => {
-        const waiter = { type, resolve };
+        const waiter = { type, resolve, predicate };
         waiters.push(waiter);
         setTimeout(() => {
           const i = waiters.indexOf(waiter);
@@ -2062,6 +2067,7 @@ async function main() {
     await test('a live match closes itself instead of holding its players for ever', async () => {
       const [a, b] = await readyPair(A, B, { drive: true });
       const foundBefore = a.events.filter((e) => e.type === 'match_found').length;
+      const priorMatchIds=new Set(a.events.filter(e=>e.type==='match_found').map(e=>e.match_id));
       await post(cbase, '/api/match/connecting', A, { host: '76561198000000001' });
       await a.wait('match_connecting');
       await post(cbase, '/api/match/connected', A);
@@ -2085,6 +2091,7 @@ async function main() {
 
       // ...and they are back in circulation: both were innocent, so they went to the front of
       // the queue and (at MATCH_SIZE 2) were matched again straight away.
+      await a.wait('match_found',8000,e=>!priorMatchIds.has(e.match_id));
       const foundAfter = a.events.filter((e) => e.type === 'match_found');
       assert.equal(foundAfter.length, foundBefore + 1, 'a NEW match, so the player is free again');
       assert.notEqual(foundAfter[foundAfter.length - 1].match_id, liveA.match_id);

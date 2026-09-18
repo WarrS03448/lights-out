@@ -52,6 +52,7 @@
   // render() would close the picker the moment a friend came online. It is view-only state and
   // deliberately NOT in the snapshot - Python has no business knowing which list is unfolded.
   var invitesOpen = false;
+  var accountForm = "", accountDraft = {};
   var rankGuideOpen = false;
   var rankGuideFresh = false;
   var rankGuideIdentity = null;
@@ -147,7 +148,7 @@
     // the inline links/chips stay <span>s (as before). ui.btn is the shared helper.
     function btn(cls, text, onclick) {
       var tag = (cls === "btn-find" || cls === "btn-accept" ||
-                 cls === "btn-ghost-light" || cls === "btn-solid") ? "button" : "span";
+                 cls === "btn-ghost-light" || cls === "btn-solid" || cls === "hero-link") ? "button" : "span";
       return ui.btn(cls, text, onclick, { tag: tag });
     }
 
@@ -251,20 +252,98 @@
       var inner = el("div", "hero-inner signin");
       inner.innerHTML =
         '<h1>' + esc(t("comp_signin_title")) + "</h1>" +
-        "<p>" + esc(t("comp_signin_body")) + "</p>";
+        "<p>" + esc(t("account_choice_body")) + "</p>";
       if (auth.phase === "signing_in") {
         var w = el("div", "signin");
-        w.innerHTML = "<p>" + esc(t("comp_signin_waiting")) + "</p>" +
-          (auth.link_code ? '<div class="code-lg">' + esc(t("comp_signin_code", { code: auth.link_code })) + "</div>" : "");
-        var again = btn("hero-link", t("comp_signin_open_again"), function () { call("open_link_again"); });
-        w.appendChild(again);
+        w.innerHTML = "<p>" + esc(t(auth.game_verifying ? "account_game_verifying" : "comp_signin_waiting")) + "</p>" +
+          (!auth.game_verifying && auth.link_code ? '<div class="code-lg">' + esc(t("comp_signin_code", { code: auth.link_code })) + "</div>" : "");
+        if (!auth.game_verifying) w.appendChild(btn("hero-link", t("comp_signin_open_again"), function () { call("open_link_again"); }));
+        w.appendChild(btn("hero-link", t(auth.game_verifying ? "comp_signout" : "comp_cancel"), function () { accountForm = ""; accountDraft = {}; call("cancel_sign_in"); }));
         inner.appendChild(w);
+      } else if (auth.phase === "game_unavailable") {
+        inner.appendChild(el("p", "", t("account_game_pending")));
+        inner.appendChild(btn("btn-find", t("account_game_retry"), function () { call("account_action", "game/retry"); }));
+        inner.appendChild(btn("hero-link", t("comp_signout"), function () { call("sign_out"); }));
       } else {
-        inner.appendChild(btn("btn-find", t("comp_signin_button"), function () { call("sign_in"); }));
+        var choices = el("div", "account-choices");
+        choices.appendChild(btn("btn-find", t("comp_signin_button"), function () { call("sign_in"); }));
+        choices.appendChild(btn("btn-find", t("account_login"), function () { accountForm = "login"; accountDraft = {}; root.innerHTML = ""; render(root, state, ctx); }));
+        inner.appendChild(choices);
+        if (!auth.account_step && !accountForm) inner.appendChild(btn("hero-link", t("account_create"), function () {
+          accountForm = "register"; accountDraft = {}; root.innerHTML = ""; render(root, state, ctx);
+        }));
+        var step = auth.account_step || accountForm;
+        if (step) {
+          var form = el("form", "signin account-form");
+          form.setAttribute("aria-busy", String(!!auth.account_busy));
+          if (state.comp && state.comp.error) {
+            var accountError = el("div", "hero-error", state.comp.error);
+            accountError.setAttribute("role", "alert"); form.appendChild(accountError);
+          }
+          function input(key, label, type) {
+            var row = el("label", "account-field", t(label)), field = document.createElement("input");
+            field.type = type || "text"; field.name = key; field.required = true;
+            if (type === "password") field.minLength = 6;
+            if (key === "token" || key === "code" || key === "email") { field.autocapitalize = "none"; field.setAttribute("autocorrect", "off"); field.spellcheck = false; }
+            field.maxLength = key === "password" ? 256 : key === "display_name" ? 80 : 256;
+            field.autocomplete = type === "password" ? (step === "register_code" ? "new-password" : "current-password") : key === "email" ? "email" : key === "display_name" ? "nickname" : "one-time-code";
+            field.value = accountDraft[key] || "";
+            field.oninput = function () {
+              accountDraft[key] = field.value;
+              if (confirmation) confirmation.setCustomValidity("");
+            };
+            row.appendChild(field); form.appendChild(row);
+            return field;
+          }
+          var confirmation = null;
+          if (step === "login" || step === "register") input("email", "account_email", "email");
+          if (step === "login" || step === "register_code") input("password", "account_password", "password");
+          if (step === "register_code") confirmation = input("confirm_password", "account_confirm_password", "password");
+          if (step === "register_code") input("display_name", "account_name");
+          if (step === "login_code" || step === "register_code") {
+            form.appendChild(el("p", "muted", t("account_code_sent")));
+            input(step === "login_code" ? "code" : "token", "account_code");
+          }
+          if (step === "login") {
+            var remember = el("label", "account-remember"), check = document.createElement("input");
+            check.type = "checkbox"; check.checked = accountDraft.remember_me === true;
+            check.onchange = function () { accountDraft.remember_me = check.checked; };
+            remember.appendChild(check); remember.appendChild(document.createTextNode(t("account_remember"))); form.appendChild(remember);
+          }
+          var submit = document.createElement("button"); submit.type = "submit"; submit.className = "btn-find";
+          submit.textContent = t(auth.account_busy ? "account_working" : "account_continue");
+          submit.disabled = !!auth.account_busy; form.appendChild(submit);
+          form.onsubmit = function (event) {
+            event.preventDefault(); if (auth.account_busy) return;
+            var fields = Object.assign({}, accountDraft);
+            if (confirmation && fields.password !== fields.confirm_password) {
+              confirmation.setCustomValidity(t("account_password_mismatch")); confirmation.reportValidity(); return;
+            }
+            delete fields.confirm_password;
+            if (fields.code) fields.code = fields.code.trim();
+            if (fields.token) fields.token = fields.token.trim();
+            delete accountDraft.password; delete accountDraft.confirm_password; delete accountDraft.code; delete accountDraft.token;
+            form.querySelectorAll('input[type="password"]').forEach(function (field) { field.value = ""; });
+            call("account_action", step === "login_code" ? "login/verify" : step === "register_code" ? "verify" : step, fields);
+          };
+          inner.appendChild(form);
+          inner.appendChild(btn("hero-link", t("comp_cancel"), function () {
+            accountForm = ""; accountDraft = {}; call("account_action", "cancel");
+            root.innerHTML = ""; render(root, Object.assign({}, state, {auth:Object.assign({}, auth, {account_step:""})}), ctx);
+          }));
+          if (!auth.account_step) inner.appendChild(btn("hero-link", t(step === "login" ? "account_create" : "account_login"), function () {
+            accountForm = step === "login" ? "register" : "login"; accountDraft = {}; root.innerHTML = ""; render(root, state, ctx);
+          }));
+        }
       }
-      if (auth && state.comp && state.comp.error) {
+      if (auth && state.comp && state.comp.error && !(auth.account_step || accountForm)) {
         inner.appendChild(el("div", "hero-error", state.comp.error));
       }
+      inner.appendChild(el("p", "account-disclosure", t("account_game_privacy")));
+      var policies = el("div", "account-policies");
+      policies.appendChild(btn("hero-link", t("account_privacy"), function () { call("account_policy", "privacy"); }));
+      policies.appendChild(btn("hero-link", t("account_terms"), function () { call("account_policy", "terms"); }));
+      inner.appendChild(policies);
       h.appendChild(inner);
       return h;
     }
@@ -1002,6 +1081,11 @@
       var box = el("div", "found-box live-action");
       if (comp.error) box.appendChild(el("div", "hero-error", comp.error));
       box.appendChild(el("div", "found-title", t("comp_live_title")));
+      (lv.reconnect_waiting || []).forEach(function (row) {
+        var seconds = Math.max(0, Math.ceil((Number(row.deadline) - Date.now()) / 1000));
+        var clock = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+        box.appendChild(el("div", "found-count", t("comp_reconnect_wait", { time: clock })));
+      });
       box.appendChild(el("div", "found-map", t("comp_map", { map: lv.map || "?" })));
       box.appendChild(el("div", "found-count", t("comp_host", { name: host.name || "?", ping: host.ping == null ? "—" : (host.estimated ? "≈" : "") + host.ping })));
       // Relaunch is for everyone in a live match: their game should be running, and this re-runs it

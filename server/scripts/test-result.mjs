@@ -89,6 +89,13 @@ function liveMatch(svc, { hostSide = 1 } = {}) {
   return match;
 }
 
+// These tests assemble extra roster seats before exercising native reports.
+function addFixturePlayer(match, player) {
+  match.players.push(player);
+  delete match.game_bindings;
+  require('../player-identity.cjs').freezeMatch(match);
+}
+
 console.log('\n--- the game reports its score ---');
 
 test('reaching the score limit decides the match', () => {
@@ -1011,7 +1018,7 @@ test("Sam's case: a team kill cancelled by an enemy kill leaves the counter at z
   const match = liveMatch(svc);
   match.team_map = { 0: 1, 1: 2 };
   const mate = '76561198000000003';
-  match.players.push({ steam_id: mate, accepted: true, connected: true });
+  addFixturePlayer(match, { steam_id: mate, accepted: true, connected: true });
   match.teams[1].push(mate);
   svc.gameReportedStats(HOST, { match: 'match-under-test', rows: `${HOST}|k=0;d=0`, rounds: '1' });
   svc._internals.gameReportedKill(HOST, { match: 'match-under-test', row: `k=${HOST};v=${mate};n=1` });
@@ -1056,7 +1063,7 @@ test('a TEAM KILL is a lookup, not an inference - and the host cannot hide it', 
   const { matches } = svc._internals;
   const match = liveMatch(svc);
   const mate = '76561198000000003';
-  match.players.push({ steam_id: mate, persona: 'mate', accepted: true, connected: true });
+  addFixturePlayer(match, { steam_id: mate, persona: 'mate', accepted: true, connected: true });
   match.teams[1].push(mate);
   svc._internals.inMatch.set(mate, match.id);
   const out = svc._internals.gameReportedKill(HOST, {
@@ -1073,7 +1080,7 @@ test('this is exactly what the kill COUNTER cannot see', () => {
   const svc = service();
   const match = liveMatch(svc);
   const mate = '76561198000000003';
-  match.players.push({ steam_id: mate, accepted: true, connected: true });
+  addFixturePlayer(match, { steam_id: mate, accepted: true, connected: true });
   match.teams[1].push(mate);
   const kill = (k, v) => svc._internals.gameReportedKill(HOST, {
     match: 'match-under-test', row: `k=${k};v=${v};n=1` });
@@ -1239,7 +1246,7 @@ test('a team kill from the feed reaches the enforcement, verdict and all', () =>
   const svc = service();
   const match = liveMatch(svc);
   const mate = '76561198000000003';
-  match.players.push({ steam_id: mate, accepted: true, connected: true });
+  addFixturePlayer(match, { steam_id: mate, accepted: true, connected: true });
   match.teams[1].push(mate);
   const out = svc._internals.gameReportedKill(HOST, {
     match: 'match-under-test', row: `k=${HOST};v=${mate};n=2;t=40;a0=3;a1=3`,
@@ -1324,7 +1331,7 @@ test('team kills on the board come from the feed, not from the netted counter', 
   // Two team kills by the host, one enemy kill. The netted `Kill` counter would imply fewer.
   const mate = '76561198000000003';
   const match = liveMatch(svc, { hostSide: 1 });
-  match.players.push({ steam_id: mate, persona: 'mate', accepted: true, connected: true });
+  addFixturePlayer(match, { steam_id: mate, persona: 'mate', accepted: true, connected: true });
   match.teams[1].push(mate);
   svc._internals.inMatch.set(mate, match.id);
   archived(svc, match);

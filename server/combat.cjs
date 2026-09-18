@@ -1,4 +1,5 @@
 'use strict';
+const {validPlayer} = require('./player-identity.cjs');
 
 const { createHash } = require('node:crypto');
 
@@ -163,7 +164,7 @@ function ingest(state,event,context={}) {
   const eligible=!provisional&&!state.coverage.broken;
   let incident=state.incidents.find(i=>i.actorId===e.a&&i.round===e.n&&(group?i.group===group:!i.group&&e.t>=i.lastGameTime&&e.t-i.lastGameTime<POLICY.independentSeconds));
   if(!incident) {
-    incident={id:`ci1_${hash(`${state.matchId}:${e.a}:${e.n}:${group||e.seq}`)}`,actorId:e.a,matchId:state.matchId,round:e.n,
+    incident={id:`ci1_${hash(`${state.matchId}:${context.authorityEpoch ? `host-${context.authorityEpoch}:` : ""}${e.a}:${e.n}:${group||e.seq}`)}`,actorId:e.a,matchId:state.matchId,round:e.n,
       startedAt:context.now,endedAt:context.now,gameTime:e.t,lastGameTime:e.t,group,damage:0,victimIds:[],lethalVictimIds:[],eventSeqs:[],validated:!provisional,sanctionEligible:eligible,
       evidence:{phase:e.phase,firstHealth:healthEvidence,lastHealth:healthEvidence}};
     state.incidents.push(incident);
@@ -187,9 +188,9 @@ function evaluate(history,now,overrides={}) {
   // Fail closed on mixed actors: caller must partition persisted history by actor.
   const unique=new Map();
   for(const i of history) {
-    if(!i||typeof i.id!=='string'||!SID.test(i.actorId)||i.validated!==true||i.sanctionEligible!==true||i.sanctioned===true||i.sanctionId||
+    if(!i||typeof i.id!=='string'||!validPlayer(i.actorId)||i.validated!==true||i.sanctionEligible!==true||i.sanctioned===true||i.sanctionId||
       !numeric(i.damage)||i.damage<=0||!numeric(i.startedAt)||!numeric(i.endedAt)||i.endedAt<i.startedAt||i.startedAt>now||i.endedAt>now||now-i.endedAt>p.expiryMs||
-      typeof i.matchId!=='string'||!Number.isInteger(i.round)||!numeric(i.gameTime)||!Array.isArray(i.victimIds)||!i.victimIds.length||i.victimIds.some(v=>!SID.test(v)||v===i.actorId)) continue;
+      typeof i.matchId!=='string'||!Number.isInteger(i.round)||!numeric(i.gameTime)||!Array.isArray(i.victimIds)||!i.victimIds.length||i.victimIds.some(v=>!validPlayer(v)||v===i.actorId)) continue;
     if(!unique.has(i.id)) unique.set(i.id,i);
     else if(canonical(unique.get(i.id))!==canonical(i)) return insufficient;
   }
@@ -318,4 +319,18 @@ function summary(state,steamId,rounds) {
   return output;
 }
 
-module.exports={POLICY,createState,parseRow,ingest,summary,evaluate};
+function summaryAcross(states, steamId, rounds) {
+  const segments=states.filter(Boolean);
+  if(segments.length<2)return summary(segments[0],steamId,rounds);
+  const combined=createState();combined.coverage.broken=true;
+  let next=0;
+  segments.forEach((state,index)=>{
+    Object.assign(combined.roster,state.roster);
+    const ids=new Map(state.events.map(e=>[e.seq,++next]));
+    combined.events.push(...state.events.map(e=>({...e,seq:ids.get(e.seq),
+      n:e.n+index*10001,...(e.ref!==undefined?{ref:ids.get(e.ref)}:{}),
+      ...(e.attack?{attack:`segment-${index}:${e.attack}`}:{})})));
+  });
+  return summary(combined,steamId,rounds);
+}
+module.exports={POLICY,createState,parseRow,ingest,summary,summaryAcross,evaluate};

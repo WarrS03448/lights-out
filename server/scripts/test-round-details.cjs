@@ -41,6 +41,24 @@ test('missing adjacent samples and decreasing death counters stay unknown',()=>{
   assert.equal(rounds[1].scoreboard[0].kills,-1);
   assert.equal(rounds[1].scoreboard[0].deaths,null);
 });
+
+test('Lights Out round and archived combat counterparties retain canonical ownership',async t=>{
+  const raw=match(), player='a1111111-1111-4111-8111-111111111111';
+  raw.players[1]={player_id:player,game_steam_id:B,steam_id:B};raw.teams[2]=[player];
+  const before=JSON.stringify(raw);
+  const peer=roundDetails(raw)[0].scoreboard[0].combat.playerStats[0];
+  assert.equal(peer.player_id,player);assert.equal(peer.game_steam_id,B);
+  assert.equal(JSON.stringify(raw),before);
+  const board=[{steam_id:A,player_id:A,combat:{enemyDamage:35}}];
+  const publicMatch={players:raw.players,teams:raw.teams,score:raw.score,scoreboard:board,rounds_played:2};
+  const receipt={inputs:raw,publicMatch,score:raw.score,rows:[],board};
+  const svc=require('../live.cjs').create({upstashCmd:async args=>
+    args[0]==='GET'&&args[1]==='hub:settlement:old' ? JSON.stringify(receipt) : args[0]==='SMEMBERS' ? [] : null});
+  t.after(()=>svc.shutdown());
+  const detail=await svc._internals.readMatch('old',A);
+  assert.equal(detail.scoreboard[0].combat.playerStats[0].player_id,player);
+  assert.equal(detail.scoreboard[0].combat.playerStats[0].game_steam_id,B);
+});
 test('partial capture cannot manufacture complete round data or anonymous team kills',()=>{
   const m=match();m.combatState.coverage.broken=true;
   m.kills=[{round:0,killer:A,victim:B,teamKill:true},{round:1,killer:A,teamKill:true,inferred:true}];

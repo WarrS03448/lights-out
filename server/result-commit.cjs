@@ -9,6 +9,13 @@ for i, expected in ipairs(p.types) do
   local actual = redis.call('TYPE', KEYS[i]).ok
   if actual ~= 'none' and actual ~= expected then return redis.error_reply('result key type mismatch') end
 end
+if p.authority then
+  local raw=redis.call('GET',KEYS[p.authority])
+  if raw then
+    local a=cjson.decode(raw)
+    if a.closed or a.epoch~=p.host_epoch or a.host~=p.host then return redis.error_reply('result authority changed') end
+  elseif p.host_epoch>0 then return redis.error_reply('result authority missing') end
+end
 for _, r in ipairs(p.rank_checks or {}) do
   local current = redis.call('GET', KEYS[r.index])
   local revision = 0

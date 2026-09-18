@@ -420,7 +420,7 @@ function roundContext(match, stats, teamOfPlayer) {
 
   const everyone = new Set([
     ...Object.keys(perRound), ...Object.keys(clutch),
-    ...((match && match.players) || []).map((p) => p.steam_id),
+    ...((match && match.players) || []).map((p) => p.player_id || p.steam_id),
   ]);
   for (const steamId of everyone) {
     const side = teamOfPlayer(steamId);

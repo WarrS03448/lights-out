@@ -204,6 +204,8 @@ def apply(desired_ids, catalogue, state, game_dir, log=None, progress=None) -> d
                 if game_mod.game_running():
                     raise RuntimeError(t("close_game"))
                 out(f"Removing {pak}")
+                from . import recording
+                recording.before_write(game_dir, version.PAK_NAME, None)
                 os.remove(pak)
             else:
                 out("Nothing to remove (no pak installed).")
@@ -294,6 +296,8 @@ def apply(desired_ids, catalogue, state, game_dir, log=None, progress=None) -> d
         progress(0.95, t("installing"))
         if game_mod.game_running():
             raise RuntimeError(t("close_game"))
+        from . import recording
+        recording.before_write(game_dir, version.PAK_NAME, tmp_out)
         os.replace(tmp_out, pak)                    # atomic swap
         tmp_out = None
         out(f"Installed {pak} ({os.path.getsize(pak)} bytes)")

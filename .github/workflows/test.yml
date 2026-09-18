@@ -16,7 +16,9 @@ jobs:
         with:
           node-version: '24'
       - name: Install Python test dependency
-        run: python -m pip install -r hub/requirements.txt pytest==9.1.1
+        run: python -m pip install -r hub/requirements.txt -r server/scripts/account-test-requirements.txt pytest==9.1.1
+      - name: Install server dependencies
+        run: npm ci --prefix server
       - name: Connection IP privacy checks
         run: |
           npm --prefix server run test:privacy

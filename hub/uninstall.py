@@ -243,7 +243,16 @@ def perform(game_dir, wipe_data=False, log=None) -> dict:
                 "wiped": False, "uninstaller": path}
 
     say("%s %s — uninstalling" % (version.APP_NAME, version.HUB_VERSION))
-    files = remove_game_files(game_dir, log=say)
+    from . import recording
+    if recording.enabled():
+        try:
+            recording.restore()
+        except Exception as exc:
+            say(str(exc))
+            return {"ok":False,"error":"launch_failed","removed":[],"failed":[],"wiped":False,"uninstaller":path}
+        files = {"removed":[],"failed":[]}
+    else:
+        files = remove_game_files(game_dir, log=say)
     wiped = wipe_state(log=say) if wipe_data else False
     say("Starting %s" % path)
     try:

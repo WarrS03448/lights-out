@@ -43,6 +43,15 @@ if receipt then return {'replayed', receipt} end
 if not validType(KEYS[2], 'zset') or not validType(KEYS[3], 'string') or not validType(KEYS[4], 'set') then return {'invalid-type'} end
 local rows = cjson.decode(ARGV[3])
 local queueIndex = #rows + 5
+local authorityKey=KEYS[queueIndex+1]
+if authorityKey then
+  local raw=redis.call('GET',authorityKey)
+  local expected=cjson.decode(ARGV[2])
+  if raw then
+    local a=cjson.decode(raw)
+    if a.closed or a.epoch~=(expected.host_epoch or 0) or a.host~=expected.host then return {'authority'} end
+  elseif (expected.host_epoch or 0)>0 then return {'authority'} end
+end
 if KEYS[queueIndex] and not validType(KEYS[queueIndex], 'set') then return {'invalid-type'} end
 for i, row in ipairs(rows) do
   if not validType(KEYS[4+i], 'string') then return {'invalid-type'} end
@@ -74,6 +83,19 @@ if receipt then
   return {'settled', receipt}
 end
 local previous = redis.call('GET', KEYS[2])
+local incoming = cjson.decode(ARGV[2])
+local initialAuthority=nil
+if KEYS[4] then
+  if not validType(KEYS[4],'string') then return {'invalid-type'} end
+  local authority=redis.call('GET',KEYS[4])
+  if authority then
+    local a=cjson.decode(authority)
+    if a.closed or a.epoch~=(incoming.host_epoch or 0) or a.host~=incoming.host then return {'authority'} end
+  elseif (incoming.host_epoch or 0)>0 then return {'authority'}
+  elseif incoming.migration_digests then
+    initialAuthority=cjson.encode({host=incoming.host,epoch=0,digest=incoming.migration_digests[incoming.host],candidate='',last_seen=0})
+  end
+end
 if previous then
   local saved = cjson.decode(previous)
   local incoming = cjson.decode(ARGV[2])
@@ -86,6 +108,7 @@ if previous then
   end
 end
 redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3])
+if initialAuthority then redis.call('SET',KEYS[4],initialAuthority,'EX',ARGV[3]) end
 redis.call('SADD', KEYS[3], ARGV[1])
 return {'saved'}
 `;

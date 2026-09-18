@@ -120,15 +120,37 @@ def load(path=None) -> dict:
         st["matchmaking_cross_region"] = data["matchmaking_cross_region"]
     if isinstance(data.get("ui_click_enabled"), bool):
         st["ui_click_enabled"] = data["ui_click_enabled"]
+    from . import credentials
     saved_auth = data.get("auth")
-    if isinstance(saved_auth, dict) and saved_auth.get("token") and saved_auth.get("steam_id"):
-        st["auth"] = {"token": str(saved_auth["token"]), "steam_id": str(saved_auth["steam_id"]),
-                      "persona": str(saved_auth.get("persona") or ""),
-                      "avatar": str(saved_auth.get("avatar") or "")}
+    if isinstance(saved_auth, dict):
+        try:
+            protected = "protected" in saved_auth
+            if protected:
+                saved_auth = credentials.open_sealed(saved_auth)
+            if saved_auth.get("token") and (saved_auth.get("player_id") or saved_auth.get("steam_id")) \
+                    and not str(saved_auth["token"]).startswith("lg_"):
+                if not protected:
+                    # Persist and verify protection before erasing legacy plaintext.
+                    sealed = credentials.seal(saved_auth)
+                    if credentials.open_sealed(sealed) != saved_auth:
+                        raise credentials.CredentialError()
+                    _write_state({**data, "auth": sealed}, path)
+                st["auth"] = saved_auth
+        except (credentials.CredentialError, OSError):
+            st["auth"] = None
     return st
 
 
 def save(state: dict, path=None) -> None:
+    from . import credentials
+    output = dict(state)
+    account = output.get("auth")
+    if isinstance(account, dict) and account.get("token"):
+        output["auth"] = None if str(account["token"]).startswith("lg_") else credentials.seal(account)
+    _write_state(output, path)
+
+
+def _write_state(state: dict, path=None) -> None:
     """Write state.json atomically (temp file + os.replace) so a crash cannot corrupt it."""
     p = str(path or paths.state_file())
     with _write_lock:

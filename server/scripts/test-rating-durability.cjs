@@ -324,7 +324,7 @@ test('old receipts gain player damage detail without rewriting frozen totals or 
     const s=service(db);
     try {
       await s._internals.ready;const full=await s._internals.readMatch('match-1',H);
-      assert.deepEqual(full.scoreboard[0].combat.playerStats,[{steam_id:F,damageDealt:35,damageTaken:null}]);
+      assert.deepEqual(full.scoreboard[0].combat.playerStats,[{player_id:F,game_steam_id:F,steam_id:F,damageDealt:35,damageTaken:null}]);
       assert.equal(full.scoreboard[0].combat.enemyDamage,999);assert.equal(full.scoreboard[0].kills,2);
       assert.equal(JSON.stringify(full).includes('combatState'),false);assert.equal(JSON.stringify(full).includes('events'),false);
       assert.equal(await s._internals.readMatch('match-1','76561198000000999'),null);

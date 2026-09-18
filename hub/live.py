@@ -28,6 +28,7 @@ import urllib.request
 
 from .version import API_BASE, HUB_VERSION
 from . import telemetry
+from .player_identity import normalize
 
 # A ping arrives every 15 s, so a minute of silence means the pipe is dead, not idle.
 READ_TIMEOUT_SECONDS = 60
@@ -101,7 +102,7 @@ class LiveClient:
     def start(self):
         if self._thread is not None:
             return
-        telemetry.identify(self.token)
+        telemetry.identify(self.token, player_id=getattr(self, "player_id", None))
         telemetry.emit("connection.start", action="live_stream")
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -334,10 +335,10 @@ class LiveClient:
             for peer in peers:
                 if not isinstance(peer, dict):
                     continue
-                steam_id, marker, peer_revision = (peer.get("steam_id"), peer.get("location"),
+                player_id, marker, peer_revision = (peer.get("player_id") or peer.get("steam_id"), peer.get("location"),
                                                     peer.get("revision"))
                 if not all(isinstance(value, str) and value
-                           for value in (steam_id, marker, peer_revision)):
+                           for value in (player_id, marker, peer_revision)):
                     continue
                 try:
                     ping = probe.estimate(marker)
@@ -345,7 +346,7 @@ class LiveClient:
                     ping = None
                 if isinstance(ping, bool) or not isinstance(ping, int) or ping < 0:
                     continue
-                estimates.append({"steam_id": steam_id, "revision": peer_revision,
+                estimates.append({"player_id": player_id, "revision": peer_revision,
                                   "ping": ping})
             if not self._network_active(session, change):
                 return
@@ -422,7 +423,7 @@ class LiveClient:
         try:
             with urllib.request.urlopen(req, timeout=ACTION_TIMEOUT_SECONDS) as response:
                 raw = response.read().decode("utf-8", "replace")
-                return response.status, (json.loads(raw) if raw else {})
+                return response.status, normalize(json.loads(raw) if raw else {})
         except urllib.error.HTTPError as e:
             try:
                 return e.code, json.loads(e.read().decode("utf-8", "replace") or "{}")
@@ -556,7 +557,7 @@ class LiveClient:
         try:
             with urllib.request.urlopen(req, timeout=ACTION_TIMEOUT_SECONDS) as response:
                 raw = response.read().decode("utf-8", "replace")
-                return response.status, (json.loads(raw) if raw else {})
+                return response.status, normalize(json.loads(raw) if raw else {})
         except urllib.error.HTTPError as e:
             try:
                 return e.code, json.loads(e.read().decode("utf-8", "replace") or "{}")
@@ -655,7 +656,7 @@ class LiveClient:
                 if not line.startswith("data: "):
                     continue              # "retry:" and any field we do not use
                 try:
-                    event = json.loads(line[6:])
+                    event = normalize(json.loads(line[6:]))
                 except ValueError:
                     continue
                 if isinstance(event, dict) and event.get("type"):

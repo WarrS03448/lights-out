@@ -100,7 +100,7 @@ SEED_HOST_ID = "0"
 # can never match a real match, so a pak that somehow ships unstamped joins nothing rather than
 # joining the wrong thing.
 SEED_JOIN_TOKEN = "chjoin-7f3a91"
-# Host-only report capability placeholder (lobby_graphs.py REPORT_TOKEN). Unlike the join token,
+# Private participant capability placeholder (lobby_graphs.py REPORT_TOKEN). Unlike the join token,
 # this value is never advertised in Steam lobby data or put in a joiner pak.
 SEED_REPORT_TOKEN = "chreport-7f3a91"
 
@@ -275,8 +275,8 @@ def retarget_pak(src_pak, out_pak, level_pkg, level_name,
         # host pak that could not carry it would strand a ranked match on an old unauthenticated
         # client. Only the host class may contain this private slot.
         if report_token:
-            if gm_uasset != CHLOBBY_UASSET:
-                raise ValueError("only the host lobby pak may carry a report token")
+            if gm_uasset not in (CHLOBBY_UASSET, CHJOIN_UASSET):
+                raise ValueError("only a private participant lobby pak may carry a report capability")
             try:
                 new_ua, _ = _rename_two(new_ua, old_report_token, report_token,
                                         old_report_token, report_token, workdir, one=True)

@@ -38,8 +38,9 @@ def player_damage_rows(value, players=None):
     for row in rows[:65]:
         if not isinstance(row, dict):
             continue
-        sid = str(row.get("steam_id") or "")
-        if sid and not re.fullmatch(r"[0-9]{17}", sid):
+        from ..player_identity import valid_player
+        sid = str(row.get("player_id") or row.get("steam_id") or "")
+        if sid and not valid_player(sid):
             continue
         who = players.get(sid) or {}
         out.append({"steam_id": sid, "name": str(who.get("name") or who.get("persona") or sid),

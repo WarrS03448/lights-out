@@ -29,3 +29,16 @@ test('failed chunks never produce a publishable manifest and live chunks have a 
   assert.deepEqual(calls[0].slice(-2),['EX','172800']);
   await assert.rejects(blobs.unpack(async()=> 'a'.repeat(20),packed,'live'),/Truncated/);
 });
+
+test('migrated evidence segments survive both live snapshots and final receipts',async()=>{
+  const data=new Map();
+  const store=async cmd=>cmd[0]==='SET'?(data.set(cmd[1],cmd[2]),'OK'):data.get(cmd[1])??null;
+  const segments=[{version:1,events:[{raw:'x'.repeat(300000)}]},{version:1,events:[{raw:'y'.repeat(300000)}]}];
+  for(const owner of ['hub:live:m','hub:settlement:m']) {
+    const original=owner.includes('settlement')?{inputs:{combat_segments:segments}}:{combat_segments:segments};
+    const packed=await blobs.pack(store,original,owner,{ttl:172800});
+    const saved=packed.inputs?.combat_segments||packed.combat_segments;
+    assert.ok(saved.every(s=>s.__combat_blob));
+    assert.deepEqual(await blobs.unpack(store,packed,owner),original);
+  }
+});

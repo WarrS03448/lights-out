@@ -58,6 +58,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="Bodycam Mirror")
     static bool SetVariableReplicated(UBlueprint* Blueprint, const FString& VariableName, bool bReplicated, const FString& RepNotifyFunction = TEXT(""));
 
+    UFUNCTION(BlueprintCallable, Category="BodycamMirror")
+    static bool SetVariableSaveGame(UBlueprint* Blueprint, const FString& VariableName);
+
     /** Class defaults of an SCS widget component: the widget class it creates at BeginPlay and screen/world space. */
     UFUNCTION(BlueprintCallable, Category="Bodycam Mirror")
     static FString SetWidgetComponentDefaults(UBlueprint* Blueprint, const FString& VariableName, UClass* WidgetClass, bool bScreenSpace = true);

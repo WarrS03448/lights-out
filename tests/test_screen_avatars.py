@@ -115,8 +115,9 @@ def test_the_service_hands_out_an_avatar_wherever_it_hands_out_a_name():
     # Every roster the HUB draws from: match_found, match_ready, the connect window, the live
     # panel - and the rejoin replay, which is the whole roster a hub that dropped gets back. Miss
     # that last one and reconnecting turns everybody's face back into initials.
-    rosters = LIVE_CJS.count("steam_id: p.steam_id, persona: p.persona, avatar: p.avatar || ''")
-    rosters += LIVE_CJS.count("steam_id: q.steam_id, persona: q.persona, avatar: q.avatar || ''")
+    rosters = LIVE_CJS.count("player_id: p.player_id, game_steam_id: identity.gameFor(match, p.player_id), persona: p.persona, avatar: p.avatar || ''")
+    rosters += LIVE_CJS.count("player_id: q.player_id, game_steam_id: identity.gameFor(match, q.player_id), persona: q.persona, avatar: q.avatar || ''")
+    rosters += LIVE_CJS.count("player_id: p.player_id, game_steam_id: identity.gameFor(rejoin, p.player_id), persona: p.persona, avatar: p.avatar || ''")
     assert rosters == 5, "expected five hub-facing rosters to carry avatars, found %d" % rosters
     assert "avatar: (anyClient && anyClient.avatar) || avatarOf(steamId)" in LIVE_CJS, \
         "the match must carry the face from the moment it is formed, not look it up later"

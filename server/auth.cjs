@@ -25,6 +25,8 @@
  *     STEAM_WEB_API_KEY. Everything works without it; the player is just shown their ID.
  */
 const crypto = require('crypto');
+const accountsModule = require('./accounts.cjs');
+const ownership = require('./account-ownership.cjs');
 
 const STEAM_OPENID = 'https://steamcommunity.com/openid/login';
 const CLAIMED_ID_RE = /^https?:\/\/steamcommunity\.com\/openid\/id\/(\d{17})$/;
@@ -126,11 +128,29 @@ async function fetchProfile(steamId) {
   }
 }
 
-function create({ upstashCmd, prefix = 'hub:', sendJson, badRequest, verify }) {
+function create({ upstashCmd, prefix = 'hub:', accountPrefix=prefix, accountStore=upstashCmd,
+                  allowSteamId=()=>true, privateGameplay=false, sendJson, badRequest, verify, accounts, ownershipTransaction }) {
   const store = makeStore(upstashCmd, prefix + 'auth:');
+  const accountService = accountsModule.create({upstashCmd:accountStore,prefix:accountPrefix,authPrefix:prefix,sendJson,
+    steamIdentity,ownershipTransaction,options:accounts,revokeSteam:token=>store.del(`token:${token}`)});
   // `verify` exists so tests can exercise the handshake without talking to Steam. It is
   // NEVER set in production: server.cjs does not pass it, so the real check always runs.
   const checkAssertion = verify || verifyWithSteam;
+
+  // Ownership is durable authorization state, not optional account enrichment.
+  // Read it even when new Lights Out registrations are disabled. An unavailable
+  // ledger must never resurrect a disconnected Steam login through legacy data.
+  async function steamLedger(steamId) {
+    return ownership.readSteam({upstashCmd:accountStore,prefix:accountPrefix},steamId);
+  }
+  async function resolveSteam(session) {
+    if(!allowSteamId(session.steam_id))return null;
+    const ledger=await steamLedger(session.steam_id);
+    if(privateGameplay&&ledger?.account_id&&!await accountService.bySteam(session.steam_id))return null;
+    if((session.steam_generation||0)!==(ledger?.generation||0))return null;
+    return {player_id:ledger?.player_id||session.steam_id,steam_generation:ledger?.generation||0,
+      account_id:ledger?.account_id||null,auth_method:'steam'};
+  }
 
   async function profileFor(steamId) {
     const cached = await store.get(`user:${steamId}`);
@@ -204,8 +224,13 @@ function create({ upstashCmd, prefix = 'hub:', sendJson, badRequest, verify }) {
     }
 
     const steamId = match[1];
+    if(!allowSteamId(steamId)) {
+      await store.set(`link:${code}`,{status:'denied'},LINK_TTL_SECONDS);
+      return sendPage(res,403,'Private test','This account is not invited to the private test.');
+    }
     const token = randomToken();
-    await store.set(`token:${token}`, { steam_id: steamId, created: Date.now() }, TOKEN_TTL_SECONDS);
+    const ledger=await steamLedger(steamId);
+    await store.set(`token:${token}`, { steam_id: steamId, created: Date.now(),steam_generation:ledger?.generation||0 }, TOKEN_TTL_SECONDS);
     await store.set(`link:${code}`, { status: 'ready', steam_id: steamId, token }, LINK_TTL_SECONDS);
 
     const profile = await profileFor(steamId);
@@ -219,12 +244,16 @@ function create({ upstashCmd, prefix = 'hub:', sendJson, badRequest, verify }) {
     if (!code) return badRequest(res, 'Missing code.');
     const pending = await store.get(`link:${code}`);
     if (!pending) return sendJson(res, 200, { ok: true, status: 'expired' });
+    if(pending.status==='denied')return sendJson(res,200,{ok:false,status:'denied'});
     if (pending.status !== 'ready') return sendJson(res, 200, { ok: true, status: 'pending' });
 
     await store.del(`link:${code}`);       // single use: the token has taken over
+    const identity=await steamIdentity(pending.token);
+    if(!identity)return sendJson(res,401,{ok:false,error:'Sign in again. This account association has changed.'});
     const profile = await profileFor(pending.steam_id);
     sendJson(res, 200, {
-      ok: true, status: 'ready', token: pending.token, steam_id: pending.steam_id, ...profile,
+      ok: true, status: 'ready', token: pending.token, steam_id: pending.steam_id,
+      player_id:identity.player_id||pending.steam_id,game_steam_id:pending.steam_id,auth_method:'steam',...profile,
     });
   }
 
@@ -236,16 +265,37 @@ function create({ upstashCmd, prefix = 'hub:', sendJson, badRequest, verify }) {
   /** 5. Who is this token? Also refreshes the token's lifetime. */
   async function handleMe(req, res) {
     const token = bearer(req);
+    if(accountsModule.isSession(token)) {
+      return accountService.route(req,res,'GET','/api/auth/account/me');
+    }
     if (!token) return sendJson(res, 401, { ok: false, error: 'Not signed in.' });
     const session = await store.get(`token:${token}`);
     if (!session) return sendJson(res, 401, { ok: false, error: 'Signed out or expired.' });
+    const identity=await resolveSteam(session);
+    if(!identity)return sendJson(res,401,{ok:false,error:'Sign in again. This account association has changed.'});
     await store.set(`token:${token}`, session, TOKEN_TTL_SECONDS);
     const profile = await profileFor(session.steam_id);
-    sendJson(res, 200, { ok: true, steam_id: session.steam_id, ...profile });
+    let linked=null;
+    if(accountService.ready) {
+      try {
+        if(identity.account_id)linked=await accountService.bySteam(session.steam_id);
+        if(linked&&(linked.id!==identity.account_id||linked.player_id!==identity.player_id||linked.steam_id!==session.steam_id))
+          throw Error('Ownership changed');
+      }
+      // Optional account enrichment must not take down independent Steam login.
+      catch {linked=null;}
+    }
+    sendJson(res, 200, { ok: true, steam_id: session.steam_id, player_id:identity.player_id,...profile,
+      ...(linked?{account_id:linked.id,account:accountService.summary(linked),auth_method:'steam'}:{}) });
   }
 
   async function handleSignOut(req, res) {
     const token = bearer(req);
+    if(accountsModule.isSession(token)) {
+      try { await accountService.signout(token);sendJson(res,200,{ok:true}); }
+      catch { sendJson(res,503,{ok:false,error:'Account service is temporarily unavailable.'}); }
+      return;
+    }
     if (token) await store.del(`token:${token}`);
     sendJson(res, 200, { ok: true });
   }
@@ -277,34 +327,56 @@ function create({ upstashCmd, prefix = 'hub:', sendJson, badRequest, verify }) {
 
   /** Returns true when it handled the request. */
   async function route(req, res, method, pathname, url) {
+    if(await accountService.route(req,res,method,pathname))return true;
     if (method === 'GET' && pathname === '/api/auth/start') { await handleStart(req, res); return true; }
     if (method === 'GET' && pathname === '/auth/steam/start') { await handleSteamStart(req, res, url); return true; }
-    if (method === 'GET' && pathname === '/auth/steam/return') { await handleSteamReturn(req, res, url); return true; }
+    if (method === 'GET' && pathname === '/auth/steam/return') {
+      try {await handleSteamReturn(req, res, url);}catch {sendJson(res,503,{ok:false,error:'Sign-in is temporarily unavailable.'});}
+      return true;
+    }
     if (method === 'GET' && pathname === '/api/auth/poll') { await handlePoll(req, res, url); return true; }
-    if (method === 'GET' && pathname === '/api/auth/me') { await handleMe(req, res); return true; }
+    if (method === 'GET' && pathname === '/api/auth/me') {
+      try {await handleMe(req, res);}catch {sendJson(res,503,{ok:false,error:'Sign-in is temporarily unavailable.'});}
+      return true;
+    }
     if (method === 'POST' && pathname === '/api/auth/signout') { await handleSignOut(req, res); return true; }
     return false;
   }
 
   /** Who is this bearer token? Used by the live service to authenticate an SSE stream or a
    *  POST. Returns {steam_id, persona, avatar} or null — never throws, never refreshes. */
-  async function whoami(token) {
+  async function steamIdentity(token) {
     if (!token) return null;
+    if(accountsModule.isSession(token))return null;
     // TEST SEAM. HUB_TEST_TOKENS="tok=steamid,tok2=steamid2" lets the test suite drive the
     // queue and match flow without a real Steam round trip. Disabled outside explicit tests.
     const seam = process.env.NODE_ENV === 'test' && process.env.HUB_TEST_TOKENS;
     if (seam) {
       for (const pair of seam.split(',')) {
         const [name, steamId] = pair.split('=');
-        if (name && name.trim() === String(token) && steamId) {
-          return { steam_id: steamId.trim(), persona: 'Test ' + steamId.trim().slice(-2), avatar: '' };
+        if (name && name.trim() === String(token) && steamId && allowSteamId(steamId.trim())) {
+          return { steam_id: steamId.trim(),auth_method:'steam', persona: 'Test ' + steamId.trim().slice(-2), avatar: '' };
         }
       }
     }
     const session = await store.get(`token:${String(token)}`);
     if (!session || !session.steam_id) return null;
+    const identity=await resolveSteam(session);
+    if(!identity)return null;
     const profile = await profileFor(session.steam_id);
-    return { steam_id: session.steam_id, ...profile };
+    return { steam_id: session.steam_id, ...identity,authenticated_at:session.created,...profile };
+  }
+
+  // Both credentials resolve to a stable owner plus a separately verified
+  // game identity. A Lights Out parent login cannot authorize native gameplay.
+  async function whoami(token) {
+    try {
+      if(accountsModule.isGameSession(token)) return await accountService.gameIdentity(token);
+      if(accountsModule.isSession(token)) return null;
+      const identity=await steamIdentity(token);
+      return identity ? {...identity,player_id:identity.player_id||identity.steam_id,
+        game_steam_id:identity.steam_id} : null;
+    } catch {return null;}
   }
 
   // `profileFor` is exported because live.cjs needs a name for somebody who is not signed in
@@ -312,7 +384,18 @@ function create({ upstashCmd, prefix = 'hub:', sendJson, badRequest, verify }) {
   // one: Steam's GetPlayerSummaries behind a day-long cache. server.cjs has passed it in as
   // `profileOf` since the bug-report release; until it was exported here that was a seam wired to
   // `undefined`, and live.cjs quietly never called it.
-  return { route, whoami, bearer, profileFor,
+  async function admitGameplay(token, expected) {
+    if(privateGameplay) {
+      if(accountsModule.isGameSession(token))return accountService.markUsed(token,expected,true);
+      const current=await whoami(token);
+      return Boolean(current&&current.player_id===expected.player_id&&current.game_steam_id===expected.game_steam_id);
+    }
+    if(accountsModule.isGameSession(token))return accountService.markUsed(token,expected);
+    if(accountsModule.isSession(token))return false;
+    if(process.env.NODE_ENV==='test'&&process.env.HUB_TEST_TOKENS)return true;
+    return ownership.markSteamUsed({upstashCmd,prefix:accountPrefix,authPrefix:prefix},token,expected);
+  }
+  return { route, whoami, bearer, profileFor, admitGameplay,
            _internals: { verifyWithSteam, randomCode, randomToken, CLAIMED_ID_RE } };
 }
 

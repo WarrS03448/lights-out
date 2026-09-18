@@ -160,8 +160,9 @@ def register(match_id, steam_id, token, game_dir, launched_at=None):
             ensure_worker(path.stem)
             return path.stem
     job_id = uuid.uuid4().hex
-    _write(_job_path(job_id), {"schema": 1, "job_id": job_id, "match_id": match_id,
-        "steam_id": steam_id, "token": token, "expected_exe": _normal_path(expected),
+    from .credentials import seal
+    _write(_job_path(job_id), {"schema": 2, "job_id": job_id, "match_id": match_id,
+        "steam_id": steam_id, "credential": seal({"token": token}), "expected_exe": _normal_path(expected),
         "launched_at": launched_at, "identity": identity})
     ensure_worker(job_id)
     return job_id
@@ -190,6 +191,22 @@ def resume_pending_jobs():
                 ensure_worker(path.stem)
             except OSError:
                 pass  # Job remains available for the next startup.
+
+
+def pending_for(player_id):
+    """Do not revoke a receipt credential while its detached worker still needs it."""
+    if not player_id:
+        return False
+    for path in _directory().glob("*.json"):
+        if not re.fullmatch(r"[0-9a-f]{32}", path.stem):
+            continue
+        try:
+            job = _read(path)
+            if job.get("steam_id") == player_id and read_status(path.stem).get("state") not in TERMINAL:
+                return True
+        except (OSError,ValueError):
+            continue
+    return False
 
 
 def finish_launch(job_id):
@@ -233,12 +250,14 @@ def receipt_allows_close(job, receipt):
 
 def _receipt(job):
     try:
-        saved = state.load().get("auth") or {}
-        token = (saved.get("token") if saved.get("steam_id") == job["steam_id"] else None) or job["token"]
+        from .credentials import open_sealed, CredentialError
+        # A match cleanup worker has only its protected, expiring gameplay token.
+        # It never falls back to another account's remembered parent credential.
+        token = open_sealed(job["credential"])["token"]
         status, value = auth._request("/api/match/completion?" + urlencode({"id": job["match_id"]}),
                                       token=token, timeout=10)
         return value if status == 200 and receipt_allows_close(job, value) else None
-    except (OSError, ValueError, auth.AuthError):
+    except (OSError, ValueError, KeyError, CredentialError, auth.AuthError):
         return None
 
 
@@ -265,13 +284,21 @@ def run_worker(job_id):
     handle = None
     try:
         job = _read(path)
-        if job.get("schema") != 1 or job.get("job_id") != job_id:
+        if job.get("schema") not in (1, 2) or job.get("job_id") != job_id:
             return 1
         if read_status(job_id).get("state") in TERMINAL:
             return 0
         grace_started = None; receipt = None; attempts = 0
         while True:
             try:
+                if job.get("schema") == 1:
+                    from .credentials import seal
+                    if not job.get("token"):
+                        return 1
+                    migrated = {**job, "schema": 2, "credential": seal({"token": job["token"]})}
+                    del migrated["token"]
+                    _write(path, migrated)
+                    job = migrated
                 identity = job.get("identity")
                 if identity is None:
                     identity = _capture_launched(job)

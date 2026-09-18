@@ -1,5 +1,5 @@
 {
-  "release": "2.3.87",
+  "release": "2.3.88",
   "date": "2026-09-18",
   "scope": "Original client, server, gamemode generators, editor helper, packaging code and tests",
   "source_export_changes": [
@@ -12,12 +12,13 @@
     "Replace real identifiers reused by tests with synthetic fixtures",
     "Bundle license notices with local builds and pin optional oozextract to 0.5.0",
     "Include authenticated host travel, public policies and automated privacy checks for release 2.3.86",
-    "Include single-load host startup, one joiner reconnect action, and verified timestamped release signing for 2.3.87"
+    "Include single-load host startup, one joiner reconnect action, and verified timestamped release signing for 2.3.87",
+    "Include email accounts, privacy disclosures, verified game identity, host migration and reconnect grace for 2.3.88; omit private test deployment tooling and settings"
   ],
   "gamemode_packs": [
     {
-      "path": "packs/BB5-1.0.27.zip",
-      "sha256": "3787d8cdb1c23d3b6d529662447abf8bfa68426c0fbd1a66400a9267a33fc4f3"
+      "path": "packs/BB5-1.0.28.zip",
+      "sha256": "7891a9b49edcda712e8a03bf09dd0213ca94afe3cd5afb961c5bf85f91e9ba0f"
     },
     {
       "path": "packs/CTF-1.0.4.zip",

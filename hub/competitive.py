@@ -38,6 +38,7 @@ from . import match_cleanup
 from . import i18n
 from . import lobbypak as lobbypak_mod
 from . import live as live_mod
+from . import player_identity
 from . import paths
 from . import sounds as sounds_mod
 from . import state as state_mod
@@ -156,7 +157,8 @@ ENEMY_CALLSIGNS = ("Alpha", "Bravo", "Charlie", "Delta", "Echo",
 #   person. These three numbers are the SERVER's defaults (COMP_CONNECT_SECONDS,
 #   COMP_NO_SHOW_BAN_SECONDS, COMP_NO_SHOW_ELO); the server is the authority, and what it
 #   sends overrides what is written here.
-CONNECT_SECONDS = 300
+from . import version as _private_version
+CONNECT_SECONDS = 900 if getattr(_private_version, 'ACCOUNT_TEST', False) else 300
 NO_SHOW_BAN_SECONDS = 300
 NO_SHOW_ELO = 25
 
@@ -863,6 +865,7 @@ class MockSession(Session):
         self.connected_ids = set()
         self.i_connected = False
         self.teams_status = ""
+        self.reconnect_waiting = []
         self.stage_seconds = 0
         self.stage_total_seconds = 0
         self._stage_ticking = False
@@ -890,7 +893,9 @@ class MockSession(Session):
         # be re-stamped for every match because the TOKEN changes, where the launch must not repeat.
         self.pak_done = False
         self.host_level = ""
-        self.report_token = ""       # host-only, per-match; never placed in UI snapshots
+        self.report_token = ""       # private per-match capability; never placed in UI snapshots
+        self.migration_token = ""
+        self.host_epoch = 0
         self.match_complete = ""
         self.game_close = ""
         self._close_armed = False      # one close per match, whatever order the events arrive in
@@ -989,8 +994,8 @@ class MockSession(Session):
             return False
         try:
             ready = lobbypak_mod.prepare(game, "BB5", self.map, log=None,
-                                 host_id=(self.host or {}).get("steam_id") or "",
-                                 token=token, role="join")
+                                 host_id=player_identity.native_id(self.host),
+                                 token=token, role="join", report_token=self.migration_token)
             self.pak_done = bool(ready)
             if ready:
                 self._lobby_pak_dir = game
@@ -1031,7 +1036,7 @@ class MockSession(Session):
             # nothing a joiner could ask for by name, and autojoin degrades to manual silently.
             self.host_level = lobbypak_mod.prepare(
                 game, HOST_GAMEMODE_ID, self.map,
-                host_id=str((self.host or {}).get("steam_id") or ""),
+                host_id=player_identity.native_id(self.host),
                 token=self._match_token(), report_token=self.report_token)
             self.host_pak_done = bool(self.host_level)
             if self.host_pak_done:
@@ -1703,7 +1708,8 @@ class MockSession(Session):
         self._changed()
 
     def _sign_in_done(self, account):
-        self.adopt_account(account, save=True)
+        if self.adopt_account(account, save=True) is False:
+            return
         self.phase = "idle"
         self.error = ""
         self._changed()
@@ -1733,9 +1739,22 @@ class MockSession(Session):
             self.error = t("comp_signout_locked")
             self._changed()
             return
-        token, self.token = self.token, ""
+        token = self.token
+        try:
+            pending = auth_mod.queue_revoke(token) if token else None
+        except Exception:
+            self.error = t("account_storage_failed")
+            self._changed()
+            return
+        self._complete_sign_out(token, pending)
+
+    def _complete_sign_out(self, token, pending):
+        """The revocation record is already durable; this path cannot queue it again."""
+        from . import telemetry
+        telemetry.identify(None)
         if token:
-            threading.Thread(target=auth_mod.sign_out, args=(token,), daemon=True).start()
+            threading.Thread(target=lambda: auth_mod.revoke_session(token, pending=pending), daemon=True).start()
+        self.token = ""
         self.panel.save_auth(None)
         self.me = None
         self.phase = "signed_out"
@@ -2686,6 +2705,9 @@ class LiveSession(MockSession):
     def __init__(self, panel):
         super().__init__(panel)
         self.client = None
+        self.parent_token = ""
+        self._proof_epoch = 0
+        self._pending_game_account = None
         # Exactly one queue countdown may ever be running. It is armed idempotently (the
         # `queued` event and the join POST's 200 race each other, and either may arrive first),
         # so this flag is what stops a second overlapping loop from double-counting the clock.
@@ -2723,7 +2745,122 @@ class LiveSession(MockSession):
         self.reset_match()
 
     # ---------------------------------------------------------------- connection
+    def _revoke_login(self, token):
+        if token:
+            try:
+                pending = auth_mod.queue_revoke(token)
+            except Exception:
+                return False
+            threading.Thread(target=lambda: auth_mod.revoke_session(token, pending=pending), daemon=True).start()
+        return True
+
+    def _abandon_game_login(self):
+        token = getattr(self, "parent_token", "")
+        if token and not self._revoke_login(token):
+            self.phase = "game_unavailable"
+            self.error = t("account_storage_failed")
+            self._changed()
+            return False
+        self.parent_token = self.token = ""
+        self._pending_game_account = None
+        self.me = None
+        if token:
+            self.panel.save_auth(None)
+        return True
+
+    def _cancel_account_login(self):
+        self._proof_epoch = getattr(self, "_proof_epoch", 0) + 1
+        self.account_busy = False
+        self.account_step = ""
+        self._login_challenge = ""
+        self._account_remember = False
+        self.game_verifying = False
+        self.error = ""
+
+    def sign_in(self):
+        if self.phase == "signed_out":
+            self._cancel_account_login()
+            super().sign_in()
+
+    def cancel_sign_in(self):
+        if self.phase in ("signed_out", "signing_in"):
+            self._cancel_account_login()
+            if self._abandon_game_login() is False:
+                return
+            super().cancel_sign_in()
+            self._changed()
+
+    def account_action(self, action, fields=None):
+        """Email credentials/codes never enter snapshots, telemetry or saved state."""
+        if action == "game/retry":
+            if self.phase == "game_unavailable" and self._pending_game_account:
+                self.error = ""
+                self._prove_game_account(self._pending_game_account, False)
+            return
+        if action == "cancel":
+            return self.cancel_sign_in()
+        if self.me or self.phase != "signed_out" or getattr(self, "account_busy", False):
+            return
+        fields = fields if isinstance(fields, dict) else {}
+        if action not in ("login", "login/verify", "register", "verify"):
+            return
+        self.account_busy = True
+        self.error = ""
+        self._proof_epoch = getattr(self, "_proof_epoch", 0) + 1
+        epoch = self._proof_epoch
+        if action == "login":
+            self._account_remember = fields.get("remember_me") is True
+            payload = {key: fields.get(key) for key in ("email", "password", "remember_me")}
+        elif action == "login/verify":
+            payload = {"challenge": getattr(self, "_login_challenge", ""), "code": fields.get("code")}
+        elif action == "register":
+            payload = {"email": fields.get("email")}
+        else:
+            payload = {key: fields.get(key) for key in ("token", "password", "display_name")}
+        self._changed()
+        def work():
+            try:
+                result = auth_mod.account_request(action, payload)
+                def apply():
+                    if getattr(self, "_proof_epoch", 0) != epoch:
+                        self._revoke_login(result.get("token"))
+                        return
+                    self.account_busy = False
+                    if action == "login":
+                        self._login_challenge = result["challenge"]
+                        self.account_step = "login_code"
+                    elif action == "register":
+                        self.account_step = "register_code"
+                    elif action == "verify":
+                        self.account_step = "login"
+                        self.error = t("account_created")
+                    else:
+                        self._login_challenge = ""
+                        self.account_step = ""
+                        remember = getattr(self, "_account_remember", False)
+                        if not remember:
+                            if self.panel.save_auth(None) is False:
+                                self._revoke_login(result.get("token"))
+                                self.error = t("account_storage_failed")
+                                self._changed()
+                                return
+                        self.adopt_account({**result, "remember_me": remember}, save=remember)
+                    self._changed()
+                self.panel.post(apply)
+            except Exception:
+                def failed():
+                    if getattr(self, "_proof_epoch", 0) == epoch:
+                        self.account_busy = False
+                        self.error = t("account_request_failed")
+                        self._changed()
+                self.panel.post(failed)
+        threading.Thread(target=work, daemon=True).start()
+
     def adopt_account(self, account, save=False):
+        account = {**(account.get("account") or {}), **account}
+        account = player_identity.normalize(account)
+        if str(account.get("token") or "").startswith("lo_"):
+            return self._prove_game_account(account, save)
         steam_id = str(account.get("steam_id") or "")
         same_account = bool(self.me and self.me.get("steam_id") == steam_id)
         token = str(account.get("token") or self.token or "")
@@ -2733,18 +2870,113 @@ class LiveSession(MockSession):
             self._clear_account_state()
             # Live accounts start with identity only. Preview ranks and match counts must
             # never stand in for a rating that has not arrived from the server yet.
-            self.me = {"steam_id": steam_id}
+            self.me = {"steam_id": steam_id, "player_id": steam_id}
             self.online = self.live_matches = self.queue_size = self.stats_queued = 0
             self.stats_ready = False
         # Saved-login validation races the first rating/stats events. Refresh identity in
         # place so its later response cannot erase server progress on the existing stream.
         self.me.update({"name": str(account.get("persona") or steam_id),
-                        "avatar": str(account.get("avatar") or "")})
+                        "avatar": str(account.get("avatar") or ""),
+                        "game_steam_id": player_identity.native_id(account)})
         self.token = token
+        self.parent_token = str(account.get("parent_token") or token)
         if save:
-            self.panel.save_auth({"token": token, "steam_id": steam_id,
-                                  "persona": self.me["name"], "avatar": self.me["avatar"]})
+            saved = self.panel.save_auth({"token": self.parent_token, "player_id": steam_id,
+                "steam_id": steam_id, "game_steam_id": self.me["game_steam_id"],
+                "persona": self.me["name"], "avatar": self.me["avatar"],
+                "remember_me": account.get("remember_me", True)})
+            if saved is False:
+                abandoned = self._abandon_game_login()
+                self.phase = "signed_out" if abandoned else "game_unavailable"
+                self.error = t("account_storage_failed")
+                self._changed()
+                return False
         self._connect()
+        return True
+
+    def _prove_game_account(self, account, save, renewal=False):
+        from . import game_identity
+        if not renewal:
+            self._disconnect()
+            if (self.me or {}).get("steam_id") != account.get("player_id"):
+                self._clear_account_state()
+            self.me = None
+        self._proof_epoch = getattr(self, "_proof_epoch", 0) + 1
+        epoch = self._proof_epoch
+        self.parent_token = account["token"]
+        self._pending_game_account = dict(account)
+        parent = self.parent_token
+        if not renewal and save and account.get("remember_me", False):
+            if self.panel.save_auth(account) is False:
+                abandoned = self._abandon_game_login()
+                self.phase = "signed_out" if abandoned else "game_unavailable"
+                self.error = t("account_storage_failed")
+                self._changed()
+                return False
+        if not renewal:
+            self.token = ""
+            self.game_verifying = True
+            self.phase = "signing_in"
+            self._changed()
+        def current():
+            return self._proof_epoch == epoch and self.parent_token == parent
+        def renew():
+            if not current():
+                return
+            if self.phase != "idle":
+                self._later(60000, renew)
+            else:
+                self._prove_game_account(account, False, renewal=True)
+        def work():
+            try:
+                verified = game_identity.mint_session(parent, self._game_dir(), should_stop=lambda: not current())
+                if verified.get("player_id") != account.get("player_id"):
+                    raise game_identity.GameIdentityError()
+                def apply():
+                    if not current():
+                        return
+                    if renewal and self.phase != "idle":
+                        self._later(60000, renew)
+                        return
+                    adopted = self.adopt_account({**account, **verified, "persona": account.get("persona") or account.get("display_name"),
+                        "parent_token": parent}, save=save and account.get("remember_me", False))
+                    self.game_verifying = False
+                    if adopted is False:
+                        return
+                    self.phase = "idle"
+                    self._changed()
+                    # Prove in the background, and only replace the live connection while idle.
+                    self._later(6 * 3600 * 1000, renew)
+                self.panel.post(apply)
+            except Exception:
+                def failed():
+                    if current():
+                        if renewal:
+                            self._later(60000, renew)
+                            return
+                        self.game_verifying = False
+                        self.error = t("account_game_unavailable")
+                        self.phase = "game_unavailable"
+                        self._changed()
+                self.panel.post(failed)
+        threading.Thread(target=work, daemon=True).start()
+
+    def restore_account(self, saved):
+        if not saved.get("token"):
+            return
+        self._proof_epoch = getattr(self, "_proof_epoch", 0) + 1
+        epoch = self._proof_epoch
+        def work():
+            fresh = auth_mod.me(saved["token"])
+            def apply():
+                if self._proof_epoch != epoch or not fresh:
+                    return
+                self.adopt_account({**saved, **fresh, "token": saved["token"]})
+                if not str(saved["token"]).startswith("lo_"):
+                    self.phase = "idle"
+                self._changed()
+            self.panel.post(apply)
+        threading.Thread(target=work, daemon=True).start()
 
     def _connect(self):
         if self.client is not None or not self.token:
@@ -2760,6 +2992,7 @@ class LiveSession(MockSession):
                 lambda: self._on_live_status(ok, detail) if self.client is client else None),
             versions=self._versions, network_config=self._network_config)
         self.client = client
+        self.client.player_id = (self.me or {}).get("player_id")
         self.client.start()
 
     def _network_config(self):
@@ -2794,9 +3027,36 @@ class LiveSession(MockSession):
         if self.locked_in():
             super().sign_out()          # refuses, and says why
             return
+        try:
+            pending = match_cleanup.pending_for((self.me or {}).get("player_id") or (self.me or {}).get("steam_id"))
+        except OSError:
+            self.error = t("account_storage_failed")
+            self._changed()
+            return
+        if pending:
+            try:
+                game_open = game_mod.game_running()
+            except Exception:
+                game_open = True  # Unknown process state cannot authorize credential revocation.
+        else:
+            game_open = False
+        if game_open:
+            self.error = t("account_wait_cleanup")
+            self._changed()
+            return
+        try:
+            token = getattr(self, "parent_token", "") or self.token
+            pending = auth_mod.queue_revoke(token) if token else None
+        except Exception:
+            self.error = t("account_storage_failed")
+            self._changed()
+            return
         self._disconnect()
         self._clear_account_state()
-        super().sign_out()
+        self._cancel_account_login()
+        self.parent_token = ""
+        self._pending_game_account = None
+        self._complete_sign_out(token, pending)
 
     def _on_live_status(self, ok, detail):
         self.connected = bool(ok)
@@ -3281,7 +3541,14 @@ class LiveSession(MockSession):
 
     # ---------------------------------------------------------------- events
     def on_live_event(self, event):
+        event = player_identity.normalize(event)
         kind = event.get("type")
+        if (kind in ("match_result", "match_over", "match_cancelled") and self.match_id
+                and event.get("match_id") and event["match_id"] != self.match_id):
+            # A leaver's old game can finish after they have entered another one.
+            # Its result belongs in history and must never close the current game.
+            self.history_stale = True
+            return
         if kind == "network_status":
             self._changed()
             return
@@ -3491,12 +3758,19 @@ class LiveSession(MockSession):
             # can never end is worse. Say so instead of letting people wonder about the teams.
             self.teams_status = "mismatch"
             self._changed()
+        elif kind == "match_reconnect":
+            if event.get("match_id") != self.match_id:
+                return
+            self.reconnect_waiting = event.get("waiting") or []
+            self._changed()
         elif kind == "match_live":
             # the server archives a match the moment it goes live, so what we hold is stale
             self.history_stale = True
             self._match_replay_seen = True
             if event.get("match_id"):
                 self.match_id = str(event["match_id"])
+            self.reconnect_waiting = event.get("reconnect_waiting") or []
+            self._update_match_authority(event)
             self._recover_running_game()
             if self.phase == "live":
                 self._changed()               # a replay of the screen we are already showing
@@ -3657,9 +3931,12 @@ class LiveSession(MockSession):
         if host_id:
             self.host = next((p for p in self.players if p.get("steam_id") == host_id),
                              self.host or dict(self.me or {}))
+        if self.host and event.get("host_game_steam_id"):
+            self.host["game_steam_id"] = str(event["host_game_steam_id"])
         if event.get("stamped") and host_id in self.connected_ids:
             self._note_host_ready()
             self.join_left = self.connect_left
+        self._update_match_authority(event)
         self._apply_network(event)
         # The host goes FIRST and alone: nobody else's game may open until this one has stamped
         # CH_MATCH onto its lobby, because their single search would find nothing and be spent.
@@ -3675,6 +3952,28 @@ class LiveSession(MockSession):
         self._changed()
         if was != "connecting":
             self._later(1000, self._tick_connect)
+
+    def _update_match_authority(self, event):
+        """Refresh host role on live replays without restarting an open game."""
+        host_id = str(event.get("host") or "")
+        old_host = str((self.host or {}).get("steam_id") or "")
+        if host_id:
+            self.host = next((p for p in self.players if p.get("steam_id") == host_id),
+                             {"steam_id": host_id, "game_steam_id": event.get("host_game_steam_id", "")})
+        token = str(event.get("migration_token") or "")
+        if len(token) == 64 and all(c in "0123456789abcdef" for c in token):
+            self.migration_token = token
+        if self._i_am_host():
+            self.report_token = self.migration_token or self.report_token
+        self.host_epoch = int(event.get("host_epoch") or 0)
+        if old_host and host_id and old_host != host_id:
+            # The next launch must build for the new role. Never replace a mounted
+            # pak: relaunch_game already checks that the process has exited.
+            self.pak_done = False
+            self.host_pak_done = False
+            self.host_level = ""
+            self.launched = False
+            self.launched_for = ""
 
     def _on_result(self, event):
         """The match is over and the service has the scoreboard (docs/match-result.md hop 2).
@@ -4146,6 +4445,7 @@ class LiveSession(MockSession):
             token = str(event.get("report_token") or "")
             if len(token) == 64 and all(ch in "0123456789abcdef" for ch in token):
                 self.report_token = token
+        self._update_match_authority(event)
         self._apply_network(event)
         # The match is live, which by definition means every one of them reported in.
         self.connect_total = len(self.players) or self.connect_total
@@ -4212,9 +4512,11 @@ class LiveSession(MockSession):
 
     def _player_from(self, entry):
         """Keep unavailable rank and latency values unknown until reported by the server."""
+        entry = player_identity.normalize(entry)
         steam_id = str(entry.get("steam_id") or "")
         persona = str(entry.get("persona") or "")
-        return {"name": persona or steam_id, "steam_id": steam_id,
+        return {"name": persona or steam_id, "steam_id": steam_id, "player_id": steam_id,
+                "game_steam_id": player_identity.native_id(entry),
                 # The Steam avatar URL, straight through. Nothing here fetches it: the web UI asks
                 # the hub's own bridge for the picture (hub/webui/httpbridge.py /avatar), which is
                 # the only place that is allowed to go to Steam for one.
@@ -4421,9 +4723,11 @@ class LiveSession(MockSession):
         """A party member from the server. UNLIKE _player_from this is honest: the persona is
         real and level/ping pass STRAIGHT THROUGH (they are None from the server — there is no
         rank service and no in-game ping). Never invent a number here."""
+        entry = player_identity.normalize(entry)
         steam_id = str(entry.get("steam_id") or "")
         persona = str(entry.get("persona") or "")
-        return {"name": persona or steam_id, "steam_id": steam_id,
+        return {"name": persona or steam_id, "steam_id": steam_id, "player_id": steam_id,
+                "game_steam_id": player_identity.native_id(entry),
                 "avatar": str(entry.get("avatar") or ""),
                 "level": entry.get("level"), "ping": entry.get("ping")}
 
@@ -4516,37 +4820,14 @@ class CompetitivePanel:
     def save_auth(self, payload):
         """Persist (or clear) the signed-in account in state.json."""
         try:
-            self.app.state["auth"] = payload
             state_mod.update_fields({"auth": payload})
+            self.app.state["auth"] = payload
+            return True
         except Exception:        # noqa: BLE001 — a read-only state dir must not break sign-in
-            pass
+            return False
 
     def _restore_account(self):
-        """Come back signed in. The saved token is trusted immediately so the tab is usable
-        offline, then checked in the background and dropped if the server disowns it."""
-        saved = (self.app.state.get("auth") or {})
-        if not saved.get("token") or not saved.get("steam_id"):
-            return
-        self.session.adopt_account(saved)
-        self.session.token = saved["token"]
-        self.session.phase = "idle"
-
-        marker = (self.session._account_epoch, self.session.token)
-        def deliver(callback):
-            if marker == (self.session._account_epoch, self.session.token):
-                callback()
-
-        def check():
-            fresh = auth_mod.me(saved["token"])
-            if fresh is None:
-                return                     # offline, or a server hiccup: keep the session
-            if not fresh.get("ok"):
-                self.post(lambda: deliver(self.session.sign_out))
-                return
-            self.post(lambda: deliver(lambda: self.session.adopt_account(
-                {**fresh, "token": saved["token"]}, save=True) or self.on_change()))
-
-        threading.Thread(target=check, daemon=True).start()
+        self.session.restore_account(self.app.state.get("auth") or {})
 
     def after(self, ms, fn):
         """root.after that is cancelled when the panel goes away.
@@ -5182,6 +5463,7 @@ class CompetitivePanel:
         drawer = {
             "signed_out": self._draw_signed_out,
             "signing_in": self._draw_signing_in,
+            "game_unavailable": self._draw_game_unavailable,
             "idle": self._draw_idle,
             "checking": self._draw_checking,
             "queued": self._draw_queued,
@@ -5257,6 +5539,17 @@ class CompetitivePanel:
         if s.link_url:
             self._button(row, t("comp_signin_open_again"), s.open_link_again).pack(side="left")
         self._button(row, t("comp_cancel"), s.cancel_sign_in).pack(side="left", padx=(8, 0))
+
+    def _draw_game_unavailable(self):
+        inner = self._centre()
+        tk.Label(inner, text=t("account_game_pending"), bg=WHITE, fg=BLACK,
+                 font=self.f_sub, wraplength=560, justify="center").pack()
+        self._button(inner, t("account_game_retry"),
+                     lambda: self.session.account_action("game/retry"), primary=True).pack(pady=(12, 0))
+        self._button(inner, t("comp_signout"), self.session.sign_out).pack(pady=(8, 0))
+        if self.session.error:
+            tk.Label(inner, text=self.session.error, bg=WHITE, fg=RED,
+                     wraplength=560, justify="center").pack(pady=(12, 0))
 
     # ------------------------------------------------- idle
     def _draw_idle(self):
@@ -5951,6 +6244,9 @@ class CompetitivePanel:
                 tk.Label(inner, text=s.error, bg=WHITE, fg=RED,
                          wraplength=520, justify="center").pack(pady=(0, 8))
         tk.Label(inner, text=t("comp_live_title"), bg=WHITE, fg=BLACK, font=self.f_sub).pack()
+        for waiting in getattr(s, "reconnect_waiting", []):
+            remaining = max(0, int((float(waiting.get("deadline") or 0) - time.time() * 1000) / 1000))
+            tk.Label(inner, text=t("comp_reconnect_wait", time=format_duration(remaining)), bg=WHITE, fg=AMBER).pack()
         tk.Label(inner, text=t("comp_map", map=s.map or "?"), bg=WHITE, fg=BLACK,
                  font=self.f_big).pack(pady=(2, 8))
         host_name = (s.host or {}).get("name", "?")

@@ -77,7 +77,7 @@ def test_legacy_client_does_not_start_network_worker():
 
 def test_worker_uploads_profile_and_paginated_revision_bound_estimates():
     peers_1 = [
-        {"steam_id": "2", "location": "marker-2", "revision": "peer-r2"},
+        {"player_id": "a1111111-1111-4111-8111-111111111111", "steam_id": "76561198000000002", "location": "marker-2", "revision": "peer-r2"},
         {"steam_id": "3", "location": "missing", "revision": "peer-r3"},
     ]
     peers_2 = [{"steam_id": str(i), "location": "marker-4", "revision": "peer-r4"}
@@ -105,7 +105,7 @@ def test_worker_uploads_profile_and_paginated_revision_bound_estimates():
     })
     ping_posts = [body for path, body in client.posts if path == "/api/network/pings"]
     assert ping_posts[0] == {"revision": "ours-r1", "peers": [
-        {"steam_id": "2", "revision": "peer-r2", "ping": 42},
+        {"player_id": "a1111111-1111-4111-8111-111111111111", "revision": "peer-r2", "ping": 42},
     ]}
     assert len(ping_posts[1]["peers"]) == 400
     assert ping_posts[1]["revision"] == "ours-r1"

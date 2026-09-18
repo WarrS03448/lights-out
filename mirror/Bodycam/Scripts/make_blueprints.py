@@ -40,6 +40,8 @@ import ctf_graphs as CG
 importlib.reload(CG)
 import bb5_graphs as BG
 importlib.reload(BG)
+import migration_graphs as MIGRATION
+importlib.reload(MIGRATION)
 import combat_graphs as COMBAT
 importlib.reload(COMBAT)
 import combat_transport_graphs as TRANSPORT
@@ -183,7 +185,7 @@ def pre_clean():
     for path in ("/Game/GM/Gamemode/GM_DOM", DOM_DIR + "/BP_DOM_Point", DOM_DIR + "/GE_DOM_DroneCooldown", "/Game/GM/DATA/DataAsset/DA_DOM",
                  "/Game/GM/Gamemode/GM_CTF", CTF_DIR + "/BP_CTF_Base", CTF_DIR + "/BP_CTF_Flag", CTF_DIR + "/GE_CTF_NoPerk", CTF_DIR + "/GE_CTF_DroneCooldown", "/Game/MenuSystemPro/INGAME/HUD_Dot",
                  "/Game/GM/DATA/DataAsset/DA_CTF",
-                 "/Game/GM/Gamemode/GM_BB5", BB5_DIR + "/BP_BB5StartRequest", BB5_DIR + "/BP_BB5TeamRequest", BB5_DIR + "/AC_BB5BombRule", BB5_DIR + "/GE_BB5_DroneCooldown", "/Game/GM/DATA/DataAsset/DA_BB5",
+                 BB5_DIR + "/BP_BB5MigrationRequest", "/Game/GM/Gamemode/GM_BB5", BB5_DIR + "/BP_BB5StartRequest", BB5_DIR + "/BP_BB5TeamRequest", BB5_DIR + "/AC_BB5BombRule", BB5_DIR + "/GE_BB5_DroneCooldown", "/Game/GM/DATA/DataAsset/DA_BB5",
                  BG.INV_PKG, BG.BOMBE_PKG,
                  "/Game/GM/Gamemode/GM_CHLobby", LG.HOST_PKG,
                  LG.GI_PKG,
@@ -387,6 +389,10 @@ def stage3_bb5(parent):
     for name in ("StartScratch", "StartApprovedRoster", "StartApprovedMatch", "FinalScratch", "FinalBatch", "FinalMeta", "FinalMatch", "FinalCombat"):
         add_var(rule, name, pin("string"))
     add_var(rule, "StartDeadline", pin("int"))
+    add_var(rule, "PresenceScratch", pin("string")); add_var(rule, "PresenceCount", pin("int"))
+    add_var(rule, "PresenceDirty", pin("bool"))
+    for name in ("StartApprovedHumans", "StartCurrentHumans"):
+        add_var(rule, name, pin("string", None, "array"))
     add_var(rule, "FinalPending", pin("bool")); add_var(rule, "FinalAcknowledged", pin("bool"))
     add_var(rule, "FinalCaptured", pin("bool"))
     add_var(rule, "CompetitiveStarted", pin("bool"))
@@ -394,6 +400,13 @@ def stage3_bb5(parent):
     for name in ("GuardSeen", "GuardNext"):
         add_var(rule, name, pin("string"))
     add_var(rule, "GuardDispatched", pin("bool"))
+    add_var(rule, "HostEpoch", pin("int"))
+    add_var(rule, "MigrationPending", pin("bool"))
+    add_var(rule, "MigrationCallbackSeen", pin("bool"))
+    add_var(rule, "MigrationCandidate", pin("string"))
+    for name in MIGRATION.DURABLE:
+        if not TOOLS.set_variable_save_game(rule, name):
+            raise BuildFailed("SaveGame flag missing: " + name)
     compile_report(rule, "AC_BB5BombRule (vars)")
     # pass 2: events + signatures + the native override
     build(rule, "EventGraph", BG.rule_events(), "AC_BB5BombRule events")
@@ -422,10 +435,11 @@ def stage3_bb5(parent):
     EAL.save_loaded_asset(request)
 
     start_request = make_blueprint(BB5_DIR, "BP_BB5StartRequest", unreal.Actor)
+    add_var(start_request, "Presence", pin("bool"))
     add_var(start_request, "Rule", pin("object", gen_class(rule)))
     for name in ("MatchKey", "Snapshot"):
         add_var(start_request, name, pin("string"))
-    for name in ("Deadline", "Phase"):
+    for name in ("Deadline", "Phase", "Epoch"):
         add_var(start_request, name, pin("int"))
     compile_report(start_request, "BP_BB5StartRequest (vars)")
     build(start_request, "EventGraph", BG.start_request_events(), "BP_BB5StartRequest events")
@@ -433,6 +447,13 @@ def stage3_bb5(parent):
     build(start_request, "EventGraph", BG.start_request_logic(), "BP_BB5StartRequest logic")
     compile_report(start_request, "BP_BB5StartRequest (logic)")
     EAL.save_loaded_asset(start_request)
+    migration_request = make_blueprint(BB5_DIR, "BP_BB5MigrationRequest", unreal.Actor)
+    add_var(migration_request, "Rule", pin("object", gen_class(rule)))
+    add_var(migration_request, "MatchKey", pin("string"))
+    add_var(migration_request, "Epoch", pin("int"))
+    add_var(migration_request, "Activate", pin("bool"))
+    build(migration_request, "EventGraph", MIGRATION.request_events(), "migration request events")
+    compile_report(migration_request, "migration request signatures")
     # Passive observer state lives on ordinary Actors, preserving GM_BB5's indexed CDO layout.
     manager = make_blueprint(BB5_DIR, "BP_CHCombatManager", unreal.Actor)
     observer = make_blueprint(BB5_DIR, "BP_CHCombatObserver", unreal.Actor)
@@ -480,6 +501,9 @@ def stage3_bb5(parent):
     log("  override FindPlayerStart: " + TOOLS.override_function(gm, "FindPlayerStart"))
     log("  override ChoosePlayerStart: " + TOOLS.override_function(gm, "ChoosePlayerStart"))
     compile_report(gm, "GM_BB5 (events)")
+    build(migration_request, "EventGraph", MIGRATION.request_logic(), "migration request logic")
+    compile_report(migration_request, "migration request logic")
+    EAL.save_loaded_asset(migration_request)
     build(gm, "EventGraph", BG.gm_logic(), "GM_BB5 logic")
     build(gm, "ShouldSpawnBots", BG.gm_shouldspawnbots(), "GM_BB5 ShouldSpawnBots override")
     # Ranked starts require server approval for the exact current roster and teams.

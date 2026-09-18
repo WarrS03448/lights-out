@@ -8,7 +8,8 @@ import combat_graphs as cg
 def test_release_arrival_reports_do_not_change_lobby_permissions():
     graph = json.loads(bg.gm_logic())
     nodes = graph['nodes']
-    assert not any(n.get('func') == 'UpdateLobby' for n in nodes)
+    assert [n['id'] for n in nodes if n.get('func') == 'UpdateLobby'] == ['migration_update']
+    assert ['migration_needs_publish.else', 'migration_update.exec'] in graph['links']
     assert not any('no-such-route' in str(n) for n in nodes)
     assert not any('ch-test-4821' in str(n) for n in nodes)
     for event in ('ch_lobby_read', 'ch_lobby_write'):

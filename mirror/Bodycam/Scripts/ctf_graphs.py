@@ -1061,6 +1061,7 @@ def parent_events():
     for name in ("OnRoundWarmup", "OnRoundStart", "OnRoundEnded", "OnMatchWaitingForPlayers", "OnMatchStart", "OnMatchEnded"):
         g.event("ev_" + name, name, BC_GM)
     g.event("ev_HMS_OnGameRehosted", "HMS_OnGameRehosted", "/Script/HostMigrationSystem.HMS_GameMode")
+    g.event("ev_HMS_OnCreateGameSaveTaskComplete", "HMS_OnCreateGameSaveTaskComplete", "/Script/HostMigrationSystem.HMS_GameMode")
     g.event("ev_K2_OnRestartPlayer", "K2_OnRestartPlayer", "/Script/Engine.GameModeBase")
     return g.json()
 

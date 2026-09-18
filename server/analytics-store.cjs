@@ -93,7 +93,7 @@ function create({store,prefix='hub:',now=Date.now}={}){
     if(m.at<now()-RETENTION.aggregates*DAY)return 'expired';
     const c=cohort(m),bucket={day:m.day,cohort:c,metrics:contribution(m)},field=hash(c),key=base+'match:'+m.id;
     const brief={...m};for(const k of ['rules','rounds','round_details','timeline','kills','combat_coverage','stats_series'])delete brief[k];
-    brief.players=m.players.map(p=>({steam_id:p.steam_id,persona:p.persona,team:p.team,mmr_delta:p.mmr_delta,rr_delta:p.rr_delta,coverage:p.coverage}));
+    brief.players=m.players.map(p=>({player_id:p.player_id||p.steam_id,steam_id:p.steam_id,game_steam_id:p.game_steam_id,persona:p.persona,team:p.team,mmr_delta:p.mmr_delta,rr_delta:p.rr_delta,coverage:p.coverage}));
     if(store)return call(['EVAL',PROJECT,'6',base+'projected:'+m.id,key,base+'matches',base+'day:'+m.day,base+'health',base+'summary:'+m.id,JSON.stringify(m),String(m.at),field,JSON.stringify(bucket),String(Math.ceil((Date.parse(m.day)+ (RETENTION.aggregates+1)*DAY)/1000)),String(Math.max(60,Math.ceil((m.at+RETENTION.matches*DAY-now())/1000))),String((RETENTION.aggregates+2)*86400),String(now()-RETENTION.matches*DAY),String(now()),fingerprint,JSON.stringify(brief)]);
     if(memory.matches.has(m.id))return 'duplicate';
     memory.matches.set(m.id,m);health.matches++;

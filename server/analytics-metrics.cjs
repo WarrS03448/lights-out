@@ -1,5 +1,6 @@
 'use strict';
 const crypto = require('node:crypto');
+const identity = require('./player-identity.cjs');
 const DAY = 86400000;
 const number = v => typeof v === 'number' && Number.isFinite(v) ? v : null;
 const text = (v, n=96) => typeof v === 'string' ? v.slice(0,n) : '';
@@ -8,7 +9,7 @@ function canonical(v){if(v instanceof Set)return [...v].map(canonical).sort();if
 const pick = (o, keys) => Object.fromEntries(keys.filter(k => o?.[k] !== undefined).map(k=>[k,o[k]]));
 const numeric = o => Object.fromEntries(Object.entries(o || {}).filter(([k,v])=>/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(k) && (number(v)!==null || typeof v==='boolean')));
 // Only these containers/scalars survive the evidence projection. Never serialize a match object.
-const EVIDENCE = new Set(('round n at t ev kind phase state from to who host map team team_id steam_id steamId persona name kills deaths team_kills won winner score score_limit seconds duration duration_seconds elapsed alive spawns spawnCount roundsWon roundsPlayed lateJoin spectator reported coverage status enemyDamage friendlyDamage damageTaken damageDealt assists headshots shots hits adr accuracy weapon weaponStats playerStats weaponStats coverage damage objectives ratingsEligible measured actual expected excess impactInTeam impactInLobby decisive integrity presence quality kpr survival spr roundWinShare clutch clutches teamKills roundsPlayed seq epoch observer a b old new max loss relation ignored attack bone distance at bt ref complete terminal gaps roster bound reason code by blame expired connected left data_collected source valid raw start end index players teams events timeline stats score_before score_after first_kill last_kill duration_known rounds_played final_stats net_kills enemy_kills damage_dealt damage_taken teamkill round_number winner_team rows metrics value total count complete_damage complete_shots').split(' '));
+const EVIDENCE = new Set(('player_id game_steam_id round n at t ev kind phase state from to who host map team team_id steam_id steamId persona name kills deaths team_kills won winner score score_limit seconds duration duration_seconds elapsed alive spawns spawnCount roundsWon roundsPlayed lateJoin spectator reported coverage status enemyDamage friendlyDamage damageTaken damageDealt assists headshots shots hits adr accuracy weapon weaponStats playerStats weaponStats coverage damage objectives ratingsEligible measured actual expected excess impactInTeam impactInLobby decisive integrity presence quality kpr survival spr roundWinShare clutch clutches teamKills roundsPlayed seq epoch observer a b old new max loss relation ignored attack bone distance at bt ref complete terminal gaps roster bound reason code by blame expired connected left data_collected source valid raw start end index players teams events timeline stats score_before score_after first_kill last_kill duration_known rounds_played final_stats net_kills enemy_kills damage_dealt damage_taken teamkill round_number winner_team rows metrics value total count complete_damage complete_shots').split(' '));
 for(const k of 'scoreboard ratings rating rd parties waited tolerance delta spread network region predicted_win attack defense attacker defender side duration_ms start_at end_at round_seconds alive_start alive_end combat damage_dealt damage_taken health samples'.split(' '))EVIDENCE.add(k);
 function evidence(value, depth=0) {
   if (depth>12) return null;
@@ -17,7 +18,7 @@ function evidence(value, depth=0) {
   if (typeof value==='string') return value.slice(0,160);
   if (Array.isArray(value)) return value.slice(0,20000).map(v=>evidence(v,depth+1));
   if (!value || typeof value!=='object') return null;
-  return Object.fromEntries(Object.entries(value).filter(([k])=>EVIDENCE.has(k)||/^\d{1,17}$/.test(k)).map(([k,v])=>[k,evidence(v,depth+1)]));
+  return Object.fromEntries(Object.entries(value).filter(([k])=>EVIDENCE.has(k)||/^\d{1,17}$/.test(k)||identity.validPlayer(k)).map(([k,v])=>[k,evidence(v,depth+1)]));
 }
 function ruleSnapshot() {
   const out={};
@@ -37,15 +38,15 @@ function projectReceipt(r) {
   const teams=r.inputs?.teams||full.teams||{};
   const rows=Array.isArray(r.rows)?r.rows:[];
   const roster=Array.isArray(full.players)?full.players:(r.inputs?.players||[]);
-  const ids=[...new Set([...Object.values(teams).flat(),...rows.map(p=>p.steamId),...roster.map(p=>p.steam_id)])].filter(v=>/^\d{17}$/.test(v));
+  const ids=[...new Set([...Object.values(teams).flat(),...rows.map(p=>p.steamId),...roster.map(identity.playerOf)])].filter(identity.validPlayer);
   const board=Array.isArray(r.board)?r.board:(full.scoreboard||[]);
   const mm=r.inputs?.mm||full.mm||{};
   const players=ids.map(sid=>{
-    const row=rows.find(p=>p.steamId===sid), person=roster.find(p=>p.steam_id===sid)||{}, stats=board.find(p=>p.steam_id===sid)||{};
+    const row=rows.find(p=>p.steamId===sid), person=roster.find(p=>identity.playerOf(p)===sid)||{}, stats=board.find(p=>identity.playerOf(p)===sid)||{};
     const before=numeric(row?.before),after=numeric(row?.after);
     const team=Object.keys(teams).find(k=>(teams[k]||[]).includes(sid))||person.team;
     const c=stats.combat||{};
-    return {steam_id:sid,persona:text(person.persona||person.name,64),team:Number(team)||null,starting_side:['attack','defend'].includes(full.sides?.[team])?full.sides[team]:null,
+    return {player_id:sid,...(identity.gameOf(person)?{steam_id:identity.gameOf(person),game_steam_id:identity.gameOf(person)}:{}),persona:text(person.persona||person.name,64),team:Number(team)||null,starting_side:['attack','defend'].includes(full.sides?.[team])?full.sides[team]:null,
       won:typeof row?.won==='boolean'?row.won:null,party_size:Array.isArray(mm.parties)?(mm.parties.find(p=>p.includes(sid))?.length||1):null,
       mmr_delta:number(row?.delta) ?? (number(before.rating)!==null&&number(after.rating)!==null?after.rating-before.rating:null),
       rr_delta:number(row?.rr?.delta),before,after,
@@ -65,7 +66,7 @@ function projectReceipt(r) {
     map:text(full.map)||'Unknown',mode:text(r.analytics_context?.mode)||'BB5',version,
     deployment:text(r.analytics_context?.deployment),scoring_version:text(r.version),rules_id:hash(config),rules:config,
     resolved_rules:Boolean(r.analytics_context?.rules),match_size:ids.length||number(full.size)||0,
-    region:text(mm.region||r.analytics_context?.region)||'unknown',host:text(full.host||r.host,17),
+    region:text(mm.region||r.analytics_context?.region)||'unknown',host:text(full.host||r.host,36),host_game_steam_id:text(full.host_game_steam_id,17),
     outcome:completed?(r.draw?'draw':'completed'):(text(full.outcome)||'unfinished'),reason:text(full.reason),
     winner:Number(r.winner||full.won_team)||null,score,completed,draw:r.draw===true,
     duration_seconds:number(full.created)!==null?Math.max(0,(at-full.created)/1000):null,
@@ -99,7 +100,7 @@ function contribution(m){
     if(number(p.before.rd)!==null){n.rd_sum+=p.before.rd;n.rd_count++;}
     if(p.rr_delta!==null){n.rr_sum+=p.rr_delta;n.rr_count++;}if(p.mmr_delta!==null){n.mmr_sum+=p.mmr_delta;n.mmr_count++;}
     for(const k of ['kills','deaths','damage'])if(p.stats[k]!==null&&(k!=='damage'||p.coverage.damage)){n[`${k}_sum`]+=p.stats[k];n[`${k}_count`]++;}
-    if(p.steam_id===m.host&&p.won!==null){n.host_matches++;n.host_wins+=p.won?1:0;}
+    if(identity.playerOf(p)===m.host&&p.won!==null){n.host_matches++;n.host_wins+=p.won?1:0;}
     if(p.starting_side&&p.won!==null){const k=p.starting_side;n[k+'_count']=(n[k+'_count']||0)+1;n[k+'_wins']=(n[k+'_wins']||0)+(p.won?1:0);}
     const rank=number(p.before.matches)===null?'unknown':require('./rating.cjs').isPlacing(p.before)?'placing':String(require('./progress.cjs').rankOf(p.before.progress));
     n[`rank_${rank}_count`]=(n[`rank_${rank}_count`]||0)+1;

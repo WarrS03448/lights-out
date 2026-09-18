@@ -40,6 +40,10 @@ or choose a compatible alternative. This source release does not attach or
 relicense the official Windows installer. The versioned upstream source archive
 is linked from the package page above.
 
+The server uses Nodemailer (MIT-0), pinned in `server/package-lock.json`; it is
+installed through npm rather than vendored. Account tests install fakeredis
+with Lua support and its dependencies under their respective licenses.
+
 Python, Node.js, pyooz/ooz, oozextract, Pillow, pystray, pywebview, pythonnet,
 PyInstaller, Inno Setup, Unreal Engine and WebView2 have their own license terms.
 Most are installed separately and are not vendored in this source snapshot.

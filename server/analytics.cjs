@@ -7,7 +7,7 @@ const {DAY,projectReceipt}=metrics;
 const CLIENT=/^(app|session|ui|request|connection|operation|update|launch|telemetry|auth)\.[a-z0-9_.]{1,50}$/;
 const CLIENT_TYPES=new Set('app.action app.error app.fallback session.start session.end session.previous_unclean ui.action ui.screen request.outcome connection.start connection.state connection.connected connection.disconnected operation.start operation.outcome operation.complete operation.failed update.start update.downloaded update.launched update.failed launch.request launch.outcome telemetry.gap auth.signout auth.sign_out'.split(' '));
 const KEYS=new Set('action status duration_ms code screen reason connected count gap error_class phase method route bytes attempt quality queue_players wait_seconds host target_id match_size team round winner score1 score2 delay_ms before after mmr rr prefix persisted category batch_count rejected duplicates'.split(' '));
-const SID=/^\d{17}$/;
+const SID={test:require('./player-identity.cjs').validPlayer};
 function cleanEvent(raw,context={},now=Date.now()){
   if(!raw||typeof raw!=='object'||Array.isArray(raw)||typeof raw.id!=='string'||!/^[A-Za-z0-9_.:-]{1,96}$/.test(raw.id))return null;
   if(typeof raw.type!=='string'||!(/^[a-z][a-z0-9_.]{1,63}$/).test(raw.type)||(context.source==='client'&&(!CLIENT.test(raw.type)||!CLIENT_TYPES.has(raw.type))))return null;
@@ -40,7 +40,7 @@ function filters(raw={},now=Date.now(),permanent=false){
   if(size!=='all'&&(!Number.isInteger(size)||size<1||size>64))throw Error('Invalid match size');
   return {from,to,size,map:String(raw.map||'').slice(0,96),version:String(raw.version||'').slice(0,96),rules_id:String(raw.rules_id||'').slice(0,64),region:String(raw.region||'').slice(0,40),mode:String(raw.mode||'').slice(0,40),
     q:String(raw.q||'').trim().slice(0,96),category:String(raw.category||'').slice(0,32),severity:String(raw.severity||'').slice(0,8),
-    actor_id:String(raw.actor_id||'').slice(0,17),match_id:String(raw.match_id||'').slice(0,80),
+    actor_id:String(raw.actor_id||'').slice(0,36),match_id:String(raw.match_id||'').slice(0,80),
     offset:Math.min(1e7,Math.max(0,Math.floor(Number(raw.offset)||0))),limit:Math.min(200,Math.max(1,Math.floor(Number(raw.limit)||50)))};
 }
 function csvCell(value){let s=value==null?'':String(value);if(/^[\s]*[=+@-]/.test(s)||/^[\t\r\n]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}
@@ -98,7 +98,7 @@ function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB
         if(!row)continue;
         let ok;
         if(kind==='audits')ok=(!f.q||[row.actor_id,row.target_id,row.action,row.id].join(' ').includes(f.q));
-        else if(kind==='matches')ok=metrics.matches(row,f)&&(!f.actor_id||row.players.some(p=>p.steam_id===f.actor_id))&&(!f.match_id||row.id===f.match_id)&&(!f.q||[row.id,row.map,...row.players.flatMap(p=>[p.steam_id,p.persona])].join(' ').toLowerCase().includes(f.q.toLowerCase()));
+        else if(kind==='matches')ok=metrics.matches(row,f)&&(!f.actor_id||row.players.some(p=>(p.player_id||p.steam_id)===f.actor_id))&&(!f.match_id||row.id===f.match_id)&&(!f.q||[row.id,row.map,...row.players.flatMap(p=>[p.steam_id,p.persona])].join(' ').toLowerCase().includes(f.q.toLowerCase()));
         else ok=(!f.actor_id||row.actor_id===f.actor_id)&&(!f.match_id||row.match_id===f.match_id)&&(!f.category||row.type.startsWith(f.category+'.'))&&(!f.severity||(f.severity==='problems'?['warn','error'].includes(row.severity):row.severity===f.severity))&&(!f.version||row.version===f.version)&&(!f.q||JSON.stringify(row).toLowerCase().includes(f.q.toLowerCase()));
         if(ok)rows.push(row);
         if(rows.length>=f.limit){exhausted=exhausted&&i===batch.rows.length-1;break;}

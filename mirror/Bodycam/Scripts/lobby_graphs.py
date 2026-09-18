@@ -1730,7 +1730,12 @@ def chjoin_logic():
     # RULE 2: the parent performs the Steam login - and, for this class, the join itself.
     g.callparent("bp_parent", HOST_CLASS, "ReceiveBeginPlay")
 
-    _lap_gate(g, JOIN_TOKEN)
+    import migration_graphs
+    timeout = migration_graphs.gi_timeout(g, 'reconnect_')
+    _gi_set_str(g, "migration_name_", "Session Name", JOIN_TOKEN)
+    _gi_set_str(g, "migration_cap_", "Search String", REPORT_TOKEN)
+    g.chain('bp', timeout, 'migration_name_set', 'migration_cap_set')
+    _lap_gate(g, JOIN_TOKEN, first='migration_cap_set')
 
     # One row so a run is attributable at all: which pak, which player, and whether the lobby layer
     # can see a lobby from here. Fanned off the parent rather than chained into the ladder, because
@@ -1966,7 +1971,9 @@ def chlobby_logic():
     # forever: chlobby-2 sent ch_lobby_alive and then nothing at all (2026-09-14). A Sequence makes
     # each call independent, which is what they always were.
     g.seq("fan", 1 + len(asks))
-    g.chain("bp", "rt_set", "hn_set", "native_selected", "native_boot_gate")
+    import migration_graphs
+    timeout = migration_graphs.gi_timeout(g, 'reconnect_')
+    g.chain("bp", timeout, "rt_set", "hn_set", "native_selected", "native_boot_gate")
     g.link(("native_boot_gate.then", "bp_parent.exec"), ("native_boot_gate.else", "fan.exec"))
     g.chain("bp_parent", "fan")
     for i, node in enumerate(["send"] + asks):

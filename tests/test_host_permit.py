@@ -21,9 +21,8 @@ and never fires the response delegate, so the pak sits there and the player has 
 
 No pak rebuild was needed for any of this, which is the point - the gate is entirely server-side.
 
-Identity comes from ch_lobby_alive, which the same BeginPlay sends 6-23 ms earlier carrying
-GetPlatformUserNetId; the host arm itself sends no id at all. Correlated by source IP - see the
-comment above askerSteamId() in server.cjs for the NAT caveat.
+Identity comes from the explicit authenticated native host, translated through the
+match's frozen player/game binding. Anonymous legacy probes never receive a permit.
 """
 import json
 import os
@@ -89,6 +88,9 @@ def node_permits():
         "const out={};"
         "out.ungranted=l.takeHostPermit(H);"
         "out.bad_id=l.grantHostPermit('not-a-steamid');"
+        "l._internals.matches.set('fixture',{id:'fixture',state:'connecting',host:H,"
+        "players:[{player_id:H,game_steam_id:H}],teams:{alpha:[],bravo:[]}});"
+        "l._internals.inMatch.set(H,'fixture');"
         "out.granted=l.grantHostPermit(H);"
         "out.first_take=l.takeHostPermit(H);"
         "out.second_take=l.takeHostPermit(H);"
@@ -145,11 +147,11 @@ try:
     print("\n--- telemetry is unaffected ---")
     status, _ = probe("ch_lobby_alive", HOST_ID)
     need(status == 200, "ordinary probes still answer normally")
-    with urllib.request.urlopen(BASE + "/api/probe/log?limit=50", timeout=10) as r:
-        log = json.loads(r.read().decode())
-    events = [json.loads(e["body"])["event_name"] for e in log["entries"] if e.get("body")]
-    need("ch_host_wait" in events,
-         "an ungranted host arm is still RECORDED - the log shows the ask, the game gets no answer")
+    try:
+        with urllib.request.urlopen(BASE + "/api/probe/log?limit=50", timeout=10):
+            need(False, "legacy raw probe log must not be exposed")
+    except urllib.error.HTTPError as e:
+        need(e.code == 404, "legacy raw probe log stays unavailable")
 
 finally:
     srv.terminate()
