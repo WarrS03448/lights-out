@@ -947,234 +947,67 @@ def peek_probe(g):
 
 
 def host_probe(g):
-    """chlobby-18: AUTO-HOST through the API, not through the game's graph.
+    """Wait for native hosting to finish, then permit exactly one match-map load.
 
-    WHY THE PREVIOUS TWO ATTEMPTS FAILED, and why this one is shaped differently:
-
-      chlobby-16/17  called BodycamGI_C::HostPartyInLobby(). That reached the game's real hosting
-                     code - and CRASHED. The function is a thunk,
-                     `LocalFinalFunction ExecuteUbergraph_BodycamGI(Int 3843)`, and those ubergraph
-                     entry offsets are preceded by runs of PopExecutionFlow: entering one cold pops
-                     an execution-flow stack nothing ever pushed. The fault was never TIMING (the
-                     PlayerController gate reported true/true and the calls returned) - it was
-                     jumping into the middle of somebody else's graph.
-      command line   `Bodycam.exe <map>?listen`, both a short name and the real cooked path, via the
-                     shim AND via the shipping exe directly (no Steam, no prompt). The game opened
-                     the shooting range every time. Its own startup owns the map; a command line
-                     does not override it.
-
-    SO: touch no ubergraph. Every call below is either an async PROXY or plain engine code, and both
-    kinds are already proven in this exact context -
-
-      UBodycamFindLobbies  ran here, and fired OnSuccess from INSIDE another delegate's callback
-      UBodycamJoinLobby    ran here, took its argument, reported success
-      UGameplayStatics     engine code, no Bodycam graph involved
-
-    UBodycamCreateLobby is the same BlueprintAsyncActionBase shape as the first two.
-
-    AND IT SKIPS THE LOBBY. The game hosts by creating a lobby, opening LobbyHost "listen", then
-    travelling to the map. We open the MATCH MAP as a listen server directly. Fewer steps, and none
-    of them is a jump into game code.
-
-    HONEST UNKNOWN: whether a lobby we build ourselves looks like a real Bodycam lobby. The game's
-    flow writes {Map, Gamemode, Ingame, Access, Bots} and sets party id / match context through
-    BodycamLobbyManager. We write CH_MATCH (so we can find it) and Access=false (the key that
-    matched 25 real lobbies in chlobby-9). If it is created but nobody can see it in the browser,
-    the next move is MakeCreateLobbyParams - which, unlike HostPartyInLobby, IS public - to get the
-    game's own parameter map and feed THAT to CreateLobby.
+    MostFillServer is unused by the shipped GI. The separate joiner already uses
+    it as process-persistent scratch; host and joiner seeds are mutually exclusive.
+    0 = idle, 1 = permission pending, 2 = travel committed. Never reset on BeginPlay.
     """
-    g.call("hdly", HTTP_LIB, "SendAttributionEvent", {
-        "URL": PROBE_SLOW_URL, "BearerToken": "chlobby", "IP": "", "EventName": "ch_host_wait",
-        "Storefront": "host", "FirstSessionTimestamp": BUILD_TAG, "IsFirstGameOpen": "false"})
-    g.n("hdlyd", "createevent", func="OnHostDelay")
-    g.link(("hdlyd.OutputDelegate", "hdly.OnResponse"))
-
-    g.existing("hostdelay", "OnHostDelay")
-
-
-    # only from the range (standalone). A client or an existing host must not be disturbed.
-    g.call("hstd", SYS, "IsStandalone")
-    g.branch("hbr")
-    g.link(("hstd.ReturnValue", "hbr.condition"))
-    g.chain("hostdelay", "hbr")
-    g.link(("hbr.else", "%s.exec" % _report_bare(g, "hxs", "ch_host_notstandalone")))
-
-    # THE FULL ATTRIBUTE SET (chlobby-22). chlobby-18/19 advertised TWO keys and the match left
-    # after ~3 s; MakeCreateLobbyParams writes fifteen, and chlobby-21 read the real formats off a
-    # live lobby rather than guessing them. Plus PlayerSteamId and Name, which are per-player and
-    # so are wired from calls rather than literals.
-    n_static = len(LOBBY_ATTRS)
-    g.n("mkmap", "makemap", count=n_static + 2)
-    for i, (key, val) in enumerate(LOBBY_ATTRS):
-        g.call("mkk%d" % i, SYS, "MakeLiteralString", {"Value": key})
-        g.call("mkv%d" % i, TYPES, "MakeStringLobbyAttribute", {"Value": val})
-        g.link(("mkk%d.ReturnValue" % i, "mkmap.Key %d" % i),
-               ("mkv%d.ReturnValue" % i, "mkmap.Value %d" % i))
-
-    # PlayerSteamId and Name both come from this client. A real lobby carries the host's STEAM NAME
-    # in Name (observed: "tompearl6769"), not a lobby title - we have no persona-name getter
-    # stubbed, so the id stands in for both. If the match cares about Name specifically, that is a
-    # thing to fix rather than a thing to guess.
-    g.call("mkpid", ONLINE, "GetPlatformUserNetId")
-    g.call("mkk_id", SYS, "MakeLiteralString", {"Value": "PlayerSteamId"})
-    g.call("mkv_id", TYPES, "MakeStringLobbyAttribute")
-    g.link(("mkpid.ReturnValue", "mkv_id.Value"))
-    g.link(("mkk_id.ReturnValue", "mkmap.Key %d" % n_static),
-           ("mkv_id.ReturnValue", "mkmap.Value %d" % n_static))
-
-    g.call("mkk_nm", SYS, "MakeLiteralString", {"Value": "Name"})
-    g.call("mkv_nm", TYPES, "MakeStringLobbyAttribute")
-    g.link(("mkpid.ReturnValue", "mkv_nm.Value"))
-    g.link(("mkk_nm.ReturnValue", "mkmap.Key %d" % (n_static + 1)),
-           ("mkv_nm.ReturnValue", "mkmap.Value %d" % (n_static + 1)))
-
-    g.call("mk", CREATE_LOBBY, "CreateLobby", {
-        "LobbyName": "Community Hub match", "MaxPlayers": "10", "bUseLAN": "false",
-        "bAllowInvites": "true", "bUsesPresence": "true", "bAllowJoinViaPresence": "true",
-        "bAllowJoinViaPresenceFriendsOnly": "false", "bAntiCheatProtected": "false",
-        "bUsesStats": "false", "bShouldAdvertise": "true",
-        "bUseLobbiesVoiceChatIfAvailable": "true", "Timeout": "30.0"})
-    g.link(("mkmap.out", "mk.SessionSettings"))
-    g.n("mkd", "createevent", func="OnLobbyMade")
-    g.n("mkb", "adddelegate", delegate="OnSuccess", **{"class": CREATE_LOBBY})
-    g.link(("mk.ReturnValue", "mkb.self"), ("mkd.OutputDelegate", "mkb.Delegate"))
-    g.n("mkfd", "createevent", func="OnLobbyFailed")
-    g.n("mkfb", "adddelegate", delegate="OnFailure", **{"class": CREATE_LOBBY})
-    g.link(("mk.ReturnValue", "mkfb.self"), ("mkfd.OutputDelegate", "mkfb.Delegate"))
-    g.call("mkact", ASYNC_BASE, "Activate")
-    g.link(("mk.ReturnValue", "mkact.self"))
-    g.chain("mk", "mkb", "mkfb", "mkact")
-
-    # NO PRE-CLEAN (chlobby-24). DestroyLobby was added in chlobby-19 on the stale-lobby theory of
-    # 6f. That theory was wrong - it reported ch_wipe_none on EVERY run, so it never once had
-    # anything to destroy - and it is now the prime suspect for something worse.
-    #
-    # GM_CHLobby calls Parent BeginPlay FIRST, which is where the lobby performs its Steam login and
-    # session setup. Four seconds later we were telling the online layer to destroy "the session
-    # this client is in" - which may be the session the LOBBY legitimately just created. Then
-    # CreateLobby fails and the client has no session at all: Sam saw "waiting for connection"
-    # followed by a black screen, twice, and only ever on builds that call DestroyLobby.
-    #
-    # chlobby-18, which had no pre-clean, reached a match twice. Back to that.
-    # chlobby-25: NO LOBBY AT ALL. Straight to OpenLevel.
-    #
-    # CreateLobby has been refused for 21 minutes - through a Steam restart, an attribute change and
-    # the removal of DestroyLobby - so it cannot be used to test anything right now. But it is not
-    # what the open question is ABOUT. The question is whether the MATCH accepts our session or
-    # exits after ~3 s with the leave animation, and a listen server does not need a Steam lobby to
-    # answer that. Nobody can join this match; we are not testing joinability.
-    #
-    #   exits at ~3 s  -> the lobby was never the issue, and the fifteen attributes of chlobby-22/24
-    #                     would not have helped. The rejection is about something else.
-    #   stays          -> the lobby IS the issue, and specifically what it advertises.
-    #
-    # It also stops us poking CreateLobby, which lets any rate limit decay untouched.
-    g.link(("hbr.then", "setsel.exec"))
-
-    # BOTH destroy outcomes continue to the create. A failure here is the NORMAL case (there was no
-    # lobby to destroy) and must not stop the chain - but they are reported apart, because "there
-    # was a stale lobby and we cleared it" and "there was nothing" are different facts about the
-    # world and we want to know which one we are in.
-    g.seq("hseq", 2)
-    g.link(("hseq.then_0", "%s.exec" % _report_bare(g, "hask", "ch_mk_ask")))
-    g.link(("hseq.then_1", "mk.exec"))
-
-    # proxy non-null? reported AFTER Activate so the latent probe cannot delay it
-    g.call("mkv", SYS, "IsValid")
-    g.link(("mk.ReturnValue", "mkv.Object"))
-    g.call("mkvS", STR, "Conv_BoolToString")
-    g.link(("mkv.ReturnValue", "mkvS.InBool"))
-    g.call("mkp", HTTP_LIB, "SendAttributionEvent", {
-        "URL": PROBE_URL, "BearerToken": "chlobby", "IP": "", "EventName": "ch_mk_proxy",
-        "Storefront": "host", "FirstSessionTimestamp": BUILD_TAG, "IsFirstGameOpen": "false"})
-    g.link(("mkvS.ReturnValue", "mkp.Timestamp"))
-    g.chain("mkact", "mkp")
-
-    # SUCCESS -> report, then open the match map as a listen server.
-    # OpenLevel is deferred (the engine processes the map change at end of frame), so calling it
-    # from inside this callback is safe - unlike entering an ubergraph, which is what crashed 17.
-    g.existing("lobbymade", "OnLobbyMade")
-    g.seq("mkseq", 2)
-    g.chain("lobbymade", "mkseq")
-    g.link(("mkseq.then_0", "%s.exec" % _report_bare(g, "mkok", "ch_mk_ok")))
-    # STRAIGHT TO THE MATCH MAP (chlobby-23, reverting chlobby-20).
-    #
-    # chlobby-18/19 did this and RELIABLY reached Bodybomb on Hospital - twice. chlobby-20/22
-    # changed it to open LobbyHost "listen" first, on the theory that the match rejected our session
-    # because we skipped the stage where BodycamLobbyManager sets party id and match context. That
-    # theory was never actually TESTED: every run since has died at CreateLobby instead, so the
-    # change bought nothing and cost us the one configuration known to get into a match.
-    #
-    # So: back to the shape with results, and vary ONE thing - the attribute set, which chlobby-21
-    # measured off a real lobby. Two attributes got a 3-second rejection; this carries fifteen.
-    #
-    # (kept from chlobby-20, unused here:)
-    #
-    # chlobby-18/19 went straight to BB5_Hospital "listen" and the match EXITED after ~3 s - Sam saw
-    # the leave-the-match animation, so the game inspected the session and chose to go. The game's
-    # own flow never does that: it opens LobbyHost "listen" FIRST, which is where
-    # BodycamLobbyManager gets its party id and match context (GenerateNewPartyId,
-    # UpdateMatchContext(1), Session Max Players = 10 - ubergraph 0f03), and only then travels.
-    # We were dropping a listen server into a match map carrying a session that had been through
-    # none of that.
-    # STAGE 1: become a host IN THE LOBBY (chlobby-26).
-    #
-    # chlobby-25 proved the ejection happens with NO LOBBY AT ALL, so lobby metadata was never what
-    # the match objects to (6i). What is left is subsystem state - GenerateNewPartyId,
-    # UpdateMatchContext(1), Session Max Players - which BodycamLobbyManager sets during the game's
-    # own host flow, and which nothing we have built has ever established.
-    #
-    # The game picks that up by opening LobbyHost "listen". chlobby-20 was built to do exactly this
-    # and was NEVER TESTED - every run died at CreateLobby before reaching the travel. Now that
-    # OpenLevel alone is known reliable, it finally can be.
-    # SET THE GAME'S OWN TARGET FIRST (chlobby-28).
-    #
-    # Six builds tried to stop the match ejecting us. It never was ejecting us: the game opens
-    # `Selected Level Name` as a listen server in its hosting-success path, and ours held the lobby,
-    # so it overwrote our travel a moment later. Set it to the match map and the game's follow-up
-    # agrees with us instead of fighting us.
     g.call("gi2", GS_LIB, "GetGameInstance")
     g.cast("gi2c", GI_CLASS, pure=True)
     g.link(("gi2.ReturnValue", "gi2c.cast_object"))
-    g.call("selname", SYS, "MakeLiteralName", {"Value": HOST_MAP_SHORT})
-    g.set("setsel", "Selected Level Name", GI_CLASS)
-    g.link(("gi2c.cast_result", "setsel.self"),
-           ("selname.ReturnValue", "setsel.Selected Level Name"))
-    g.chain("setsel", "mkopen")
 
-    g.call("mkopen", GS_LIB, "OpenLevel",
-           {"LevelName": HOST_MAP, "bAbsolute": "true", "Options": "listen"})
-    g.link(("mkseq.then_1", "mkopen.exec"))
+    def ready(prefix, state):
+        # GetCurrentLevelName is impure in this engine; execute before comparing.
+        g.call(prefix + "level", GS_LIB, "GetCurrentLevelName", {"bRemovePrefixString": "true"})
+        g.call(prefix + "isrange", STR, "EqualEqual_StrStr", {"B": "LobbyHost"})
+        g.link((prefix + "level.ReturnValue", prefix + "isrange.A"))
+        g.call(prefix + "server", SYS, "IsServer")
+        g.call(prefix + "standalone", SYS, "IsStandalone")
+        g.call(prefix + "networked", MATH, "Not_PreBool")
+        g.link((prefix + "standalone.ReturnValue", prefix + "networked.A"))
+        g.get(prefix + "state", LAP_PROP, GI_CLASS)
+        g.link(("gi2c.cast_result", prefix + "state.self"))
+        g.call(prefix + "expected", MATH, "EqualEqual_IntInt", {"B": str(state)})
+        g.link((prefix + "state." + LAP_PROP, prefix + "expected.A"))
+        g.call(prefix + "valid", SYS, "IsValid")
+        g.link(("gi2c.cast_result", prefix + "valid.Object"))
+        predicate = prefix + "isrange.ReturnValue"
+        for i, item in enumerate(("server", "networked", "expected", "valid")):
+            combine = prefix + "and" + str(i)
+            g.call(combine, MATH, "BooleanAND")
+            g.link((predicate, combine + ".A"), (prefix + item + ".ReturnValue", combine + ".B"))
+            predicate = combine + ".ReturnValue"
+        g.branch(prefix + "gate")
+        g.link((predicate, prefix + "gate.condition"))
+        g.chain(prefix + "level", prefix + "gate")
 
-    g.existing("lobbyfailed", "OnLobbyFailed")
-    g.chain("lobbyfailed", _report_bare(g, "mkno", "ch_mk_fail"))
+    ready("request_", 0)
+    g.set("host_claim", LAP_PROP, GI_CLASS, {LAP_PROP: "1"})
+    g.link(("gi2c.cast_result", "host_claim.self"), ("request_gate.then", "host_claim.exec"))
+    g.call("hdly", HTTP_LIB, "SendAttributionEvent", {
+        "URL": PROBE_SLOW_URL, "BearerToken": "chlobby", "IP": "", "EventName": "ch_host_wait",
+        "Storefront": "native-ready", "FirstSessionTimestamp": "chlobby-36", "IsFirstGameOpen": "false"})
+    # Preserve both independently verified map-retarget sites. The short name is
+    # diagnostic only; native Selected Level Name MUST stay on the stock range.
+    g.call("match_short", SYS, "MakeLiteralName", {"Value": HOST_MAP_SHORT})
+    g.call("match_string", STR, "Conv_NameToString")
+    g.link(("match_short.ReturnValue", "match_string.InName"), ("match_string.ReturnValue", "hdly.Platform"))
+    g.n("hdlyd", "createevent", func="OnHostDelay")
+    g.link(("hdlyd.OutputDelegate", "hdly.OnResponse"))
+    g.chain("host_claim", "hdly")
 
-    # ---- STAGE 2 IS GONE (chlobby-31). It was the freeze.
-    #
-    # Stage 2 was written for chlobby-26, when stage 1 opened LobbyHost "listen" and stage 2 was the
-    # follow-up hop from the lobby to the match map. chlobby-23/28 changed stage 1 to open HOST_MAP
-    # directly (and to set `Selected Level Name` so the game's own follow-up agrees with us), which
-    # left stage 2 re-opening the map it was ALREADY IN.
-    #
-    # Its gate was `IsServer && !IsStandalone`, and it hung straight off the BeginPlay fan with no
-    # delay and no lap gate - so it re-armed itself in the world it had just travelled to:
-    #
-    #   lobby, first BeginPlay        IsServer true, IsStandalone true   -> false, stays put
-    #   BB5_Hospital as listen host   IsServer true, IsStandalone false  -> TRAVELS AGAIN
-    #
-    # and the destination of that travel is a listen server in BB5_Hospital, which reads true again.
-    # One full map load per lap. Sam, 2026-09-16: auto-host "loads in then tries to load in again",
-    # the second load appears frozen; twice it eventually landed and the third closed the game with
-    # an application hang. Non-deterministic because this OpenLevel dropped `listen` - on a lap
-    # where the netmode collapsed to Standalone the gate went false and the loop ended by luck.
-    #
-    # It was harmless until today only because auto-host was not travelling at all: the shipped seed
-    # asked the dead pre-rebrand hostname for its travel permit (see check_graphs.FROZEN), so there
-    # was never a second BeginPlay. 6debe78 fixed the hostname and handed stage 2 its first one.
-    #
-    # Stage 1 already does the whole job. If a second hop is ever needed again it needs a lap gate
-    # (_lap_gate) and a DIFFERENT target - not the map it is standing in.
-    return "hdly"
+    g.existing("hostdelay", "OnHostDelay")
+    g.branch("permit_ok")
+    g.link(("hostdelay.bSuccess", "permit_ok.condition"))
+    g.chain("hostdelay", "permit_ok")
+    ready("travel_", 1)
+    g.link(("permit_ok.then", "travel_level.exec"))
+    g.set("host_commit", LAP_PROP, GI_CLASS, {LAP_PROP: "2"})
+    g.link(("gi2c.cast_result", "host_commit.self"), ("travel_gate.then", "host_commit.exec"))
+    g.call("mkopen", GS_LIB, "OpenLevel", {"LevelName": HOST_MAP, "bAbsolute": "true", "Options": "listen"})
+    g.chain("host_commit", "mkopen")
+    return "request_level"
 
 
 def join_probe(g):
@@ -1313,7 +1146,7 @@ def net_probe(g):
     g.call("npid", ONLINE, "GetPlatformUserNetId")
     g.call("nsnd", HTTP_LIB, "SendAttributionEvent", {
         "URL": PROBE_URL, "BearerToken": "chlobby", "IP": "", "EventName": "ch_netmode",
-        "FirstSessionTimestamp": BUILD_TAG, "IsFirstGameOpen": "false"})
+        "FirstSessionTimestamp": "chlobby-36", "IsFirstGameOpen": "false"})
     g.link(("npid.ReturnValue", "nsnd.UserId"),
            ("nsrvS.ReturnValue", "nsnd.Timestamp"),
            ("nstdS.ReturnValue", "nsnd.Platform"),
@@ -2078,7 +1911,8 @@ def chlobby_logic():
     """
     g = G()
     g.event("bp", "ReceiveBeginPlay", ACTOR)
-    # RULE 2. Everything the lobby does lives behind this call.
+    # Stock hosting runs only during the initial standalone boot. Calling it in
+    # the completed listen range queues another native OpenLevel to LobbyHost.
     g.callparent("bp_parent", HOST_CLASS, "ReceiveBeginPlay")
     # STAMP OUR NAME BEFORE THE PARENT RUNS. GM_Host's BeginPlay is what reaches CreateLobby, and
     # MakeCreateLobbyParams reads "Session Name" to fill the lobby's `Name` attribute - so this has
@@ -2096,7 +1930,7 @@ def chlobby_logic():
 
     g.call("send", HTTP_LIB, "SendAttributionEvent", {
         "URL": PROBE_URL, "BearerToken": "chlobby", "IP": "", "EventName": "ch_lobby_alive",
-        "Storefront": "lobby", "FirstSessionTimestamp": BUILD_TAG, "IsFirstGameOpen": "false"})
+        "Storefront": "lobby", "FirstSessionTimestamp": "chlobby-36", "IsFirstGameOpen": "false"})
     g.link(("pid.ReturnValue", "send.UserId"),
            ("plat.ReturnValue", "send.Platform"),
            ("inlobbyS.ReturnValue", "send.Timestamp"))
@@ -2104,7 +1938,25 @@ def chlobby_logic():
     # A host must have no lobby search in flight when OpenLevel tears down this world.
     # The old diagnostic peek/legacy join arms reintroduced the chlobby-29 EOS crash
     # when the seed was recooked. Keep searches in GM_CHPeek / GM_CHJoin only.
-    asks = [net_probe(g), host_probe(g)]
+    asks = ["nlvl", host_probe(g)]
+    net_probe(g)
+    g.chain("nlvl", "nsnd")
+    # Native success must open only its own range. A late callback can no longer
+    # reload the match. Do this on every BeginPlay, before stock hosting starts.
+    g.call("native_target", SYS, "MakeLiteralName", {"Value": "/Game/Map/LobbyHost/LobbyHost"})
+    g.set("native_selected", "Selected Level Name", GI_CLASS)
+    g.link(("gi2c.cast_result", "native_selected.self"),
+           ("native_target.ReturnValue", "native_selected.Selected Level Name"))
+    g.call("native_standalone", SYS, "IsStandalone")
+    g.get("native_stage", LAP_PROP, GI_CLASS)
+    g.link(("gi2c.cast_result", "native_stage.self"))
+    g.call("native_idle", MATH, "EqualEqual_IntInt", {"B": "0"})
+    g.link(("native_stage." + LAP_PROP, "native_idle.A"))
+    g.call("native_first_boot", MATH, "BooleanAND")
+    g.link(("native_standalone.ReturnValue", "native_first_boot.A"),
+           ("native_idle.ReturnValue", "native_first_boot.B"))
+    g.branch("native_boot_gate")
+    g.link(("native_first_boot.ReturnValue", "native_boot_gate.condition"))
     # Use the host-only capability already stamped into the seed's FName table.
     # The server can authorize travel without correlating connection addresses.
     g.link(("rt_str.ReturnValue", "hdly.BearerToken"))
@@ -2114,7 +1966,9 @@ def chlobby_logic():
     # forever: chlobby-2 sent ch_lobby_alive and then nothing at all (2026-09-14). A Sequence makes
     # each call independent, which is what they always were.
     g.seq("fan", 1 + len(asks))
-    g.chain("bp", "rt_set", "hn_set", "bp_parent", "fan")
+    g.chain("bp", "rt_set", "hn_set", "native_selected", "native_boot_gate")
+    g.link(("native_boot_gate.then", "bp_parent.exec"), ("native_boot_gate.else", "fan.exec"))
+    g.chain("bp_parent", "fan")
     for i, node in enumerate(["send"] + asks):
         g.link(("fan.then_%d" % i, "%s.exec" % node))
     return g.json()

@@ -1,6 +1,6 @@
 {
-  "release": "2.3.86",
-  "date": "2026-09-17",
+  "release": "2.3.87",
+  "date": "2026-09-18",
   "scope": "Original client, server, gamemode generators, editor helper, packaging code and tests",
   "source_export_changes": [
     "Add MIT license, upstream notices, public documentation and test workflow",
@@ -11,7 +11,8 @@
     "Make the release verification test locate its own checkout",
     "Replace real identifiers reused by tests with synthetic fixtures",
     "Bundle license notices with local builds and pin optional oozextract to 0.5.0",
-    "Include authenticated host travel, public policies and automated privacy checks for release 2.3.86"
+    "Include authenticated host travel, public policies and automated privacy checks for release 2.3.86",
+    "Include single-load host startup, one joiner reconnect action, and verified timestamped release signing for 2.3.87"
   ],
   "gamemode_packs": [
     {

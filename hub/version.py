@@ -15,7 +15,7 @@ import os
 
 # ---------------------------------------------------------------- identity
 APP_NAME = "Lights Out"
-HUB_VERSION = "2.3.86"                      # display version: shown in the UI, the installer name, AppVersion
+HUB_VERSION = "2.3.87"                      # display version: shown in the UI, the installer name, AppVersion
 # Version-info resource fields (hub.spec). Plain strings; the exe's file version is HUB_VERSION.
 COMPANY_NAME = "Lights Out (unofficial)"
 PRODUCT_NAME = APP_NAME
@@ -58,7 +58,7 @@ HUB_FILE_VERSION = ".".join(str(n) for n in version_tuple())
 # here: the installer branch renamed them to FILE_DESCRIPTION / LEGAL_COPYRIGHT at the top of this
 # file, and because both definitions survived the merge the later pair silently won, so the exe would
 # have carried these strings instead of the intended ones. The top of the file is the only definition.
-PUBLISHER = "theneeb"
+PUBLISHER = "Samuel Warren"
 
 # ---------------------------------------------------------------- endpoints / file names
 DEFAULT_CATALOGUE_URL = "https://lightsout.up.railway.app/catalogue.json"

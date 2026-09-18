@@ -94,19 +94,14 @@ def _exec_out(nodes, node_id, pin):
 # generated-graph and shipped-bytecode tests now forbid those calls independently.
 FROZEN = {
     "chlobby_events": "4847cf5728a1a18b",
-    # Host delay uses the private per-match credential.
-    "chlobby_logic": "9396ac4aa141746d",
+    # 2026-09-18: native range first; authenticated, one-shot match travel.
+    "chlobby_logic": "89d9abfb69e7554e",
     "host_stub_events": "059a9394d3dc91d4",
 }
 
 KNOWN_FANOUT = {}
 
-KNOWN_ORPHANS = {
-    ("chlobby_logic", "hseq"):
-        "the CreateLobby arm, deliberately disconnected since chlobby-25 - the host goes straight "
-        "to setsel/OpenLevel and advertises no Steam lobby. Reconnecting it is step 1 of "
-        "docs/HANDOFF-autojoin.md ('put the lobby back on'); delete this entry when it happens.",
-}
+KNOWN_ORPHANS = {}
 PURE_LIBS = {"/Script/Engine.KismetMathLibrary"}
 # functions outside the math library that are BlueprintPure in this engine build, so wiring an exec pin to them is refused.
 # Add to this list whenever the editor reports "no input pin 'exec'" — that is how GetOverlappingActors got here (2026-09-14).

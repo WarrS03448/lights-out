@@ -1,26 +1,42 @@
 # Authored lobby seeds
 
-These are our cooked `GM_CHLobby` and `GM_CHJoin` Blueprints. The hub combines the selected class with the player's own `LobbyHost` level using `build_lobby_override.py`. The finished pak contains game-owned level bytes and is built locally, never redistributed with the hub.
-
-The files were refreshed from the verified UE 5.5 Windows unversioned cook on **2026-09-17**:
+These cooked `GM_CHLobby` and `GM_CHJoin` Blueprints are authored by this project.
+The client combines one class with the player's own `LobbyHost` level locally.
+Game-owned level bytes, generated native stubs and assembled local paks are never
+redistributed with the client or source release.
 
 | Authored file | Bytes |
 | --- | ---: |
-| `Bodycam/Content/GM/Gamemode/GM_CHLobby.uasset` | 7,705 |
-| `Bodycam/Content/GM/Gamemode/GM_CHLobby.uexp` | 7,260 |
+| `Bodycam/Content/GM/Gamemode/GM_CHLobby.uasset` | 8,436 |
+| `Bodycam/Content/GM/Gamemode/GM_CHLobby.uexp` | 10,432 |
 | `Bodycam/Content/GM/Gamemode/GM_CHJoin.uasset` | 4,439 |
 | `Bodycam/Content/GM/Gamemode/GM_CHJoin.uexp` | 5,508 |
 
-`blueprints_summary.txt` is the actual build summary copied with the refreshed host assets. Its final line is `RESULT: OK` and it contains no uppercase `ERROR` entries. Both host files are byte-identical to that cook; the existing joiner files are preserved unchanged. The full cook completed with zero errors and one existing `GM_CHLobby` warning about a pruned `GetCurrentLevelName` diagnostic node.
+The host assets are the verified September 18, 2026 UE5.5 Windows unversioned
+**chlobby36** cook, already exercised in the retained private test. The original
+host-only `blueprints_summary.txt` is retained verbatim: its older builder banner
+says chlobby35, while the final compiled graph includes chlobby36's guarded native
+parent call. It ends `RESULT: OK` with no uppercase `ERROR`; final build and cook
+completed without compiler/cook errors. The unchanged join assets retain their
+previous verified provenance. Tests inspect the actual shipped bytecode as well
+as the generated source.
 
-## Seed versions and verification
+The cache name is `CommunityLobby_chlobby36_P.pak`; the locally assembled host
+seed SHA256 is `29dd3119ddbe87808dec8af33b2e0b1d4c1e4032184c8333d9c0f94282ec3b82`.
+Variant keys include the seed digest so existing cached variants are replaced.
 
-The host cache name is **`CommunityLobby_chlobby34_P.pak`**. It passes the stamped private report capability as the host travel request’s bearer credential. It retains the earlier removal of the diagnostic lobby search and legacy join arm that raced host travel and matched the observed EOS crash. The graph still writes the private reporting capability into `BodycamGI.Search String` before the parent BeginPlay/travel path. The per-match join token remains in `Session Name`. The graph's diagnostic `BUILD_TAG` intentionally remains `chlobby-31`; the cache version identifies this changed host seed. Variant cache keys also include the seed digest, so retrying the same match after an app update cannot reuse the unsafe variant.
+The host stamps its session token and reporting capability, keeps native
+Selected Level Name on the shooting range, and runs stock parent BeginPlay only
+on its first standalone boot. In the resulting listen range it requests the
+existing authenticated travel permit, then commits one match-map load. The stage
+survives world changes; repeated callbacks and return-to-range cannot rearm it.
+No direct FindLobbies or JoinLobby calls are introduced into the host class.
 
-A local host seed assembled from these assets and the installed game read-only was **18,869 bytes**, SHA256 **`c48ec7ee8b9facc0e39ace3a43b18a3bc99c14e11b2dc7658e336711adc6245d`**. Identity retargeting reproduces it byte-for-byte; the authenticated host variant preserves the original bytecode and replaces the shared capability name successfully. Disassembly retains both map NameConst sites, the report-capability assignment and parent BeginPlay, and contains no direct `FindLobbies` or `JoinLobby` calls. Source and shipped-bytecode regression tests enforce that restriction.
+`CommunityJoin_chjoin2_P.pak` and both joiner assets are unchanged. Joiners still
+use their stamped session token and the native parent join flow.
 
-The join cache name remains **`CommunityJoin_chjoin2_P.pak`**. Comparing old and new join disassembly found only a regenerated latent-action UUID, with no behavior changes. It still targets `SessionToJoin (Client)` using the per-match join token and leaves search/travel to the stock parent. Join-token retargeting passed; a host-ID placeholder is not part of this established join graph.
-
-These are build, bytecode and packaging checks. **An in-game retry must confirm the auto-host crash is resolved.** No game launch or installation was performed for this refresh; it must not be described as an in-game-tested seed. See [connection IP privacy](../../PRIVACY.md) for the host-authorization change and its regression checks.
-
-When changing the graph, refresh the authored assets and actual summary together, repeat the packaging checks, and bump the affected cache basename for a behavioral change. Never include the stand-in `GM_Host`, `BodycamGI`, or the game's `LobbyHost` level in this seed directory.
+Solo tests observed one selected-map load per launch. Automated source, bytecode,
+identity retargeting, installed-map packaging and connection tests passed. A
+multi-client Steam test was not performed for this release, and a previously
+observed native memory crash is not claimed fixed. Public host recovery after an
+already-arrived host process closes is not added by this change.

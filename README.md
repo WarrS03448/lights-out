@@ -18,7 +18,7 @@ The official Windows installer is digitally signed by **Samuel Warren**.
 
 ## What is included
 
-This public source release corresponds to **Lights Out 2.3.86**,
+This public source release corresponds to **Lights Out 2.3.87**,
 **Bodybomb 5v5 1.0.27**, and **Capture the Flag 1.0.4**.
 
 | Folder | Contents |

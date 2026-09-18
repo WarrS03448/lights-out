@@ -66,10 +66,10 @@ LOBBY_PAK_NAME = "CommunityLobby_P.pak"
 # Fresh solo-host crash dumps match the prior EOS search/travel failure. Source AND shipped
 # bytecode tests now forbid FindLobbies/JoinLobby in this traveling class. New basename forces
 # cached chlobby32 replacement. Parent host flow, map and report-token retargeting are retained.
-# Runtime crash confirmation still requires an in-game retry; BUILD_TAG remains chlobby-31.
-SEED_SHA256 = "c48ec7ee8b9facc0e39ace3a43b18a3bc99c14e11b2dc7658e336711adc6245d"
-# chlobby34 authenticates the travel clock with the stamped match capability.
-SEED_BASENAME = "CommunityLobby_chlobby34_P.pak"
+# chlobby36 starts native hosting once, waits for its listen range, then commits
+# one authenticated match travel. The stage survives map loads in the GameInstance.
+SEED_SHA256 = "29dd3119ddbe87808dec8af33b2e0b1d4c1e4032184c8333d9c0f94282ec3b82"
+SEED_BASENAME = "CommunityLobby_chlobby36_P.pak"
 JOIN_SEED_BASENAME = "CommunityJoin_chjoin2_P.pak"
 
 # WHICH COOKED CLASS EACH ROLE PACKS. build_lobby_override.py takes these straight through as

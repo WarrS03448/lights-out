@@ -207,6 +207,9 @@ def _clear(path):
 def build_hub(version, iscc):
     """PyInstaller --onedir -> self-check -> Inno Setup installer (compiled with `iscc`). Returns the installer path."""
     py = venv_python()
+    signing = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+               "-File", os.path.join(ROOT, "tools", "release", "sign.ps1")]
+    run(signing + ["-CheckConfiguration"], cwd=ROOT)
     say("Installing the build requirements…")
     run([py, "-m", "pip", "install", "-q", "-r", os.path.join("hub", "requirements.txt")], cwd=ROOT)
     say("Running the hub tests…")
@@ -226,6 +229,8 @@ def build_hub(version, iscc):
         log=os.path.join(ROOT, "hub", "build.log"))
     if not os.path.isfile(exe):
         die(f"the build did not produce {exe} — see hub/build.log")
+    say("Signing and verifying the application…")
+    run(signing + ["-Path", exe], cwd=ROOT)
     say("Self-check…")
     # The self-check runs the freshly built exe and verifies the frozen bundle is sound (the pak
     # builder + ooz import, AND the web UI screens register — a frozen-only regression that once
@@ -248,6 +253,8 @@ def build_hub(version, iscc):
         log=os.path.join(ROOT, "hub", "installer.log"))
     if not os.path.isfile(setup):
         die(f"Inno Setup did not produce {setup} — see hub/installer.log")
+    say("Signing and verifying the installer…")
+    run(signing + ["-Path", setup], cwd=ROOT)
     say(f"  {os.path.relpath(setup, ROOT)} ({os.path.getsize(setup)} B)")
     return setup
 

@@ -54,9 +54,26 @@ def test_shipped_host_bytecode_cannot_launch_search_or_join():
     assert not any("CallMath " + name + "@" in calls for name in FORBIDDEN)
     # Inspect the shipped bytecode, not only the source graph: the bearer argument
     # immediately after the delay URL must be the stamped token's converted value.
+    literal = re.search(r"Let \(([^\n]+)\)\n[^\n]*\n[^\n]*CallMath MakeLiteralName[^\n]*\n"
+                        r"[^\n]*NameConst 'chreport-7f3a91'", calls)[1]
+    converted = re.search(r"Let \(([^\n]+)\)\n[^\n]*\n[^\n]*CallMath Conv_NameToString[^\n]*\n"
+                          r"[^\n]*\$Local " + re.escape(literal), calls)[1]
     assert re.search(r"String 'https://lightsout.up.railway.app/api/probe/slow'\n"
-                     r"[^\n]*\$Local CallFunc_Conv_NameToString_ReturnValue@", calls)
-    assert "NameConst 'chreport-7f3a91'" in calls
+                     r"[^\n]*\$Local " + re.escape(converted), calls)
+    assert calls.count("CallMath OpenLevel@") == 1
+    assert calls.count("String 'LobbyHost'") == 2
+    assert calls.count("CallMath GetCurrentLevelName@") == 3  # two guards plus diagnostics
+    assert "NameConst '/Game/Map/LobbyHost/LobbyHost'" in calls
+    assert re.search(r"Int 2\n[^\n]*CallMath OpenLevel@", calls)
+    # A second stock BeginPlay would schedule another native range load. In the
+    # cooked program its false guard must skip parent and land at the same fan
+    # as the true path after parent returns.
+    guarded_parent = re.search(
+        r"JumpIfNot -> ([0-9a-f]+)\n[^\n]*\$Local ([^\n]+)\n"
+        r"[^\n]*LocalFinalFunction ReceiveBeginPlay@GM_Host_C[^\n]*\n"
+        r"[^\n]*\n[^\n]*Jump -> ([0-9a-f]+)", calls)
+    assert guarded_parent and guarded_parent[1] == guarded_parent[3]
+    assert 'BooleanAND' in guarded_parent[2]
 
 
 def test_separate_joiner_still_uses_native_parent_join_flow():

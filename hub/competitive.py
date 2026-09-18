@@ -5621,7 +5621,8 @@ class CompetitivePanel:
         s = self.session
         inner = self._centre()
         if getattr(s, "live", False) and (s._i_am_host() or s.i_connected):
-            self._button(inner, t("comp_relaunch"), s.relaunch_game).pack(pady=(0, 8))
+            self._button(inner, t("comp_relaunch" if s._i_am_host() else "comp_reconnect"),
+                         s.relaunch_game).pack(pady=(0, 8))
         if s.error:
             tk.Label(inner, text=s.error, bg=WHITE, fg=RED,
                      wraplength=520, justify="center").pack(pady=(0, 8))
@@ -5944,7 +5945,8 @@ class CompetitivePanel:
         s = self.session
         inner = self._centre()
         if getattr(s, "live", False):
-            self._button(inner, t("comp_relaunch"), s.relaunch_game).pack(pady=(0, 8))
+            self._button(inner, t("comp_relaunch" if s._i_am_host() else "comp_reconnect"),
+                         s.relaunch_game).pack(pady=(0, 8))
             if s.error:
                 tk.Label(inner, text=s.error, bg=WHITE, fg=RED,
                          wraplength=520, justify="center").pack(pady=(0, 8))

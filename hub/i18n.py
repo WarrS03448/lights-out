@@ -142,6 +142,7 @@ STRINGS = {
         "comp_waiting_host": "Waiting for the host's game to start…",
         "comp_host_join_timer": "The host has {time} to join the match.",
         "comp_relaunch": "Open game",
+        "comp_reconnect": "Reconnect to game",
         "comp_connect_warn": "Miss the clock and the match is cancelled: you cannot queue for {time}. Nobody else loses anything.",
         "comp_dur_min": "{n} min",
         "comp_dur_hour": "{n} h",
@@ -546,8 +547,8 @@ STRINGS = {
         "comp_browser_required": "Matchmaking requires the main interface. Close Lights Out, repair or install Microsoft Edge WebView2 Runtime, then reopen Lights Out without the --classic option.",
         "comp_files_busy": "Wait for the current file operation to finish.",
         "comp_files_locked": "Leave the queue or party and finish your match before changing game files.",
-        "comp_launch_prepare_failed": "Could not prepare the match. Close Bodycam, then select Open game to retry.",
-        "comp_open_game_running": "Close Bodycam first, then select Open game to reconnect.",
+        "comp_launch_prepare_failed": "Could not prepare the match. Close Bodycam, then try again from the hub.",
+        "comp_open_game_running": "Close Bodycam first, then reconnect from the hub.",
     },
     "de": {
         # --- Competitive tab (2026-09-14) ---
@@ -574,6 +575,7 @@ STRINGS = {
         "comp_waiting_host": "Warten, bis das Spiel des Hosts startet…",
         "comp_host_join_timer": "Der Host hat noch {time}, um dem Match beizutreten.",
         "comp_relaunch": "Spiel öffnen",
+        "comp_reconnect": "Erneut mit dem Spiel verbinden",
         "comp_connect_warn": "Verpasst du die Zeit, wird das Match abgebrochen: Du kannst {time} lang nicht in die Warteschlange. Alle anderen verlieren nichts.",
         "comp_dur_min": "{n} Min.",
         "comp_dur_hour": "{n} Std.",
@@ -971,8 +973,8 @@ STRINGS = {
         "comp_browser_required": "Die Spielsuche benötigt die Hauptoberfläche. Schließe Lights Out, repariere oder installiere Microsoft Edge WebView2 Runtime und öffne Lights Out ohne die Option --classic.",
         "comp_files_busy": "Warte, bis der aktuelle Dateivorgang abgeschlossen ist.",
         "comp_files_locked": "Verlasse die Warteschlange oder Gruppe und beende dein Match, bevor du Spieldateien änderst.",
-        "comp_launch_prepare_failed": "Das Match konnte nicht vorbereitet werden. Schließe Bodycam und wähle Spiel öffnen, um es erneut zu versuchen.",
-        "comp_open_game_running": "Schließe zuerst Bodycam und wähle dann Spiel öffnen, um dich erneut zu verbinden.",
+        "comp_launch_prepare_failed": "Das Match konnte nicht vorbereitet werden. Schließe Bodycam und versuche es erneut über den Hub.",
+        "comp_open_game_running": "Schließe zuerst Bodycam und verbinde dich dann erneut über den Hub.",
     },
     "es": {
         # --- Competitive tab (2026-09-14) ---
@@ -999,6 +1001,7 @@ STRINGS = {
         "comp_waiting_host": "Esperando a que arranque el juego del anfitrión…",
         "comp_host_join_timer": "El anfitrión tiene {time} para unirse a la partida.",
         "comp_relaunch": "Abrir juego",
+        "comp_reconnect": "Reconectar a la partida",
         "comp_connect_warn": "Si se acaba el tiempo la partida se cancela: no puedes entrar en cola durante {time}. Los demás no pierden nada.",
         "comp_dur_min": "{n} min",
         "comp_dur_hour": "{n} h",
@@ -1396,8 +1399,8 @@ STRINGS = {
         "comp_browser_required": "La búsqueda requiere la interfaz principal. Cierra Lights Out, repara o instala Microsoft Edge WebView2 Runtime y vuelve a abrir Lights Out sin la opción --classic.",
         "comp_files_busy": "Espera a que termine la operación de archivos.",
         "comp_files_locked": "Sal de la cola o del grupo y termina la partida antes de cambiar archivos del juego.",
-        "comp_launch_prepare_failed": "No se pudo preparar la partida. Cierra Bodycam y selecciona Abrir juego para reintentar.",
-        "comp_open_game_running": "Cierra Bodycam primero y luego selecciona Abrir juego para reconectarte.",
+        "comp_launch_prepare_failed": "No se pudo preparar la partida. Cierra Bodycam y vuelve a intentarlo desde el hub.",
+        "comp_open_game_running": "Cierra Bodycam primero y luego vuelve a conectarte desde el hub.",
     },
     "fr": {
         # --- Competitive tab (2026-09-14) ---
@@ -1424,6 +1427,7 @@ STRINGS = {
         "comp_waiting_host": "En attente du lancement du jeu de l'hôte…",
         "comp_host_join_timer": "L'hôte a {time} pour rejoindre le match.",
         "comp_relaunch": "Ouvrir le jeu",
+        "comp_reconnect": "Se reconnecter à la partie",
         "comp_connect_warn": "Si le temps s'écoule, le match est annulé : vous ne pouvez plus chercher de partie pendant {time}. Personne d'autre ne perd quoi que ce soit.",
         "comp_dur_min": "{n} min",
         "comp_dur_hour": "{n} h",
@@ -1821,8 +1825,8 @@ STRINGS = {
         "comp_browser_required": "La recherche nécessite l’interface principale. Ferme Lights Out, répare ou installe Microsoft Edge WebView2 Runtime, puis rouvre Lights Out sans l’option --classic.",
         "comp_files_busy": "Attends la fin de l’opération sur les fichiers.",
         "comp_files_locked": "Quitte la file ou le groupe et termine ta partie avant de modifier les fichiers du jeu.",
-        "comp_launch_prepare_failed": "Impossible de préparer la partie. Ferme Bodycam, puis sélectionne Ouvrir le jeu pour réessayer.",
-        "comp_open_game_running": "Ferme d’abord Bodycam, puis sélectionne Ouvrir le jeu pour te reconnecter.",
+        "comp_launch_prepare_failed": "Impossible de préparer la partie. Ferme Bodycam, puis réessaie depuis le hub.",
+        "comp_open_game_running": "Ferme d’abord Bodycam, puis reconnecte-toi depuis le hub.",
     },
     "pt": {
         # --- Competitive tab (2026-09-14) ---
@@ -1849,6 +1853,7 @@ STRINGS = {
         "comp_waiting_host": "Esperando o jogo do anfitrião iniciar…",
         "comp_host_join_timer": "O anfitrião tem {time} para entrar na partida.",
         "comp_relaunch": "Abrir jogo",
+        "comp_reconnect": "Reconectar à partida",
         "comp_connect_warn": "Se o tempo acabar a partida é cancelada: não podes entrar na fila por {time}. Ninguém mais perde nada.",
         "comp_dur_min": "{n} min",
         "comp_dur_hour": "{n} h",
@@ -2246,8 +2251,8 @@ STRINGS = {
         "comp_browser_required": "A busca exige a interface principal. Feche o Lights Out, repare ou instale o Microsoft Edge WebView2 Runtime e abra o Lights Out sem a opção --classic.",
         "comp_files_busy": "Espera que a operação de ficheiros termine.",
         "comp_files_locked": "Sai da fila ou do grupo e termina a partida antes de alterar os ficheiros do jogo.",
-        "comp_launch_prepare_failed": "Não foi possível preparar a partida. Fecha o Bodycam e seleciona Abrir jogo para tentar novamente.",
-        "comp_open_game_running": "Feche o Bodycam primeiro e selecione Abrir jogo para se reconectar.",
+        "comp_launch_prepare_failed": "Não foi possível preparar a partida. Fecha o Bodycam e tenta novamente pelo hub.",
+        "comp_open_game_running": "Fecha o Bodycam primeiro e volta a conectar-te pelo hub.",
     },
     "ru": {
         # --- Competitive tab (2026-09-14) ---
@@ -2274,6 +2279,7 @@ STRINGS = {
         "comp_waiting_host": "Ждём запуск игры хоста…",
         "comp_host_join_timer": "У хоста есть {time}, чтобы зайти в матч.",
         "comp_relaunch": "Открыть игру",
+        "comp_reconnect": "Переподключиться к игре",
         "comp_connect_warn": "Не успеете, и матч отменят: вы не сможете искать игру {time}. Остальные не теряют ничего.",
         "comp_dur_min": "{n} мин",
         "comp_dur_hour": "{n} ч",
@@ -2671,8 +2677,8 @@ STRINGS = {
         "comp_browser_required": "Для поиска нужен основной интерфейс. Закройте Lights Out, восстановите или установите Microsoft Edge WebView2 Runtime, затем откройте Lights Out без параметра --classic.",
         "comp_files_busy": "Дождись завершения текущей операции с файлами.",
         "comp_files_locked": "Выйди из очереди или группы и заверши матч перед изменением файлов игры.",
-        "comp_launch_prepare_failed": "Не удалось подготовить матч. Закрой Bodycam и выбери «Открыть игру», чтобы повторить попытку.",
-        "comp_open_game_running": "Сначала закройте Bodycam, затем выберите «Открыть игру» для повторного подключения.",
+        "comp_launch_prepare_failed": "Не удалось подготовить матч. Закрой Bodycam и повтори попытку через хаб.",
+        "comp_open_game_running": "Сначала закрой Bodycam, затем переподключись через хаб.",
     },
     "zh": {
         # --- Competitive tab (2026-09-14) ---
@@ -2699,6 +2705,7 @@ STRINGS = {
         "comp_waiting_host": "等待房主的游戏启动…",
         "comp_host_join_timer": "房主还有 {time} 加入比赛。",
         "comp_relaunch": "打开游戏",
+        "comp_reconnect": "重新连接游戏",
         "comp_connect_warn": "超时比赛将被取消：你在 {time} 内无法排队。其他人不会有任何损失。",
         "comp_dur_min": "{n} 分钟",
         "comp_dur_hour": "{n} 小时",
@@ -3096,7 +3103,7 @@ STRINGS = {
         "comp_browser_required": "匹配需要主界面。请关闭 Lights Out，修复或安装 Microsoft Edge WebView2 Runtime，然后不带 --classic 参数重新打开 Lights Out。",
         "comp_files_busy": "请等待当前文件操作完成。",
         "comp_files_locked": "更改游戏文件前，请退出队列或小队并完成当前比赛。",
-        "comp_launch_prepare_failed": "无法准备比赛。请关闭 Bodycam，然后选择“打开游戏”重试。",
-        "comp_open_game_running": "请先关闭 Bodycam，然后选择“打开游戏”重新连接。",
+        "comp_launch_prepare_failed": "无法准备比赛。请关闭 Bodycam，然后通过大厅重试。",
+        "comp_open_game_running": "请先关闭 Bodycam，然后通过大厅重新连接。",
     },
 }

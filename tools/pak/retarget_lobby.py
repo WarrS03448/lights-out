@@ -4,15 +4,16 @@
     python3 retarget_lobby.py --selftest              # identity target must reproduce the seed byte-for-byte
     python3 retarget_lobby.py --all <out_dir>         # one variant per level installed on this machine
 
-WHY THIS EXISTS. The lobby pak auto-hosts by writing BodycamGI."Selected Level Name" and calling
-OpenLevel, and both take the map as a LITERAL baked at cook time (lobby_graphs.py:55-56, HOST_MAP and
-HOST_MAP_SHORT). A real match has to open whichever of the 13 installed levels the hub chose, and
+WHY THIS EXISTS. The lobby pak's OpenLevel target and short-name diagnostic are
+LITERALS baked at cook time (lobby_graphs.py HOST_MAP and HOST_MAP_SHORT).
+Native "Selected Level Name" stays on the stock range in chlobby35. A real match
+has to open whichever of the installed levels the hub chose, and
 rebuilding through the editor per match is not a thing a player's machine can do.
 
 It does not have to. MEASURED on the working chlobby-28 pak: both map strings live in
 GM_CHLobby.uasset's FName table and NEITHER appears anywhere in GM_CHLobby.uexp - the bytecode
 reaches them by index, at HOST_NAMECONST_SITES NameConst sites (the OpenLevel LevelName argument and
-the MakeLiteralName feeding the property write). So retargeting is two FName entries plus a repack of
+the MakeLiteralName feeding the short-name diagnostic). So retargeting is two FName entries plus a repack of
 the same four files: ~1-4 ms, 18 KB, with GM_CHLobby.uexp and both LobbyHost files byte-identical.
 
 WHAT MAKES THIS SAFE ENOUGH TO RUN ON A PLAYER'S MACHINE. OpenLevel on a level that does not exist
@@ -103,10 +104,10 @@ SEED_JOIN_TOKEN = "chjoin-7f3a91"
 # this value is never advertised in Steam lobby data or put in a joiner pak.
 SEED_REPORT_TOKEN = "chreport-7f3a91"
 
-# chlobby34 authenticates host travel using the stamped match capability.
+# chlobby35 waits for native hosting, then commits one authenticated match load.
 SEED_PAK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
-                        "paks", "CommunityLobby_chlobby34_P.pak")
-SEED_SHA256 = "c48ec7ee8b9facc0e39ace3a43b18a3bc99c14e11b2dc7658e336711adc6245d"
+                        "paks", "CommunityLobby_chlobby36_P.pak")
+SEED_SHA256 = "29dd3119ddbe87808dec8af33b2e0b1d4c1e4032184c8333d9c0f94282ec3b82"
 
 LEVEL_ROOT = _C + "GM_Maps/Community/"
 

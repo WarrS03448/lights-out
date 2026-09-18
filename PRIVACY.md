@@ -1,6 +1,6 @@
 # Connection IP privacy
 
-This document describes connection privacy in Lights Out 2.3.86.
+This document describes connection privacy in Lights Out 2.3.87.
 The application does not derive player identity from a connection IP
 or record connection IPs in its diagnostic logs, analytics, or player records.
 

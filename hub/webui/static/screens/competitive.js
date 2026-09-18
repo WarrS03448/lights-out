@@ -976,15 +976,14 @@
       // The host has no launch button at all: their game still opens with the connect window.
       if (c.i_connected) {
         box.appendChild(el("div", "found-count", t("comp_connect_waiting")));
-      } else if (!isHost) {
+      }
+      // One game action: first launch waits for host readiness; after launch the
+      // joiner can reconnect using the existing guarded reopen action.
+      if (!isHost && !c.i_connected) {
         box.appendChild(ui.btn("btn-accept", t("comp_launch"),
           function () { call("launch_game"); }, { tag: "button", disabled: !ready }));
-      }
-      // Relaunch: the host's game auto-opens when the window does, and a joiner who has already
-      // pressed Launch may need to re-run it (alt-F4'd, or Steam ate it). Never offered to a
-      // joiner who has not launched yet — Launch is that player's button.
-      if (isHost || c.i_connected) {
-        box.appendChild(ui.btn("btn-ghost-light", t("comp_relaunch"),
+      } else {
+        box.appendChild(ui.btn("btn-ghost-light", t(isHost ? "comp_relaunch" : "comp_reconnect"),
           function () { call("relaunch_game"); }, { tag: "button" }));
       }
       // The start gate: all pips green and still nothing happening is the most confusing state
@@ -1007,7 +1006,7 @@
       box.appendChild(el("div", "found-count", t("comp_host", { name: host.name || "?", ping: host.ping == null ? "—" : (host.estimated ? "≈" : "") + host.ping })));
       // Relaunch is for everyone in a live match: their game should be running, and this re-runs it
       // (guarded, safe if it is already up).
-      box.appendChild(ui.btn("btn-ghost-light", t("comp_relaunch"),
+      box.appendChild(ui.btn("btn-ghost-light", t(isHost ? "comp_relaunch" : "comp_reconnect"),
         function () { call("relaunch_game"); }, { tag: "button" }));
       if (!isHost) {
         box.appendChild(el("div", "found-count", t("comp_join_hint", { name: host.name || "?" })));

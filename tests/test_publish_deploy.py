@@ -106,4 +106,32 @@ def test_installer_receives_matching_numeric_version(monkeypatch):
     compiler = next(cmd for cmd in calls if cmd[0] == "iscc-test")
     assert "/DHubVersion=2.3.43" in compiler
     assert "/DHubFileVersion=2.3.43.0" in compiler
+    signs = [cmd for cmd in calls if "-Path" in cmd and cmd[0] == "powershell.exe"]
+    assert [cmd[-1] for cmd in signs] == [publish.onedir_exe(), publish.installer_path("2.3.43")]
+    assert calls.index(signs[0]) < calls.index(compiler) < calls.index(signs[1]), \
+        "sign the bundled app before packaging, then sign the final installer"
     assert not any(cmd[0] == "taskkill" for cmd in calls), "building must not close a player's hub"
+
+
+@pytest.mark.parametrize("failure", ["config", "app", "installer"])
+def test_signing_failure_cannot_update_the_public_download(monkeypatch, failure):
+    def run(cmd, **kwargs):
+        if cmd[0] == "powershell.exe":
+            stage = "config" if "-CheckConfiguration" in cmd else (
+                "app" if cmd[-1] == publish.onedir_exe() else "installer")
+            if stage == failure:
+                raise SystemExit("signing failed")
+        return 0
+    monkeypatch.setattr(publish, "run", run)
+    monkeypatch.setattr(publish, "read_hub_version", lambda: "2.3.87")
+    monkeypatch.setattr(publish, "find_iscc", lambda: "iscc-test")
+    monkeypatch.setattr(publish, "_clear", lambda path: None)
+    monkeypatch.setattr(publish.os.path, "isdir", lambda path: False)
+    monkeypatch.setattr(publish.os.path, "isfile", lambda path: True)
+    monkeypatch.setattr(publish.os.path, "getsize", lambda path: 100)
+    def unexpected(*args, **kwargs):
+        raise AssertionError("a failed signing step must not stage installer/catalogue bytes")
+    monkeypatch.setattr(publish.shutil, "copy2", unexpected)
+    monkeypatch.setattr(publish, "save_catalogue", unexpected)
+    with pytest.raises(SystemExit, match="signing failed"):
+        publish.publish_hub(types.SimpleNamespace(version="2.3.87"))
