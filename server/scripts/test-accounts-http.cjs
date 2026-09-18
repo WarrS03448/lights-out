@@ -14,7 +14,7 @@ before(async()=>{await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve)
 after(async()=>{await analytics.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
 
 test('production HTTP router reaches every account endpoint and keeps them disabled by default',async()=>{
-  for(const action of ['register','verify','login','login/verify','logout','forgot-password','reset-password','change-password',
+  for(const action of ['register','verify','login','login/verify','logout','forgot-password','forgot-password/verify','reset-password','change-password',
     'link-steam','link-steam/verify','disconnect-steam','disconnect-steam/verify','game/challenge','game/verify']) {
     const response=await fetch(base+'/api/auth/account/'+action,{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
     assert.equal(response.status,503,action);assert.equal((await response.json()).code,'accounts_unavailable');

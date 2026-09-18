@@ -299,38 +299,58 @@
 
     function accountLinkModal() {
       var link = (s.account || {}).link || {}, stage = link.stage;
+      var recovery = ["forgot_password","recovery_code","reset_password"].indexOf(stage) >= 0;
       var kids = [], form = el("form", "set-link-form");
       form.setAttribute("aria-busy", String(!!link.busy));
       var messages = {login:"link_login_intro",login_code:"link_email_code_intro",steam:"link_steam_intro",
         password:"link_password_intro",confirm:"link_confirm_intro",done:"link_success",uncertain:"link_uncertain"};
-      kids.push(el("p", "set-hint", st(messages[stage] || "link_hint")));
+      var recoveryMessages = {forgot_password:"account_recovery_intro",recovery_code:"account_recovery_sent",reset_password:"account_recovery_verified"};
+      kids.push(el("p", "set-hint", recovery ? t(recoveryMessages[stage]) : st(messages[stage] || "link_hint")));
       if (link.email && stage !== "done" && stage !== "uncertain") kids.push(el("p", "set-link-pair", st("link_pair", link)));
       var errorKeys = {progress_conflict:"link_progress_conflict",link_conflict:"link_owner_conflict",
         already_linked:"link_owner_conflict",active_match:"link_match",fresh_steam_required:"link_expired",
         invalid_action_code:"link_code_invalid",invalid_code:"link_code_invalid",account_changed:"link_restart",
         not_signed_in:"link_restart",invalid_credentials:"link_credentials",rate_limited:"link_rate",wrong_steam:"link_wrong_steam"};
-      if (link.error) { var error = el("div", "set-note bad", st(errorKeys[link.error] || "link_unavailable")); error.setAttribute("role","alert"); kids.push(error); }
+      var recoveryErrors = {password_reset:"account_password_reset",recovery_limited:"account_recovery_limited",recovery_invalid:"account_recovery_invalid",
+        recovery_email:"account_recovery_email",recovery_password:"account_recovery_password",reset_uncertain:"account_reset_uncertain",recovery_failed:"account_recovery_failed"};
+      if (link.error) { var error = el("div", "set-note" + (link.error === "password_reset" ? "" : " bad"), recoveryErrors[link.error] ? t(recoveryErrors[link.error]) : st(errorKeys[link.error] || "link_unavailable")); error.setAttribute("role",link.error === "password_reset" ? "status" : "alert"); kids.push(error); }
+      var confirmation = null;
       function field(name, label, type) {
         var row = el("label", "set-link-field", t(label)), input = document.createElement("input");
         input.id = "settings-link-" + (link.epoch || 0) + "-" + stage + "-" + name; input.name = name; input.type = type || "text";
         input.required = true; input.disabled = !!link.busy; input.maxLength = name === "code" ? 6 : 254;
-        input.autocomplete = type === "password" ? "current-password" : name === "email" ? "email" : "one-time-code";
+        input.autocomplete = type === "password" ? (stage === "reset_password" ? "new-password" : "current-password") : name === "email" ? "email" : "one-time-code";
         if (name === "code") { input.inputMode="numeric";input.pattern="[0-9]{6}"; }
         if (type === "password") input.minLength = 6;
         input.autocapitalize="none"; input.spellcheck=false; row.appendChild(input);form.appendChild(row);
+        input.oninput=function(){if(confirmation)confirmation.setCustomValidity("");};
+        return input;
       }
-      if (stage === "login") field("email", "account_email", "email");
-      if (stage === "login" || stage === "password") field("password", "account_password", "password");
-      if (stage === "login_code" || stage === "confirm") field("code", "account_code");
-      if (["login","login_code","password","confirm"].indexOf(stage) >= 0) {
+      if (stage === "login" || stage === "forgot_password") field("email", "account_email", "email");
+      if (stage === "login" || stage === "password" || stage === "reset_password") field("password", "account_password", "password");
+      if (stage === "reset_password") confirmation=field("confirm_password", "account_confirm_password", "password");
+      if (stage === "login_code" || stage === "confirm" || stage === "recovery_code") field("code", "account_code");
+      if (["login","login_code","password","confirm","forgot_password","recovery_code","reset_password"].indexOf(stage) >= 0) {
         var submit = document.createElement("button"); submit.type="submit";submit.className="set-btn primary";
         submit.disabled=!!link.busy; submit.textContent=link.busy?t("account_working"):stage==="password"?st("link_send_confirmation"):stage==="confirm"?st("link_confirm_button"):t("account_continue");form.appendChild(submit);
         form.onsubmit=function(event){
           event.preventDefault();if(link.busy)return;
-          var fields={};form.querySelectorAll("input").forEach(function(input){fields[input.name]=input.value;if(input.type==="password"||input.name==="code")input.value="";});
-          call("settings_account_link",stage,fields);
+          var fields={};form.querySelectorAll("input").forEach(function(input){fields[input.name]=input.value;});
+          if(confirmation&&fields.password!==fields.confirm_password){confirmation.setCustomValidity(t("account_password_mismatch"));confirmation.reportValidity();return;}
+          delete fields.confirm_password;
+          form.querySelectorAll('input[type="password"],input[name="code"]').forEach(function(input){input.value="";});
+          var actions={forgot_password:"forgot-password",recovery_code:"forgot-password/verify",reset_password:"reset-password"};
+          call("settings_account_link",actions[stage]||stage,fields);
         };
         kids.push(form);
+        if(stage === "login" || stage === "password") {
+          var forgot=ui.btn("set-btn settings-account-forgot",t("account_forgot"),function(){call("settings_account_link","recover");},{tag:"button"});
+          forgot.disabled=!!link.busy;kids.push(forgot);
+        }
+        if(stage === "recovery_code") {
+          var resend=ui.btn("set-btn",t("account_recovery_resend"),function(){call("settings_account_link","forgot-password");},{tag:"button"});
+          resend.disabled=!!link.busy;kids.push(resend);
+        }
       } else if (stage === "steam") {
         if (link.busy) kids.push(el("p","set-hint",st("link_steam_waiting")));
         var steam=ui.btn("set-btn primary",st("link_steam_button"),function(){call("settings_account_link", "steam");},{tag:"button"});steam.disabled=!!link.busy;kids.push(steam);
@@ -343,7 +363,7 @@
         var cancel=ui.btn("set-btn",t("comp_cancel"),close,{tag:"button"});cancel.disabled=stage==="confirm"&&!!link.busy;kids.push(cancel);
         if(link.error){var restart=ui.btn("set-btn",st("link_start_over"),function(){call("settings_account_link","restart");},{tag:"button"});restart.disabled=!!link.busy;kids.push(restart);}
       }
-      var overlay=ui.modal({title:st("link_title"),children:kids,onClose:close});
+      var overlay=ui.modal({title:recovery?t("account_reset_title"):st("link_title"),children:kids,onClose:close});
       overlay.querySelector(".ui-modal").classList.add("account-link-modal");
       return overlay;
     }

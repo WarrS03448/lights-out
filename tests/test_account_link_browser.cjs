@@ -16,10 +16,23 @@ const fixture=JSON.parse(execFileSync(process.env.HUB_TEST_PYTHON||'python',['-c
    await page.setViewportSize({width,height:900});s.settings.account.link.stage='';await page.evaluate(s=>__hub.onState(s),s);
    assert.equal(await page.locator('.set-account-link').count(),1,lang+' Connect belongs under account');
    await Promise.all([page.waitForResponse(r=>r.url().endsWith('/verb/settings_account_link')),page.locator('.set-account-link').click()]);assert.equal(calls.at(-1).body[0],'start');
-   for(const stage of ['login','login_code','steam','password','confirm','done']){
+   for(const stage of ['login','login_code','steam','password','confirm','done','forgot_password','recovery_code','reset_password']){
     s.settings.account.link.stage=stage;await page.evaluate(s=>__hub.onState(s),s);const modal=page.locator('.account-link-modal');await modal.waitFor();
     const box=await modal.boundingBox();assert.ok(box.x>=0&&box.x+box.width<=width+1,lang+' '+stage+' fits');
-    assert.ok((await modal.textContent()).includes(copy.settings.link_title));
+    assert.ok((await modal.textContent()).includes(['forgot_password','recovery_code','reset_password'].includes(stage)?copy.core.account_reset_title:copy.settings.link_title));
+    if(stage==='login'||stage==='password'){
+     await Promise.all([page.waitForResponse(r=>r.url().endsWith('/verb/settings_account_link')),modal.locator('.settings-account-forgot').click()]);
+     assert.equal(calls.at(-1).body[0],'recover');
+    }
+    if(stage==='forgot_password'||stage==='recovery_code')assert.equal(await modal.locator('input[type=password]').count(),0);
+    if(stage==='reset_password'){
+     await modal.locator('input[name=password]').fill('new-password');await modal.locator('input[name=confirm_password]').fill('wrong');
+     const before=calls.length;await modal.locator('button[type=submit]').click();assert.equal(calls.length,before);
+     await modal.locator('input[name=confirm_password]').fill('new-password');
+     await Promise.all([page.waitForResponse(r=>r.url().endsWith('/verb/settings_account_link')),modal.locator('button[type=submit]').click()]);
+     assert.equal(calls.at(-1).body[0],'reset-password');assert.equal(calls.at(-1).body[1].password,'new-password');
+     assert.equal(await modal.locator('input[name=password]').inputValue(),'');
+    }
     if(stage==='login'){
      await modal.locator('input[name=email]').fill('fixture@example.test');await modal.locator('input[name=password]').fill('secret123');
      s.unrelatedTick=(s.unrelatedTick||0)+1;await page.evaluate(s=>__hub.onState(s),s);assert.equal(await page.locator('.account-link-modal input[name=password]').inputValue(),'secret123');

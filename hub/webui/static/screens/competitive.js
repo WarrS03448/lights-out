@@ -267,7 +267,10 @@
       } else {
         var choices = el("div", "account-choices");
         choices.appendChild(btn("btn-find", t("comp_signin_button"), function () { call("sign_in"); }));
-        choices.appendChild(btn("btn-find", t("account_login"), function () { accountForm = "login"; accountDraft = {}; root.innerHTML = ""; render(root, state, ctx); }));
+        choices.appendChild(btn("btn-find", t("account_login"), function () {
+          accountForm = "login"; accountDraft = {}; call("account_action", "cancel"); root.innerHTML = "";
+          render(root, Object.assign({}, state, {auth:Object.assign({}, auth, {account_step:"", account_busy:false}), comp:Object.assign({}, state.comp, {error:""})}), ctx);
+        }));
         inner.appendChild(choices);
         if (!auth.account_step && !accountForm) inner.appendChild(btn("hero-link", t("account_create"), function () {
           accountForm = "register"; accountDraft = {}; root.innerHTML = ""; render(root, state, ctx);
@@ -286,7 +289,8 @@
             if (type === "password") field.minLength = 6;
             if (key === "token" || key === "code" || key === "email") { field.autocapitalize = "none"; field.setAttribute("autocorrect", "off"); field.spellcheck = false; }
             field.maxLength = key === "password" ? 256 : key === "display_name" ? 80 : 256;
-            field.autocomplete = type === "password" ? (step === "register_code" ? "new-password" : "current-password") : key === "email" ? "email" : key === "display_name" ? "nickname" : "one-time-code";
+            field.autocomplete = type === "password" ? (step === "register_code" || step === "reset_password" ? "new-password" : "current-password") : key === "email" ? "email" : key === "display_name" ? "nickname" : "one-time-code";
+            if (step === "recovery_code" && key === "code") { field.inputMode = "numeric"; field.pattern = "[0-9]{6}"; field.maxLength = 6; }
             field.value = accountDraft[key] || "";
             field.oninput = function () {
               accountDraft[key] = field.value;
@@ -296,10 +300,15 @@
             return field;
           }
           var confirmation = null;
-          if (step === "login" || step === "register") input("email", "account_email", "email");
-          if (step === "login" || step === "register_code") input("password", "account_password", "password");
-          if (step === "register_code") confirmation = input("confirm_password", "account_confirm_password", "password");
+          if (step === "forgot_password" || step === "recovery_code" || step === "reset_password") {
+            form.appendChild(el("h2", "", t("account_reset_title")));
+            form.appendChild(el("p", "muted", t(step === "forgot_password" ? "account_recovery_intro" : step === "recovery_code" ? "account_recovery_sent" : "account_recovery_verified")));
+          }
+          if (step === "login" || step === "register" || step === "forgot_password") input("email", "account_email", "email");
+          if (step === "login" || step === "register_code" || step === "reset_password") input("password", "account_password", "password");
+          if (step === "register_code" || step === "reset_password") confirmation = input("confirm_password", "account_confirm_password", "password");
           if (step === "register_code") input("display_name", "account_name");
+          if (step === "recovery_code") input("code", "account_code");
           if (step === "login_code" || step === "register_code") {
             form.appendChild(el("p", "muted", t("account_code_sent")));
             input(step === "login_code" ? "code" : "token", "account_code");
@@ -323,10 +332,26 @@
             if (fields.code) fields.code = fields.code.trim();
             if (fields.token) fields.token = fields.token.trim();
             delete accountDraft.password; delete accountDraft.confirm_password; delete accountDraft.code; delete accountDraft.token;
-            form.querySelectorAll('input[type="password"]').forEach(function (field) { field.value = ""; });
-            call("account_action", step === "login_code" ? "login/verify" : step === "register_code" ? "verify" : step, fields);
+            form.querySelectorAll('input[type="password"], input[name="code"], input[name="token"]').forEach(function (field) { field.value = ""; });
+            var actions = {login_code:"login/verify", register_code:"verify", forgot_password:"forgot-password", recovery_code:"forgot-password/verify", reset_password:"reset-password"};
+            call("account_action", actions[step] || step, fields);
           };
           inner.appendChild(form);
+          if (step === "login") {
+            var forgot = btn("hero-link account-forgot", t("account_forgot"), function () {
+              if (auth.account_busy) return;
+              accountForm = "forgot_password"; accountDraft = {email:accountDraft.email || ""};
+              call("account_action", "cancel"); root.innerHTML = "";
+              render(root, Object.assign({}, state, {auth:Object.assign({}, auth, {account_step:""}), comp:Object.assign({}, state.comp, {error:""})}), ctx);
+            });
+            forgot.disabled = !!auth.account_busy; inner.appendChild(forgot);
+          }
+          if (step === "recovery_code") {
+            var resend = btn("hero-link account-resend", t("account_recovery_resend"), function () {
+              if (!auth.account_busy) { delete accountDraft.code; call("account_action", "forgot-password", {email:accountDraft.email}); }
+            });
+            resend.disabled = !!auth.account_busy; inner.appendChild(resend);
+          }
           inner.appendChild(btn("hero-link", t("comp_cancel"), function () {
             accountForm = ""; accountDraft = {}; call("account_action", "cancel");
             root.innerHTML = ""; render(root, Object.assign({}, state, {auth:Object.assign({}, auth, {account_step:""})}), ctx);

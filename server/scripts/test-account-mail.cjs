@@ -11,6 +11,18 @@ const env={HUB_MAIL_TRANSPORT:'resend-https',HUB_SMTP_HOST:'smtp.resend.com',HUB
   HUB_SMTP_PASSWORD:'fixture-private-key',HUB_SMTP_FROM:'Lights Out <accounts@example.test>'};
 const message={to:'member@example.test',kind:'verify',token:'fixture-verification-code'};
 
+test('recovery mail provides a localized fifteen-minute code without exposing codes to absent accounts',async()=>{
+  const messages=[];
+  global.fetch=async(url,options)=>{messages.push(JSON.parse(options.body));return {ok:true,json:async()=>({id:'receipt'})};};
+  for(const language of ['en','de','es','fr','pt','ru','zh']) {
+    await fromEnvironment(env)({to:'member@example.test',kind:'reset-code',token:'123456',language});
+    assert.match(messages.at(-1).text,/123456/);assert.match(messages.at(-1).text,/15/);
+    if(language!=='en')assert.doesNotMatch(messages.at(-1).text,/Your Lights Out password reset code/);
+    await fromEnvironment(env)({to:'absent@example.test',kind:'reset-code',token:'123456',language,actionable:false});
+    assert.doesNotMatch(messages.at(-1).text,/123456/);
+  }
+});
+
 test('Resend HTTPS uses the configured restricted key and existing account message',async()=>{
   let sent;
   global.fetch=async(url,options)=>{sent={url,options};return {ok:true,json:async()=>({id:'49a3999c-0ce1-4ea6-ab68-afcd6dc2e794'})};};

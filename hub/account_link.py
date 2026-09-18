@@ -1,7 +1,7 @@
 """Settings-only linking: isolated proof sessions, no temporary gameplay adoption."""
 import threading
 import webbrowser
-from . import auth
+from . import auth, i18n
 
 
 def _spawn(work):
@@ -27,6 +27,7 @@ class AccountLink:
         self._login_challenge = self._challenge = self._url = ''
         self._origin_token = self._steam_id = ''
         self._origin_epoch = 0
+        self._recovery_challenge = self._reset_token = self._recovery_email = ''
 
     def eligible(self):
         s = self.session
@@ -54,6 +55,7 @@ class AccountLink:
         self.stage = ''; self.busy = False; self.error = ''; self.email = ''
         self._email_token = self._steam_token = ''
         self._login_challenge = self._challenge = self._url = ''
+        self._recovery_challenge = self._reset_token = self._recovery_email = ''
         for token in tokens:
             self._dispose(token)
         if notify:
@@ -72,7 +74,7 @@ class AccountLink:
         self.session.finish_account_link()
         self.stage = 'uncertain' if uncertain else 'done'
 
-    def _task(self, work, apply, final=False):
+    def _task(self, work, apply, final=False, recovery=''):
         epoch = self.epoch
         self.busy = True; self.error = ''; self.session._changed()
         def worker():
@@ -85,7 +87,7 @@ class AccountLink:
                 allowed = {'progress_conflict', 'link_conflict', 'active_match',
                     'fresh_steam_required', 'invalid_action_code', 'ownership_unavailable',
                     'account_changed', 'not_signed_in', 'invalid_credentials',
-                    'rate_limited', 'wrong_steam', 'already_linked', 'invalid_code'}
+                    'rate_limited', 'wrong_steam', 'already_linked', 'invalid_code', 'invalid_email', 'invalid_password'}
                 code = code if code in allowed else 'unavailable'
                 def failed():
                     if self._current(epoch):
@@ -93,6 +95,12 @@ class AccountLink:
                             self._finish(uncertain=True)
                         else:
                             self.busy = False; self.error = code
+                            if recovery:
+                                self.error = {'rate_limited':'recovery_limited', 'invalid_code':'recovery_invalid',
+                                    'invalid_email':'recovery_email', 'invalid_password':'recovery_password'}.get(code,
+                                    'reset_uncertain' if recovery == 'reset-password' else 'recovery_failed')
+                                if recovery == 'reset-password' and code == 'invalid_code':
+                                    self._reset_token = ''; self.stage = 'forgot_password'
                         self.session._changed()
                     elif self.epoch == epoch:
                         self.cancel()
@@ -142,6 +150,37 @@ class AccountLink:
         if action == 'open_steam' and self.stage == 'steam' and self._url:
             self.open_browser(self._url); return
         if not self._current(self.epoch) or self.busy:
+            return
+        if action == 'recover' and self.stage in ('login', 'password'):
+            self.cancel(notify=False)
+            self.stage = 'forgot_password'; self.session._changed(); return
+        if action == 'forgot-password' and self.stage in ('forgot_password', 'recovery_code'):
+            email = self._recovery_email if self.stage == 'recovery_code' else fields.get('email')
+            payload = {'email': email, 'language': i18n.get_language()}
+            def applied(result):
+                self._recovery_challenge = result['challenge']; self._recovery_email = email
+                self.stage = 'recovery_code'
+            self._task(lambda: self.request(action, payload), applied, recovery=action)
+            return
+        if action == 'forgot-password/verify' and self.stage == 'recovery_code' and self._recovery_challenge:
+            payload = {'challenge': self._recovery_challenge, 'code': str(fields.get('code') or '').strip()}
+            def work():
+                try: return self.request(action, payload)
+                finally: payload.clear()
+            def applied(result):
+                self._reset_token = result['reset_token']; self._recovery_challenge = ''
+                self.stage = 'reset_password'
+            self._task(work, applied, recovery=action)
+            return
+        if action == 'reset-password' and self.stage == 'reset_password' and self._reset_token:
+            payload = {'token': self._reset_token, 'password': fields.get('password')}
+            def work():
+                try: return self.request(action, payload)
+                finally: payload.clear()
+            def applied(result):
+                self._reset_token = self._recovery_challenge = self._recovery_email = ''
+                self.stage = 'login'; self.error = 'password_reset'
+            self._task(work, applied, recovery=action)
             return
         if action == 'login' and self.stage == 'login':
             payload = {'email': fields.get('email'), 'password': fields.get('password'), 'remember_me': False}

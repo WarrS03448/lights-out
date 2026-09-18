@@ -1,4 +1,5 @@
 'use strict';
+const {recoveryMail}=require('./account-recovery-mail.cjs');
 
 function fromEnvironment(env=process.env) {
   const method=env.HUB_MAIL_TRANSPORT||'smtp';
@@ -16,7 +17,7 @@ function fromEnvironment(env=process.env) {
     connectionTimeout:10000,greetingTimeout:10000,socketTimeout:15000,
     logger:false,debug:false,disableFileAccess:true,disableUrlAccess:true,
   }):null;
-  return async({to,kind,token,steam_id,actionable=true})=>{
+  return async({to,kind,token,steam_id,language='en',actionable=true})=>{
     const verification=kind==='verify';
     const login=kind==='login';
     const ownership=kind==='link-steam'||kind==='disconnect-steam';
@@ -38,6 +39,7 @@ function fromEnvironment(env=process.env) {
       text:ownershipText||text,
       disableFileAccess:true,disableUrlAccess:true,
     };
+    if(kind==='reset-code')Object.assign(message,recoveryMail({language,token,actionable}));
     if(method==='resend-https') {
       try {
         const response=await fetch('https://api.resend.com/emails',{

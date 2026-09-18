@@ -1,11 +1,11 @@
 {
   "catalogue_version": 1,
   "hub": {
-    "version": "2.3.89",
-    "download_url": "https://lightsout.up.railway.app/hub/LightsOut-Setup-2.3.89.exe",
+    "version": "2.3.90",
+    "download_url": "https://lightsout.up.railway.app/hub/LightsOut-Setup-2.3.90.exe",
     "page_url": "https://lightsout.up.railway.app/",
-    "sha256": "7bcaf7bc97b973602596e26e6dcfd08b8d5a47bd4a2e324f431b4ea80b73cf1a",
-    "size": 21394312,
+    "sha256": "21705824b9313a1320f2ae85e8b70cb561888a43dee26376842e25d199c9c67a",
+    "size": 21407672,
     "kind": "inno-setup"
   },
   "gamemodes": [

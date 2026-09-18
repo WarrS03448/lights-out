@@ -64,6 +64,10 @@ if not raw then return 0 end
 local account=cjson.decode(raw)
 if account.version~=tonumber(ARGV[1]) or account.password_hash~=ARGV[2] then return 0 end
 if #KEYS==3 and redis.call('GET',KEYS[3])~=ARGV[5] then return 0 end
+if #KEYS==3 then
+ local grant=cjson.decode(ARGV[5])
+ if grant.expires_at and grant.expires_at<=tonumber(ARGV[4]) then return 0 end
+end
 local sessions=redis.call('SMEMBERS',KEYS[2])
 for _,token in ipairs(sessions) do
  if #token~=64 or not string.match(token,'^[a-f0-9]+$') then return redis.error_reply('invalid account session index') end
@@ -76,6 +80,26 @@ redis.call('SET',KEYS[1],updated)
 for _,token in ipairs(sessions) do redis.call('DEL',ARGV[6]..token) end
 redis.call('DEL',KEYS[2])
 if #KEYS==3 then redis.call('DEL',KEYS[3]) end
+return 1`;
+const RECOVERY_FINISH = TYPES + `
+local raw=redis.call('GET',KEYS[1])
+local user=redis.call('GET',KEYS[2])
+if not raw or not user then return 0 end
+local challenge=cjson.decode(raw)
+local account=cjson.decode(user)
+local grant=cjson.decode(ARGV[2])
+if not challenge.actionable or challenge.account_id~=account.id or challenge.version~=account.version or challenge.expires_at<=tonumber(ARGV[3]) then
+ redis.call('DEL',KEYS[1]);return 0
+end
+if challenge.code_hash~=ARGV[1] then
+ challenge.attempts=challenge.attempts+1
+ if challenge.attempts>=5 then redis.call('DEL',KEYS[1])
+ else redis.call('SET',KEYS[1],cjson.encode(challenge),'KEEPTTL') end
+ return 0
+end
+if grant.account_id~=account.id or grant.version~=account.version or not grant.actionable then return 0 end
+redis.call('SET',KEYS[3],ARGV[2],'EX',ARGV[4])
+redis.call('DEL',KEYS[1])
 return 1`;
 const LOGOUT = WITH_SESSION_SET(2) + `
 redis.call('DEL',KEYS[1])
@@ -146,6 +170,9 @@ function create({upstashCmd,prefix,authPrefix=prefix,secret}) {
     completeLogin:(challenge,account,codeHash,token,session,ttl)=>evalScript(LOGIN_FINISH,
       [key('login',digest(challenge)),key('user',account.id),key('session',digest(token)),key('sessions',account.id)],
       [codeHash,JSON.stringify(session),ttl,Date.now(),digest(token)]),
+    completeRecovery:(challenge,account,codeHash,token,grant,ttl)=>evalScript(RECOVERY_FINISH,
+      [key('recovery',digest(challenge)),key('user',account.id),key('reset',digest(token))],
+      [codeHash,JSON.stringify(grant),Date.now(),ttl]),
     revokeSession:(token,accountId)=>evalScript(LOGOUT,
       [key('session',digest(token)),key('sessions',accountId)],[digest(token)]),
     changePassword:(account,hash,at,reset)=>evalScript(PASSWORD,

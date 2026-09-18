@@ -2,6 +2,7 @@
 from types import SimpleNamespace
 from hub.account_link import AccountLink
 from hub.auth import AuthError
+import pytest
 
 STEAM = '76561198000000001'
 EMAIL_TOKEN = 'lo_' + 'e' * 43
@@ -46,6 +47,49 @@ def advance_to_confirm(flow, run):
     run()
     flow.action('password', {'password':'secret-second'})
     run()
+
+
+@pytest.mark.parametrize('from_password', [False, True])
+def test_settings_recovery_verifies_email_and_returns_to_login_without_switching_steam(from_password):
+    s,f,calls,revoked,opened,run,_=harness()
+    f.action('start')
+    if from_password:
+        f.action('login',{'email':'fixture@example.test','password':'secret'});run()
+        f.action('login_code',{'code':'123456'});run();f.action('steam');run()
+        assert f.stage=='password'
+    def request(action, payload, token=None):
+        calls.append((action,dict(payload),token))
+        return {'forgot-password':{'challenge':'c'*43},'forgot-password/verify':{'reset_token':'r'*43},'reset-password':{'ok':True}}[action]
+    f.request=request
+    f.action('recover');run()
+    assert f.stage=='forgot_password'
+    if from_password:assert EMAIL_TOKEN in revoked and PROOF in revoked
+    f.action('forgot-password',{'email':'fixture@example.test'});run()
+    assert f.stage=='recovery_code'
+    f.action('forgot-password/verify',{'code':'123456'});run()
+    assert f.stage=='reset_password'
+    assert 'r'*43 not in repr(f.view()) and 'c'*43 not in repr(f.view())
+    f.action('reset-password',{'password':'new-password'});run()
+    assert calls[-1]==('reset-password',{'token':'r'*43,'password':'new-password'},None)
+    assert f.stage=='login' and f.error=='password_reset'
+    assert s.token=='original-steam' and s.me['steam_id']==STEAM
+    assert not f._reset_token and not f._recovery_challenge
+
+
+def test_settings_recovery_cancel_ignores_late_grant_and_failed_resend_retains_code():
+    s,f,calls,revoked,opened,run,_=harness()
+    def request(action,payload,token=None):
+        if action=='forgot-password':return {'challenge':'c'*43}
+        return {'reset_token':'r'*43}
+    f.request=request;f.action('start');f.action('recover')
+    f.action('forgot-password',{'email':'fixture@example.test'});run()
+    def fail(*args):raise AuthError('limited',code='rate_limited',status=429)
+    f.request=fail;f.action('forgot-password');run()
+    assert f.stage=='recovery_code' and f._recovery_challenge=='c'*43
+    f.request=request;f.action('forgot-password/verify',{'code':'123456'})
+    f.action('cancel');run()
+    assert not f.stage and not f._reset_token and not f._recovery_challenge
+    assert s.token=='original-steam' and not revoked
 
 
 def test_success_preserves_current_identity_until_atomic_confirmation_and_then_signs_out():

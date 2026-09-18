@@ -1,4 +1,5 @@
 'use strict';
+const security=require('../account-security.cjs');
 const {test, before, after, beforeEach} = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
@@ -90,6 +91,14 @@ async function login(email = EMAIL, password = PASSWORD, remember_me = false) {
   const result = await request('login/verify',{challenge:started.body.challenge,code});
   assert.equal(result.status,200,JSON.stringify(result.body));
   return result.body.token;
+}
+async function recovery(email = EMAIL) {
+  const started=await request('forgot-password',{email});
+  assert.equal(started.status,202);
+  const code=outbox.findLast(m=>m.kind==='reset-code'&&m.to===email).token;
+  const verified=await request('forgot-password/verify',{challenge:started.body.challenge,code});
+  assert.equal(verified.status,200,JSON.stringify(verified.body));
+  return verified.body.reset_token;
 }
 async function steamSession(token='steam-proof', steamId=STEAM) {
   const raw=await store(['GET',prefix+'accounts:steam-identity:'+steamId]);
@@ -198,8 +207,18 @@ test('reset codes are single use and changing credentials revokes every old acco
   await register();const first=await login(),second=await login();
   const unknown=await request('forgot-password',{email:'nobody@example.test'});
   const known=await request('forgot-password',{email:EMAIL});
-  assert.equal(known.status,202);assert.deepEqual(known.body,unknown.body);
-  const code=outbox.findLast(m=>m.kind==='reset').token;
+  assert.equal(known.status,202);
+  assert.match(known.body.challenge,/^[A-Za-z0-9_-]{43}$/);
+  assert.match(unknown.body.challenge,/^[A-Za-z0-9_-]{43}$/);
+  assert.deepEqual({...known.body,challenge:''},{...unknown.body,challenge:''});
+  const emailCode=outbox.findLast(m=>m.kind==='reset-code').token;
+  assert.match(emailCode,/^\d{6}$/);
+  assert.equal((await request('reset-password',{token:emailCode,password:NEW_PASSWORD})).status,400);
+  const proof={challenge:known.body.challenge,code:emailCode};
+  const verified=await request('forgot-password/verify',proof);
+  assert.equal(verified.status,200);
+  const code=verified.body.reset_token;
+  assert.equal((await request('forgot-password/verify',proof)).status,400);
   const reset=await request('reset-password',{token:code,password:NEW_PASSWORD});
   assert.equal(reset.status,200);
   for(const token of [first,second])assert.equal((await request('me',undefined,token)).status,401);
@@ -209,8 +228,7 @@ test('reset codes are single use and changing credentials revokes every old acco
 });
 
 test('password change checks old password, revokes sessions and invalidates outstanding reset codes',async()=>{
-  await register();const token=await login();await request('forgot-password',{email:EMAIL});
-  const resetToken=outbox.findLast(m=>m.kind==='reset').token;
+  await register();const token=await login();const resetToken=await recovery();
   assert.equal((await request('change-password',{current_password:'wrong',password:NEW_PASSWORD},token)).status,401);
   assert.equal((await request('change-password',{current_password:PASSWORD,password:NEW_PASSWORD},token)).status,200);
   assert.equal((await request('me',undefined,token)).status,401);
@@ -281,15 +299,14 @@ test('expired verification, reset and session records cannot be reused',async()=
   await register();const session=await login();
   for(const key of await store(['KEYS',prefix+'accounts:session:*']))await store(['EXPIRE',key,'0']);
   assert.equal((await request('me',undefined,session)).status,401);
-  await request('forgot-password',{email:EMAIL});const reset=outbox.findLast(m=>m.kind==='reset').token;
+  const reset=await recovery();
   for(const key of await store(['KEYS',prefix+'accounts:reset:*']))await store(['EXPIRE',key,'0']);
   assert.equal((await request('reset-password',{token:reset,password:NEW_PASSWORD})).status,400);
   await login();
 });
 
 test('concurrent reset codes have one winner and cannot restore stale credentials',async()=>{
-  await register();await request('forgot-password',{email:EMAIL});await request('forgot-password',{email:EMAIL});
-  const codes=outbox.filter(m=>m.kind==='reset').map(m=>m.token);
+  await register();const codes=[await recovery(),await recovery()];
   const results=await Promise.all(codes.map(token=>request('reset-password',{token,password:NEW_PASSWORD})));
   assert.deepEqual(results.map(r=>r.status).sort(),[200,400]);
   await login(EMAIL,NEW_PASSWORD);
@@ -668,7 +685,7 @@ test('five wrong login codes exhaust the challenge, and expired/reset-invalidate
   for(const key of await store(['KEYS',prefix+'accounts:login:*']))await store(['EXPIRE',key,'0']);
   assert.equal((await request('login/verify',{challenge:started.body.challenge,code})).status,401);
   started=await request('login',{email:EMAIL,password:PASSWORD});code=outbox.findLast(m=>m.kind==='login').token;
-  await request('forgot-password',{email:EMAIL});const reset=outbox.findLast(m=>m.kind==='reset').token;
+  const reset=await recovery();
   assert.equal((await request('reset-password',{token:reset,password:NEW_PASSWORD})).status,200);
   assert.equal((await request('login/verify',{challenge:started.body.challenge,code})).status,401);
 });
@@ -733,8 +750,58 @@ test('remembered-session capacity is bounded and password recovery deletes all r
   const retried=await request('login/verify',{challenge:started.body.challenge,code:loginCode});
   assert.equal(retried.status,200);assert.equal(retried.body.remember_me,true);
   assert.equal((await store(['KEYS',prefix+'accounts:session:*'])).length,20);
-  await request('forgot-password',{email:EMAIL});const code=outbox.findLast(m=>m.kind==='reset').token;
+  const code=await recovery();
   assert.equal((await request('reset-password',{token:code,password:NEW_PASSWORD})).status,200);
   assert.equal((await store(['KEYS',prefix+'accounts:session:*'])).length,0);
   assert.equal((await request('me',undefined,sessions[0])).status,401);
+});
+
+test('recovery codes are hashed, attempt-limited, expiring and bound to their challenge',async()=>{
+  await register();
+  const first=await request('forgot-password',{email:EMAIL,language:'fr'});
+  const code=outbox.at(-1).token;
+  assert.equal(outbox.at(-1).language,'fr');
+  const key=prefix+'accounts:recovery:'+security.digest(first.body.challenge);
+  const record=JSON.parse(await store(['GET',key]));
+  assert.ok(record.code_hash&&!Object.hasOwn(record,'code'));
+  const wrong=code==='000000'?'111111':'000000';
+  for(let i=0;i<5;i++)assert.equal((await request('forgot-password/verify',{challenge:first.body.challenge,code:wrong})).status,400);
+  assert.equal((await request('forgot-password/verify',{challenge:first.body.challenge,code})).status,400);
+  const second=await request('forgot-password',{email:EMAIL});const secondCode=outbox.at(-1).token;
+  await store(['EXPIRE',prefix+'accounts:recovery:'+security.digest(second.body.challenge),'0']);
+  assert.equal((await request('forgot-password/verify',{challenge:second.body.challenge,code:secondCode})).status,400);
+});
+
+test('recovery verification has one concurrent winner and never authorizes absent accounts',async()=>{
+  await register();const started=await request('forgot-password',{email:EMAIL});
+  const proof={challenge:started.body.challenge,code:outbox.at(-1).token};
+  const results=await Promise.all([request('forgot-password/verify',proof),request('forgot-password/verify',proof)]);
+  assert.deepEqual(results.map(r=>r.status).sort(),[200,400]);
+  const unknown=await request('forgot-password',{email:'absent@example.test'});
+  assert.equal(outbox.at(-1).actionable,false);
+  assert.equal((await request('forgot-password/verify',{challenge:unknown.body.challenge,code:outbox.at(-1).token})).status,400);
+  assert.equal((await request('reset-password',{token:started.body.challenge,password:NEW_PASSWORD})).status,400);
+});
+
+test('password changes invalidate recovery challenges before they can grant reset access',async()=>{
+  await register();const session=await login();const started=await request('forgot-password',{email:EMAIL});
+  const proof={challenge:started.body.challenge,code:outbox.at(-1).token};
+  assert.equal((await request('change-password',{current_password:PASSWORD,password:NEW_PASSWORD},session)).status,200);
+  assert.equal((await request('forgot-password/verify',proof)).status,400);
+});
+
+test('wrong recovery codes perform the same storage work for registered and absent emails',async()=>{
+  await register();
+  const known=await request('forgot-password',{email:EMAIL});const knownCode=outbox.at(-1).token;
+  const absent=await request('forgot-password',{email:'absent@example.test'});const absentCode=outbox.at(-1).token;
+  const original=store,work=[];
+  store=async(...args)=>{work.push(args[0][0]);return original(...args);};
+  try {
+    auth=makeAuth();
+    await request('forgot-password/verify',{challenge:known.body.challenge,code:knownCode==='000000'?'111111':'000000'});
+    const expected=work.filter(op=>op!=='CONFIG');work.length=0;
+    await request('forgot-password/verify',{challenge:absent.body.challenge,code:absentCode==='000000'?'111111':'000000'});
+    // The first request additionally pins the secret configuration for this new router.
+    assert.deepEqual(expected.slice(1),work);
+  } finally {store=original;}
 });

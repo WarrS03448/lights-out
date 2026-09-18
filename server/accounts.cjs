@@ -9,8 +9,10 @@ const ticketModule = require('./steam-ticket.cjs');
 const {fail,digest,isSession,isToken} = security;
 const SESSION_SECONDS=12*3600;
 const LOGIN_SECONDS=600;
+const RECOVERY_SECONDS=900;
+const RESET_SECONDS=300;
 const ROOT='/api/auth/account/';
-const POST_ROUTES=new Set(['register','verify','login','login/verify','logout','forgot-password','reset-password','change-password',
+const POST_ROUTES=new Set(['register','verify','login','login/verify','logout','forgot-password','forgot-password/verify','reset-password','change-password',
   'link-steam','link-steam/verify','disconnect-steam','disconnect-steam/verify','game/challenge','game/verify']);
 const GET_ROUTES=new Set(['me','game/me']);
 const OWNERSHIP_SECONDS=300;
@@ -146,15 +148,41 @@ function create({upstashCmd,prefix,authPrefix=prefix,sendJson,steamIdentity,revo
     const input=await body(req);
     if(action==='register'||action==='forgot-password') {
       const email=security.email(input.email);await rate('mail',email,3,3600);
-      if(config.allowEmail&&!config.allowEmail(email))return sendJson(res,202,ACCEPTED);
+      const challenge=action==='forgot-password'?security.randomToken():null;
+      const response=challenge?{...ACCEPTED,challenge,expires_in:RECOVERY_SECONDS}:ACCEPTED;
+      if(config.allowEmail&&!config.allowEmail(email))return sendJson(res,202,response);
       const account=await db.byEmail(email);
       // Always take the storage + delivery path. A non-actionable request sends
       // a helpful notice to the address owner, never a usable credential. The
       // public response cannot expose existence via SMTP latency or failure.
       if(action==='register')await deliver('verify',email,{email},3600,!account);
-      if(action==='forgot-password')await deliver('reset',email,
-        {account_id:account?.id||null,version:account?.version||0},900,Boolean(account));
-      return sendJson(res,202,ACCEPTED);
+      if(action==='forgot-password') {
+        const code=security.loginCode();
+        const record={account_id:account?.id||null,version:account?.version||0,actionable:Boolean(account),
+          code_hash:security.codeDigest(config.secret,'reset:'+challenge,code),attempts:0,
+          expires_at:Date.now()+RECOVERY_SECONDS*1000};
+        await db.set('recovery',digest(challenge),record,RECOVERY_SECONDS);
+        try {await config.sendMail({kind:'reset-code',to:email,token:code,actionable:Boolean(account),
+          language:['de','en','es','fr','pt','ru','zh'].includes(input.language)?input.language:'en'});}
+        catch {await db.remove('recovery',digest(challenge));throw Error('Recovery email unavailable');}
+      }
+      return sendJson(res,202,response);
+    }
+    if(action==='forgot-password/verify') {
+      if(!isToken(input.challenge)||typeof input.code!=='string'||!/^\d{6}$/.test(input.code))
+        fail(400,'invalid_code','This code is invalid or expired.');
+      await rate('recovery-verify',digest(input.challenge),10,RECOVERY_SECONDS);
+      const pending=await db.get('recovery',digest(input.challenge));
+      // Match storage work for registered and absent addresses, including a
+      // rejected verification, so the code endpoint cannot enumerate emails.
+      const account=await db.get('user',pending?.account_id||'missing');
+      const token=security.randomToken();
+      const target=account||{id:pending?.account_id||'missing',version:0};
+      const grant={account_id:target.id,version:target.version,actionable:allowed(account),expires_at:Date.now()+RESET_SECONDS*1000};
+      if(!await db.completeRecovery(input.challenge,target,
+        security.codeDigest(config.secret,'reset:'+input.challenge,input.code),token,grant,RESET_SECONDS))
+        fail(400,'invalid_code','This code is invalid or expired.');
+      return sendJson(res,200,{ok:true,reset_token:token,expires_in:RESET_SECONDS});
     }
     if(action==='verify') {
       if(!isToken(input.token))fail(400,'invalid_code','This code is invalid or expired.');

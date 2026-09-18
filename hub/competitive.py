@@ -2783,6 +2783,8 @@ class LiveSession(MockSession):
         self.account_busy = False
         self.account_step = ""
         self._login_challenge = ""
+        self._recovery_challenge = ""
+        self._reset_token = ""
         self._account_remember = False
         self.game_verifying = False
         self.error = ""
@@ -2812,7 +2814,11 @@ class LiveSession(MockSession):
         if self.me or self.phase != "signed_out" or getattr(self, "account_busy", False):
             return
         fields = fields if isinstance(fields, dict) else {}
-        if action not in ("login", "login/verify", "register", "verify"):
+        if action not in ("login", "login/verify", "register", "verify", "forgot-password", "forgot-password/verify", "reset-password"):
+            return
+        if action == "forgot-password/verify" and (getattr(self, "account_step", "") != "recovery_code" or not getattr(self, "_recovery_challenge", "")):
+            return
+        if action == "reset-password" and (getattr(self, "account_step", "") != "reset_password" or not getattr(self, "_reset_token", "")):
             return
         self.account_busy = True
         self.error = ""
@@ -2825,6 +2831,14 @@ class LiveSession(MockSession):
             payload = {"challenge": getattr(self, "_login_challenge", ""), "code": fields.get("code")}
         elif action == "register":
             payload = {"email": fields.get("email")}
+        elif action == "forgot-password":
+            self._reset_token = ""
+            self._login_challenge = ""
+            payload = {"email": fields.get("email"), "language": i18n.get_language()}
+        elif action == "forgot-password/verify":
+            payload = {"challenge": self._recovery_challenge, "code": fields.get("code")}
+        elif action == "reset-password":
+            payload = {"token": self._reset_token, "password": fields.get("password")}
         else:
             payload = {key: fields.get(key) for key in ("token", "password", "display_name")}
         self._changed()
@@ -2833,7 +2847,8 @@ class LiveSession(MockSession):
                 result = auth_mod.account_request(action, payload)
                 def apply():
                     if getattr(self, "_proof_epoch", 0) != epoch:
-                        self._revoke_login(result.get("token"))
+                        if action == "login/verify":
+                            self._revoke_login(result.get("token"))
                         return
                     self.account_busy = False
                     if action == "login":
@@ -2844,6 +2859,17 @@ class LiveSession(MockSession):
                     elif action == "verify":
                         self.account_step = "login"
                         self.error = t("account_created")
+                    elif action == "forgot-password":
+                        self._recovery_challenge = result["challenge"]
+                        self.account_step = "recovery_code"
+                    elif action == "forgot-password/verify":
+                        self._recovery_challenge = ""
+                        self._reset_token = result["reset_token"]
+                        self.account_step = "reset_password"
+                    elif action == "reset-password":
+                        self._reset_token = self._recovery_challenge = ""
+                        self.account_step = "login"
+                        self.error = t("account_password_reset")
                     else:
                         self._login_challenge = ""
                         self.account_step = ""
@@ -2857,13 +2883,23 @@ class LiveSession(MockSession):
                         self.adopt_account({**result, "remember_me": remember}, save=remember)
                     self._changed()
                 self.panel.post(apply)
-            except Exception:
+            except Exception as exc:
+                code = getattr(exc, "code", "")
                 def failed():
                     if getattr(self, "_proof_epoch", 0) == epoch:
                         self.account_busy = False
                         self.error = t("account_request_failed")
+                        if action in ("forgot-password", "forgot-password/verify", "reset-password"):
+                            key = {"rate_limited": "account_recovery_limited", "invalid_code": "account_recovery_invalid",
+                                   "invalid_email": "account_recovery_email", "invalid_password": "account_recovery_password"}.get(code)
+                            self.error = t(key or ("account_reset_uncertain" if action == "reset-password" else "account_recovery_failed"))
+                            if action == "reset-password" and code == "invalid_code":
+                                self._reset_token = ""
+                                self.account_step = "forgot_password"
                         self._changed()
                 self.panel.post(failed)
+            finally:
+                payload.clear()
         threading.Thread(target=work, daemon=True).start()
 
     def adopt_account(self, account, save=False):
