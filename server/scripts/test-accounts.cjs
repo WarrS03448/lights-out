@@ -11,7 +11,48 @@ const NEW_PASSWORD = 'Another long unique passphrase!';
 const EMAIL = 'player@example.test';
 const STEAM = '76561198000000001';
 const ORIGIN = 'https://accounts.example.test';
+const accountDirectory = require('../admin-accounts.cjs');
 let bridge, store, auth, server, base, outbox, storeDown, mailDown, prefix;
+
+test('console inventory includes verified website accounts, isolates namespaces and excludes private fields',async()=>{
+  const account=await register();
+  await request('register',{email:'pending@example.test'});
+  await store(['SET','other:accounts:user:'+account.id,JSON.stringify({...account,display_name:'Wrong namespace'})]);
+  const directory=accountDirectory.create({store,prefix,autostart:false});
+  await directory.refresh();
+  assert.equal(directory.snapshot().available,false,'partial scans cannot advertise complete totals');
+  await directory.refresh();
+  const snapshot=directory.snapshot();
+  assert.equal(snapshot.available,true);
+  assert.equal(snapshot.rows.length,1);
+  assert.equal(snapshot.rows[0].player_id,account.id);
+  assert.equal(snapshot.rows[0].persona,'Player One');
+  assert.doesNotMatch(JSON.stringify(snapshot),/email|password|session|token|example.test|Wrong namespace/);
+  storeDown=true;await directory.refresh();
+  assert.equal(directory.snapshot().stale,true);
+  assert.equal(directory.snapshot().rows.length,1,'keep last complete inventory on failure');
+});
+
+test('console inventory follows real link and disconnect without moving or combining player history',async()=>{
+  const created=await register();let token=await login();await steamSession();
+  assert.equal((await link(token)).status,200);
+  const directory=accountDirectory.create({store,prefix,autostart:false});
+  await directory.refresh();await directory.refresh();
+  assert.deepEqual(directory.snapshot().rows.map(r=>[r.player_id,r.account_type]),[[STEAM,'Linked']]);
+  await directory.refresh(); // User records read while still linked; ledger changes next.
+  token=await login();const preview=await request('disconnect-steam',{password:PASSWORD},token);
+  assert.equal((await request('disconnect-steam/verify',{challenge:preview.body.challenge,
+    code:outbox.findLast(m=>m.kind==='disconnect-steam').token,confirmation:'disconnect-steam-v1'},token)).status,200);
+  await directory.refresh();
+  assert.equal(directory.snapshot().stale,true,'a mixed pre/post-disconnect scan must not be published');
+  await directory.refresh();await directory.refresh();
+  const rows=directory.snapshot().rows;
+  assert.equal(rows.length,2);
+  assert.equal(rows.find(r=>r.account_id===created.id).player_id,STEAM);
+  assert.equal(rows.find(r=>r.account_id===created.id).account_type,'Lights Out');
+  const fresh=rows.find(r=>r.account_type==='Steam');
+  assert.notEqual(fresh.player_id,STEAM);assert.equal(fresh.steam_login_id,STEAM);
+});
 
 function sendJson(res, status, body, headers = {}) {
   res.writeHead(status, {'content-type':'application/json', 'cache-control':'no-store', ...headers});

@@ -23,7 +23,7 @@ const server=http.createServer(async(req,res)=>{const u=new URL(req.url,'http://
     fs.mkdirSync('work/analytics-browser',{recursive:true});
     for(const width of [1440,390]){
       await page.setViewportSize({width,height:1000});await page.goto(url+'/admin/analytics');await page.locator('.card').first().waitFor();
-      assert.equal(await page.locator('.card .value').first().innerText(),'65');
+      assert.equal(await page.locator('.card').filter({hasText:'Completed matches'}).locator('.value').innerText(),'65');
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
       await page.screenshot({path:`work/analytics-browser/overview-${width}.png`,fullPage:true});
       for(const view of ['balance','ratings','reliability','audits','events','matches']){

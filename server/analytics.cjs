@@ -98,7 +98,7 @@ function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB
         if(!row)continue;
         let ok;
         if(kind==='audits')ok=(!f.q||[row.actor_id,row.target_id,row.action,row.id].join(' ').includes(f.q));
-        else if(kind==='matches')ok=metrics.matches(row,f)&&(!f.actor_id||row.players.some(p=>(p.player_id||p.steam_id)===f.actor_id))&&(!f.match_id||row.id===f.match_id)&&(!f.q||[row.id,row.map,...row.players.flatMap(p=>[p.steam_id,p.persona])].join(' ').toLowerCase().includes(f.q.toLowerCase()));
+        else if(kind==='matches')ok=metrics.matches(row,f)&&(!f.actor_id||row.players.some(p=>(p.player_id||p.steam_id)===f.actor_id))&&(!f.match_id||row.id===f.match_id)&&(!f.q||[row.id,row.map,...row.players.flatMap(p=>[p.player_id,p.game_steam_id,p.steam_id,p.persona])].join(' ').toLowerCase().includes(f.q.toLowerCase()));
         else ok=(!f.actor_id||row.actor_id===f.actor_id)&&(!f.match_id||row.match_id===f.match_id)&&(!f.category||row.type.startsWith(f.category+'.'))&&(!f.severity||(f.severity==='problems'?['warn','error'].includes(row.severity):row.severity===f.severity))&&(!f.version||row.version===f.version)&&(!f.q||JSON.stringify(row).toLowerCase().includes(f.q.toLowerCase()));
         if(ok)rows.push(row);
         if(rows.length>=f.limit){exhausted=exhausted&&i===batch.rows.length-1;break;}

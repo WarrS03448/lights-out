@@ -88,10 +88,10 @@ const PRESET_NAME_MAX = 48;
 function defaultPresets() {
   return [
     { id: 'overview', name: 'Overview', sort: 'last_seen', dir: 'desc',
-      columns: ['persona', 'player_id', 'status', 'rank_name', 'matches', 'win_rate', 'kd',
+      columns: ['persona', 'player_id', 'account_type', 'status', 'rank_name', 'matches', 'win_rate', 'kd',
                 'seconds', 'last_seen', 'actions'] },
     { id: 'moderation', name: 'Moderation', sort: 'reports', dir: 'desc',
-      columns: ['persona', 'player_id', 'reports', 'reporters', 'reports_made', 'team_kills',
+      columns: ['persona', 'player_id', 'account_type', 'reports', 'reporters', 'reports_made', 'team_kills',
                 'abandons', 'no_shows', 'banned', 'last_seen', 'actions'] },
     { id: 'performance', name: 'Performance', sort: 'progress', dir: 'desc',
       columns: ['persona', 'rank_name', 'rr', 'mmr', 'played', 'kills', 'deaths', 'kd', 'kpr',
@@ -169,7 +169,8 @@ const PLAYERS_JS = `
   COLUMNS.forEach(function (c) { byKey[c.key] = c; });
 
   var state = {
-    q: '',
+    q: new URLSearchParams(location.search).get('q') || '',
+    player_id: new URLSearchParams(location.search).get('player_id') || '',
     sort: 'last_seen',
     dir: 'desc',
     columns: [],
@@ -191,6 +192,7 @@ const PLAYERS_JS = `
     save: document.getElementById('save'),
     note: document.getElementById('note'),
   };
+  el.search.value = state.player_id || state.q;
 
   // ---------------------------------------------------------------- drawing a cell
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -225,12 +227,9 @@ const PLAYERS_JS = `
     var v = row[column.key];
     td.className = 'c-' + column.type;
     if (column.type === 'name') {
-      // Straight to their Steam profile: the next thing a moderator does with a name is look at
-      // the account behind it. rel=noreferrer, because this page is a signed-in console.
+      // Drill into evidence for the canonical player, independent of their sign-in method.
       var a = document.createElement('a');
-      if (/^[0-9]{17}$/.test(row.game_steam_id || '')) a.href = 'https://steamcommunity.com/profiles/' + row.game_steam_id;
-      a.target = '_blank';
-      a.rel = 'noreferrer noopener';
+      a.href = '/admin/analytics?player_id=' + encodeURIComponent(row.player_id);
       a.textContent = v || row.player_id;
       if (!v) a.className = 'unnamed';
       td.appendChild(a);
@@ -377,10 +376,10 @@ const PLAYERS_JS = `
         });
       }));
     } else {
-      td.appendChild(button('Ban', 'Keep this Steam account out of competitive', true, function () {
+      td.appendChild(button('Ban', 'Keep this player profile out of competitive', true, function () {
         ask({ title: 'Ban ' + who,
               body: 'How many days? 0 is permanent.\\n\\nThey are dropped from the queue and any '
-                + 'match they are in, and the ban is tied to the Steam account.',
+                + 'match they are in, and the ban is tied to this player profile.',
               field: 'days', value: '7', confirm: 'Ban', danger: true }).then(function (days) {
           if (days === null) return;
           if (!/^\\d{1,4}$/.test(days)) { say('That is not a number of days.', true); return; }
@@ -481,13 +480,25 @@ const PLAYERS_JS = `
       td.className = 'empty';
       td.textContent = state.meta && state.meta.total
         ? 'No player matches that.'
-        : 'Nobody has signed in yet.';
+        : 'No player records are available yet.';
       empty.appendChild(td);
       el.tbody.appendChild(empty);
     }
     var m = state.meta || {};
+    var accountStats = document.getElementById('account-stats');
+    accountStats.replaceChildren();
+    var accounts = m.accounts || {};
+    [['Player profiles', accounts.total], ['Lights Out accounts', accounts.lightsout],
+      ['Linked accounts', accounts.linked], ['Steam-only profiles', accounts.steam]].forEach(function (item) {
+      var card = document.createElement('div'); card.className = 'stat';
+      var value = document.createElement('b'); value.textContent = item[1] == null ? '—' : item[1];
+      var label = document.createElement('span'); label.textContent = item[0];
+      card.append(value, label); accountStats.appendChild(card);
+    });
+    document.getElementById('account-note').textContent = (accounts.note || 'Account inventory unavailable.')
+      + ' Lights Out totals include linked accounts. Hub connections include reconnects.';
     var parts = [];
-    parts.push((m.found || 0) + ' of ' + (m.total || 0) + ' accounts');
+    parts.push((m.found || 0) + ' of ' + (m.total || 0) + ' known player profiles');
     if ((m.shown || 0) < (m.found || 0)) parts.push('showing the first ' + m.shown);
     if (m.persisted === false) parts.push('memory only \\u2014 no store is configured');
     el.count.textContent = parts.join(' \\u00b7 ');
@@ -497,6 +508,7 @@ const PLAYERS_JS = `
   var pending = null;
   function load() {
     var url = '/admin/players/data?q=' + encodeURIComponent(state.q)
+      + '&player_id=' + encodeURIComponent(state.player_id)
       + '&sort=' + encodeURIComponent(state.sort)
       + '&dir=' + encodeURIComponent(state.dir);
     if (pending) pending.abort();
@@ -518,13 +530,14 @@ const PLAYERS_JS = `
 
   var typing = null;
   el.search.addEventListener('input', function () {
+    state.player_id = '';
     state.q = el.search.value;
     // Debounced, because a search is a round trip and a moderator types a whole name.
     if (typing) clearTimeout(typing);
     typing = setTimeout(load, 220);
   });
   el.search.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { el.search.value = ''; state.q = ''; load(); }
+    if (e.key === 'Escape') { el.search.value = ''; state.q = ''; state.player_id = ''; load(); }
   });
   document.getElementById('refresh').addEventListener('click', load);
 
@@ -859,6 +872,8 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
                  break-inside:avoid; }
   .boxes input { margin-right:8px; }
   table { border-collapse:collapse; width:100%; font-size:12px; }
+  .table-scroll { width:100%; overflow-x:auto; }
+  .table-scroll th { top:0; }
   th { position:sticky; top:53px; z-index:4; background:var(--bg); text-align:left;
        font-weight:600; font-size:10px; letter-spacing:.1em; text-transform:uppercase;
        color:var(--muted); padding:9px 10px; border-bottom:1px solid var(--line);
@@ -920,9 +935,8 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
     const plural = (v, one, many) => `${n(v)} ${n(v) === 1 ? one : many}`;
     // An offline player has no persona, so the name falls back to the id - and printing the id
     // twice on the same row looks like two different numbers at a glance.
-    const named = (name, id) => (name && name !== id)
-      ? `<span class="name">${esc(name)}</span><span class="id">${esc(id)}</span>`
-      : `<span class="id">${esc(id)}</span>`;
+    const named = (name, id) => `<a class="name" href="/admin/players?player_id=${encodeURIComponent(id||'')}">${esc(name||id)}</a>`
+      + ((name && name !== id) ? `<span class="id">${esc(id)}</span>` : '');
     const banBtns = (id) => `<form method="post" action="/admin/ban" style="display:flex;gap:6px;margin:0">
         <input type="hidden" name="steam_id" value="${esc(id)}">
         <button class="btn" name="days" value="7">7 days</button>
@@ -951,7 +965,7 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
       ${(m.rounds || []).length ? `<div class="strip">${m.rounds.map((r, i) =>
         `<span class="rd t${n(r.won)}" title="R${i + 1} ${n(r[1])}:${n(r[2])}">${i + 1}</span>`).join('')}</div>` : ''}
       <div class="players">${(m.players || []).map((p) =>
-        `<span>${esc(p.persona || (p.player_id || p.steam_id))}${p.team ? ' (' + n(p.team) + ')' : ''}</span>`).join('')}</div>
+        `<span>${named(p.persona,p.player_id||p.steam_id)}${p.team ? ' (' + n(p.team) + ')' : ''}${p.game_steam_id ? '<span class="id">Game Steam: '+esc(p.game_steam_id)+'</span>' : ''}</span>`).join('')}</div>
     </div>`).join('') || '<div class="empty">No matches running.</div>';
 
     const kills = (d.team_kills || []).map((k) => `<div class="row">
@@ -988,6 +1002,11 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
     const enforcing = (d.notes || {}).enforcement === 'on';
     return page('Hub admin', `
       ${chrome(me, 'overview')}
+      <div class="stats" id="account-stats">
+        ${[['Player profiles','total'],['Lights Out accounts','lightsout'],['Linked accounts','linked'],['Steam-only profiles','steam']]
+          .map(([label,key])=>stat(d.accounts?.[key] ?? '—',label)).join('')}
+      </div>
+      <p class="note" id="account-note">${esc(d.accounts?.note || 'Account inventory unavailable.')} Lights Out accounts include linked accounts; gameplay totals belong to player profiles.</p>
       <div class="stats">
         ${stat(n(d.online), 'online')}
         ${stat(n((d.queue || {}).players), 'queued')}
@@ -1049,9 +1068,11 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
       .replace(/</g, '\\u003c');
     return page('Players - hub admin', `
       ${chrome(me, 'players')}
+      <div class="stats" id="account-stats"></div>
+      <p class="note" id="account-note">Loading account inventory…</p>
       <div class="bar">
         <input id="q" type="search" autocomplete="off" spellcheck="false"
-               placeholder="Search by Steam name or SteamID64">
+               placeholder="Search name, player ID, account ID or Steam ID">
         <select id="presets" title="Column sets"></select>
         <button class="btn" id="save" title="Save the columns and sort into this set">Saved</button>
         <button class="btn" id="newpreset" title="Save these columns as a new set">New</button>
@@ -1062,7 +1083,7 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
       </div>
       <div class="picker" id="picker" hidden><div class="boxes" id="boxes"></div></div>
       <p class="note" id="note"></p>
-      <table><thead id="head"></thead><tbody id="rows"></tbody></table>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Player directory"><table><thead id="head"></thead><tbody id="rows"></tbody></table></div>
       <p class="count" id="count">Loading the directory...</p>
       <div class="modal" id="modal" hidden><div class="sheet">
         <h2 id="mtitle"></h2>
@@ -1147,7 +1168,11 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
       const options=Object.fromEntries(url.searchParams);
       try {
         if(pathname==='/admin/analytics')send(res,200,require('./admin-analytics.cjs').page());
-        else if(pathname.endsWith('/data'))json(res,200,await analytics.summary(options));
+        else if(pathname.endsWith('/data')) {
+          const data = await analytics.summary(options);
+          data.accounts = live().adminAccountSummary ? await live().adminAccountSummary(me.steam_id,data.filters) : null;
+          json(res,200,data);
+        }
         else if(pathname.endsWith('/matches'))json(res,200,await analytics.query('matches',options));
         else if(pathname.endsWith('/events'))json(res,200,await analytics.query('events',options));
         else if(pathname.endsWith('/audits'))json(res,200,await analytics.query('audits',options));
@@ -1178,6 +1203,7 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
 
     if (pathname === '/admin/players/data' && method === 'GET') {
       const data = await live().adminPlayers(me.steam_id, {
+        player_id: url.searchParams.get('player_id') || '',
         q: url.searchParams.get('q') || '',
         sort: url.searchParams.get('sort') || '',
         dir: url.searchParams.get('dir') || '',

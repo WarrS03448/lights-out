@@ -1554,6 +1554,15 @@ function auth() {
 // rather than a second one - a separate deploy would run the same code against the same database,
 // and what protects the data is the sign-in, not the hostname.
 let adminRouter = null;
+let accountDirectoryService;
+function accountDirectory() {
+  if (!accountDirectoryService) accountDirectoryService = require('./admin-accounts.cjs').create({
+    store:process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+      ? (privateAccounts ? accountStore : upstashCmd) : null,
+    prefix:ACCOUNT_PREFIX,
+  });
+  return accountDirectoryService;
+}
 function admin() {
   if (!adminRouter) {
     adminRouter = adminModule.create({
@@ -1587,6 +1596,7 @@ function live() {
       process.env.UPSTASH_REDIS_REST_TOKEN ? upstashCmd : null;
     liveRouter = liveModule.create({
       analytics: analytics(),
+      accountDirectory: accountDirectory(),
       whoami: (token) => auth().whoami(token),
       admitGameplay: (token,identity) => auth().admitGameplay(token,identity),
       activityGate: accountActivity,
@@ -1830,6 +1840,7 @@ function start() {
   const server = createServer();
   analytics().emit('service.start',{code:'server_started'});
   void analytics().maintenance();
+  accountDirectory();
   const port = process.env.PORT ?? 8081;
   // The rules build numbers, before the first catalogue goes out if we can manage it. Nothing
   // waits on it: until it lands, versions are served plain, which is always safe.
@@ -1872,6 +1883,7 @@ function installShutdown(server) {
     Promise.resolve()
       .then(() => live().shutdown())
       .then(() => analytics().close())
+      .then(() => accountDirectoryService?.close())
       .catch((err) => console.error('[server] shutdown:', err && err.message))
       .then(() => new Promise((resolve) => server.close(resolve)))
       .then(() => { clearTimeout(hard); process.exit(0); })

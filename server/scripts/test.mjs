@@ -3963,7 +3963,7 @@ async function main() {
         L._internals.ADMIN_IDS.delete(HOST);
       }
       assert.equal(status, 200);
-      assert.ok(body.includes('Search by Steam name or SteamID64'), 'no search bar');
+      assert.match(body, /<input[^>]*id="q"[^>]*type="search"/, 'no search bar');
       const boot = JSON.parse(body.split('id="boot">')[1].split('</script>')[0]
         .replace(/\\u003c/g, '<'));
       assert.equal(boot.columns.length, liveModule.PLAYER_COLUMNS.length,

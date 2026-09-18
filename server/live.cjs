@@ -283,6 +283,11 @@ const ENEMY_CALLSIGNS = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo',
 const PLAYER_COLUMNS = [
   { key: 'persona', label: 'Name', type: 'name', text: true },
   { key: 'player_id', label: 'Player ID', type: 'id', text: true },
+  { key: 'account_type', label: 'Account', type: 'text', text: true },
+  { key: 'account_id', label: 'Lights Out account ID', type: 'id', text: true },
+  { key: 'steam_login_id', label: 'Steam sign-in ID', type: 'id', text: true },
+  { key: 'game_steam_id', label: 'Last game Steam ID', type: 'id', text: true },
+  { key: 'account_created', label: 'Account created', type: 'date' },
   { key: 'status', label: 'Status', type: 'status', text: true },
   { key: 'rank_name', label: 'Rank', type: 'rank', text: true },
   { key: 'rr', label: 'RR', type: 'num' },
@@ -309,7 +314,7 @@ const PLAYER_COLUMNS = [
   { key: 'reporters', label: 'Reporters', type: 'num' },
   { key: 'reports_made', label: 'Reports filed', type: 'num' },
   { key: 'banned', label: 'Banned', type: 'ban' },
-  { key: 'sessions', label: 'Sign-ins', type: 'num' },
+  { key: 'sessions', label: 'Hub connections', type: 'num' },
   { key: 'first_seen', label: 'First seen', type: 'date' },
   { key: 'last_seen', label: 'Last seen', type: 'date' },
   { key: 'last_match', label: 'Last match', type: 'date' },
@@ -757,7 +762,7 @@ function banFirstTeam(poolSize, advantageTeam) {
 
 const HEARTBEAT_MS = 15000;          // SSE comment frames, so proxies keep the pipe open
 
-function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, upstashCmd, prefix, analytics, admitGameplay, activityGate,
+function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, upstashCmd, prefix, analytics, accountDirectory, admitGameplay, activityGate,
                  collectSeconds, requiredVersions, profileOf, relayIssuer, expectedRules, rankedRules, privateSoloSteam='' }) {
   const soloMatch=match=>Boolean(privateSoloSteam&&identity.validSteam(privateSoloSteam)&&match?.players?.length===1&&
     identity.gameFor(match,match.host)===privateSoloSteam&&match.players[0].player_id===match.host);
@@ -866,6 +871,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   const frozenCareers = new Set();
   const careerWrites = new Map();
   let rosterRead = null;
+  let rosterAvailable = false;
   let ladderAdopted = false;
 
   // [{at, by, persona, text, hub, mode}, ...] newest first - see BUG_TEXT_MAX for why this is one
@@ -4185,6 +4191,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
                                reason: rec.reason || '', until: rec.until || 0 }))
         .sort((a2, b2) => b2.at - a2.at),
       online: bySteam.size,
+      accounts: await adminAccountSummary(steamId),
       // What the moderator needs to know to read the rest of the page honestly.
       notes: {
         enforcement: tkEnforcing() ? 'on' : 'off',
@@ -4256,7 +4263,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * reason rememberProfile is called there. A player who signs in and never queues still gets a
    * row, which is the point: this is a directory of ACCOUNTS, not of competitors.
    */
-  function noteSeen(steamId, persona) {
+  function noteSeen(steamId, persona, account = {}) {
     const id = String(steamId || '');
     if (!identity.validPlayer(id)) return null;
     const rec = { ...careerOf(id) };
@@ -4268,6 +4275,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     // without STEAM_WEB_API_KEY signs in with an empty persona.
     const name = String(persona || '').trim().slice(0, 64);
     if (name) rec.persona = name;
+    if (identity.validSteam(account.game_steam_id)) rec.game_steam_id = account.game_steam_id;
+    if (['steam','lightsout'].includes(account.auth_method)) rec.auth_method = account.auth_method;
     const v = versions.get(id);
     if (v && v.hub) rec.hub = String(v.hub).slice(0, 32);
     if (v && v.mode) rec.mode = String(v.mode).slice(0, 32);
@@ -4390,12 +4399,13 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * Memoised as a PROMISE rather than a flag: the console refreshes itself, so two requests can
    * easily be in flight together, and a flag would let the second one read a half-filled map.
    */
-  function loadRoster() {
+  async function loadRoster() {
     if (!store) return Promise.resolve(careers);
     if (!rosterRead) {
       rosterRead = (async () => {
         try {
           const raw = await store(['HGETALL', rosterKey()]);
+          if (!Array.isArray(raw) && (!raw || typeof raw !== 'object')) throw Error('Directory unavailable');
           // Upstash answers a hash as a flat [field, value, field, value, ...]. A plain object is
           // accepted too, so a local stand-in store does not have to imitate the wire.
           const pairs = [];
@@ -4416,11 +4426,14 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
               careers.set(id, { ...blankCareer(id), ...rec, player_id: id });
             }
           }
-        } catch { /* an unreadable directory is an empty one, never a failed page */ }
+          rosterAvailable = true;
+        } catch { rosterAvailable = false; }
         return careers;
       })();
     }
-    return rosterRead;
+    await rosterRead;
+    if (!rosterAvailable) rosterRead = null;
+    return careers;
   }
 
   /**
@@ -4434,13 +4447,14 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    */
   async function adoptLadder() {
     if (!store || ladderAdopted) return;
-    ladderAdopted = true;
     try {
       const ids = await store(['ZRANGE', boardKey(), '0', '-1']);
+      if (!Array.isArray(ids)) throw Error('Leaderboard unavailable');
       for (const raw of (Array.isArray(ids) ? ids : [])) {
         const id = String(raw);
         if (identity.validPlayer(id) && !careers.has(id)) careers.set(id, blankCareer(id));
       }
+      ladderAdopted = true;
     } catch { /* no board, no adoption; the directory is simply the people we have seen */ }
   }
 
@@ -4468,6 +4482,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     return {
       player_id: id,
       persona: c.persona || '',
+      account_type:'Unknown', account_id:'', account_created:0, steam_login_id:'', linked_steam_id:'',
+      game_steam_id: verifiedPlayers.get(id)?.game_steam_id || c.game_steam_id || '',
+      auth_method: c.auth_method || '',
       status: statusOf(id),
       online: bySteam.has(id),
       rank_name: rank.placing ? '' : (rank.rank_name || ''),
@@ -4521,8 +4538,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * are drawn is a question for the person looking, and the answer lives in their presets. That
    * means turning a column on never costs a request.
    */
-  async function adminPlayers(steamId, opts = {}) {
-    if (!isAdmin(steamId)) return { ok: false, error: 'not an admin' };
+  async function accountPopulation() {
     await loadRoster();
     await adoptLadder();
     // Whoever this process has touched but the directory has not heard of yet: somebody who
@@ -4532,6 +4548,23 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         careers.set(String(id), blankCareer(id));
       }
     }
+    const inventory = accountDirectory?.snapshot() || {available:false, stale:false, updated_at:null, rows:[]};
+    const snapshot = {...inventory, available:inventory.available && (!store || (rosterAvailable && ladderAdopted))};
+    const indexed = {...snapshot, byPlayer:new Map(snapshot.rows.map(r=>[r.player_id,r])), reassignedIds:new Set(snapshot.reassigned||[])};
+    const ids = new Set([...careers.keys(), ...indexed.byPlayer.keys()]);
+    const rows = [...ids].map(id=>require('./admin-accounts.cjs').enrich(directoryRow(id),indexed));
+    return {rows,snapshot};
+  }
+
+  async function adminAccountSummary(steamId, range = {}) {
+    if (!isAdmin(steamId)) return {ok:false,error:'not an admin'};
+    const {rows,snapshot} = await accountPopulation();
+    return require('./admin-accounts.cjs').summary(rows,snapshot,range);
+  }
+
+  async function adminPlayers(steamId, opts = {}) {
+    if (!isAdmin(steamId)) return { ok: false, error: 'not an admin' };
+    const population = await accountPopulation();
 
     const q = String(opts.q || '').trim().toLowerCase().slice(0, 64);
     const limit = Math.max(1, Math.min(DIRECTORY_MAX, Number(opts.limit) || DIRECTORY_PAGE));
@@ -4540,14 +4573,16 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const sort = column ? column.key : 'last_seen';
     const dir = String(opts.dir || '').toLowerCase() === 'asc' ? 'asc' : 'desc';
 
-    let rows = [...careers.keys()].map(directoryRow);
+    let rows = population.rows;
+    const accounts = require('./admin-accounts.cjs').summary(rows,population.snapshot);
     const total = rows.length;
+    if (opts.player_id) rows = rows.filter(r=>r.player_id === String(opts.player_id));
     if (q) {
       // Name OR id, which is the whole ask - and the id matches on any part of it, because the
       // thing a moderator has in front of them is as often the last four digits off a screenshot
       // as it is the whole number.
-      rows = rows.filter((r) => r.player_id.includes(q)
-        || (r.persona && r.persona.toLowerCase().includes(q)));
+      rows = rows.filter((r) => [r.player_id,r.account_id,r.steam_login_id,r.game_steam_id,r.persona]
+        .some(value=>String(value||'').toLowerCase().includes(q)));
     }
     const found = rows.length;
     const at = (r) => {
@@ -4589,6 +4624,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       ok: true,
       now: Date.now(),
       columns: PLAYER_COLUMNS,
+      accounts,
       rows,
       // What the footer says, and the three numbers are three different questions: how many
       // accounts there are, how many the search matched, and how many are on this page.
@@ -7657,7 +7693,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     rememberProfile(account.player_id, account.persona, account.avatar);
     // ...and into the admin directory, which is what makes "every player that has ever logged
     // on" a row rather than only every player who has ever played.
-    noteSeen(account.player_id, account.persona);
+    noteSeen(account.player_id, account.persona, account);
     clients.set(clientId, { res, steamId: account.player_id, gameSteamId: account.game_steam_id, token: bearer(req),
                             accountId:account.account_id, authMethod:account.auth_method, sourceSteamId:account.steam_id, persona: account.persona || '',
                             // The Steam avatar URL, alongside the persona and for the same reason:
@@ -8676,6 +8712,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     leaderboard: publicResult(leaderboard),
     adminOverview: publicResult(adminOverview),
     adminPlayers: publicResult(adminPlayers),
+    adminAccountSummary,
     resetRank,
     setElo,
     setRank,
