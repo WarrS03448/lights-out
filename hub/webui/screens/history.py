@@ -29,8 +29,8 @@ from ...competitive import kd_ratio, profile_stats
 
 # ---------------------------------------------------------------- strings (this screen's own)
 # English is the source of truth and every other language is merged over it, so an under-translated
-# language still renders every key (mirrors i18n.strings_for). Content rules: … (U+2026) not "...",
-# — (U+2014) not "--", sentence case labels.
+# language still renders every key (mirrors i18n.strings_for). Use … (U+2026) for ellipses
+# and sentence case labels.
 _EN = {
     **round_strings("en"),
     **player_damage_strings("en"),
@@ -48,10 +48,10 @@ _EN = {
     "col_kd": "K/D",
     "col_tk": "TK",
     "col_player": "Player",
-    "stat_none": "—",
+    "stat_none": "-",
     "rounds_played": "{n} rounds",
     "not_reported": "The gamemode never reported this player.",
-    "kills_note": "Kills are the game's own net count — a team kill takes one off. TK is counted "
+    "kills_note": "Kills are the game's own net count. A team kill takes one off. TK is counted "
                   "separately from the kill feed.",
     "combat_details": "Combat",
     "combat_complete": "Damage complete",
@@ -97,15 +97,15 @@ _EN = {
     "col_when": "When",
     "score_pending": "no score",
     "kda_label": "K/D",
-    "kda_pending": "—",
-    "rr_pending": "—",
+    "kda_pending": "-",
+    "rr_pending": "-",
     "rr_unit": "RR",
     "rr_placement": "Placement",
     "pending_note": "Some of these matches never reported a result, so they carry no score and "
                     "no RR. Everything else here is real.",
     "players": "{n} players",
     "empty_title": "No matches yet",
-    "empty_hint": "Play a competitive match and it shows up here — the map, your team and what it "
+    "empty_hint": "Play a competitive match and it shows up here with the map, your team and what it "
                   "cost you.",
     "loading": "Loading your matches…",
     "refresh": "Refresh",
@@ -132,10 +132,10 @@ _TRANSLATIONS = {
         "col_kd": "K/T",
         "col_tk": "TK",
         "col_player": "Spieler",
-        "stat_none": "—",
+        "stat_none": "-",
         "rounds_played": "{n} Runden",
         "not_reported": "Der Spielmodus hat diesen Spieler nie gemeldet.",
-        "kills_note": "Kills sind die Nettozahl des Spiels — ein Teamkill zieht einen ab. TK wird separat aus dem Kill-Feed gezählt.",
+        "kills_note": "Kills sind die Nettozahl des Spiels. Ein Teamkill zieht einen ab. TK wird separat aus dem Kill-Feed gezählt.",
         "combat_details": "Kampf", "combat_complete": "Schaden vollständig",
         "combat_partial": "Teilweise", "combat_unavailable": "Nicht verfügbar",
         "combat_partial_note": "Einige Kampfdaten wurden nicht erfasst.",
@@ -160,7 +160,7 @@ _TRANSLATIONS = {
         "pending_note": "Einige dieser Matches haben nie ein Ergebnis gemeldet, daher haben sie "
                         "weder Punkte noch RR. Alles andere hier ist echt.",
         "players": "{n} Spieler", "empty_title": "Noch keine Matches",
-        "empty_hint": "Spiele ein Wettkampfmatch und es erscheint hier — mit Karte, deinem Team "
+        "empty_hint": "Spiele ein Wettkampfmatch und es erscheint hier mit Karte, deinem Team "
                       "und dem, was es dich gekostet hat.",
         "loading": "Deine Matches werden geladen…", "refresh": "Aktualisieren",
         "signed_out_cta": "Melde dich an, um deinen Matchverlauf zu sehen.",
@@ -182,10 +182,10 @@ _TRANSLATIONS = {
         "col_kd": "B/M",
         "col_tk": "BA",
         "col_player": "Jugador",
-        "stat_none": "—",
+        "stat_none": "-",
         "rounds_played": "{n} rondas",
         "not_reported": "El modo de juego nunca informó de este jugador.",
-        "kills_note": "Las bajas son el recuento neto del juego — una baja aliada resta una. BA se cuenta aparte, desde el registro de bajas.",
+        "kills_note": "Las bajas son el recuento neto del juego. Una baja aliada resta una. BA se cuenta aparte, desde el registro de bajas.",
         "combat_details": "Combate", "combat_complete": "Daño completo",
         "combat_partial": "Parcial", "combat_unavailable": "No disponible",
         "combat_partial_note": "Algunos datos de combate no se observaron.",
@@ -210,7 +210,7 @@ _TRANSLATIONS = {
         "pending_note": "Algunas de estas partidas nunca informaron un resultado, así que no "
                         "tienen marcador ni RR. Todo lo demás aquí es real.",
         "players": "{n} jugadores", "empty_title": "Aún no hay partidas",
-        "empty_hint": "Juega una partida competitiva y aparecerá aquí — el mapa, tu equipo y lo "
+        "empty_hint": "Juega una partida competitiva y aparecerá aquí con el mapa, tu equipo y lo "
                       "que te costó.",
         "loading": "Cargando tus partidas…", "refresh": "Actualizar",
         "signed_out_cta": "Inicia sesión para ver tu historial de partidas.",
@@ -232,10 +232,10 @@ _TRANSLATIONS = {
         "col_kd": "É/M",
         "col_tk": "TÉ",
         "col_player": "Joueur",
-        "stat_none": "—",
+        "stat_none": "-",
         "rounds_played": "{n} manches",
         "not_reported": "Le mode de jeu n'a jamais rapporté ce joueur.",
-        "kills_note": "Les éliminations sont le compte net du jeu — un tir ami en retire une. TÉ est compté à part, depuis le journal des éliminations.",
+        "kills_note": "Les éliminations sont le compte net du jeu. Un tir ami en retire une. TÉ est compté à part, depuis le journal des éliminations.",
         "combat_details": "Combat", "combat_complete": "Dégâts complets",
         "combat_partial": "Partiel", "combat_unavailable": "Indisponible",
         "combat_partial_note": "Certaines données de combat n'ont pas été observées.",
@@ -260,7 +260,7 @@ _TRANSLATIONS = {
         "pending_note": "Certains de ces matchs n'ont jamais rapporté de résultat : ils n'ont "
                         "donc ni score ni RR. Tout le reste ici est réel.",
         "players": "{n} joueurs", "empty_title": "Aucun match pour l'instant",
-        "empty_hint": "Jouez un match compétitif et il apparaîtra ici — la carte, votre équipe et "
+        "empty_hint": "Jouez un match compétitif et il apparaîtra ici avec la carte, votre équipe et "
                       "ce qu'il vous a coûté.",
         "loading": "Chargement de vos matchs…", "refresh": "Actualiser",
         "signed_out_cta": "Connectez-vous pour voir votre historique de matchs.",
@@ -282,10 +282,10 @@ _TRANSLATIONS = {
         "col_kd": "A/M",
         "col_tk": "AE",
         "col_player": "Jogador",
-        "stat_none": "—",
+        "stat_none": "-",
         "rounds_played": "{n} rounds",
         "not_reported": "O modo de jogo nunca reportou este jogador.",
-        "kills_note": "Abates são a contagem líquida do jogo — um abate de equipa tira um. AE é contado à parte, a partir do registo de abates.",
+        "kills_note": "Abates são a contagem líquida do jogo. Um abate de equipa tira um. AE é contado à parte, a partir do registo de abates.",
         "combat_details": "Combate", "combat_complete": "Dano completo",
         "combat_partial": "Parcial", "combat_unavailable": "Indisponível",
         "combat_partial_note": "Alguns dados de combate não foram observados.",
@@ -310,7 +310,7 @@ _TRANSLATIONS = {
         "pending_note": "Algumas destas partidas nunca reportaram um resultado, por isso não "
                         "têm placar nem RR. Todo o resto aqui é real.",
         "players": "{n} jogadores", "empty_title": "Ainda sem partidas",
-        "empty_hint": "Jogue uma partida competitiva e ela aparece aqui — o mapa, seu time e o que "
+        "empty_hint": "Jogue uma partida competitiva e ela aparece aqui com o mapa, seu time e o que "
                       "ela te custou.",
         "loading": "Carregando suas partidas…", "refresh": "Atualizar",
         "signed_out_cta": "Entre para ver seu histórico de partidas.",
@@ -332,10 +332,10 @@ _TRANSLATIONS = {
         "col_kd": "У/С",
         "col_tk": "УС",
         "col_player": "Игрок",
-        "stat_none": "—",
+        "stat_none": "-",
         "rounds_played": "{n} раундов",
         "not_reported": "Режим игры ни разу не сообщил об этом игроке.",
-        "kills_note": "Убийства — это чистый счёт самой игры: убийство союзника вычитает одно. УС считается отдельно, по ленте убийств.",
+        "kills_note": "Число убийств отражает чистый счёт самой игры: убийство союзника вычитает одно. УС считается отдельно, по ленте убийств.",
         "combat_details": "Бой", "combat_complete": "Урон учтён полностью",
         "combat_partial": "Неполные данные", "combat_unavailable": "Недоступно",
         "combat_partial_note": "Часть боевых данных не была зафиксирована.",
@@ -360,7 +360,7 @@ _TRANSLATIONS = {
         "pending_note": "Некоторые из этих матчей так и не сообщили результат, поэтому у них "
                         "нет ни счёта, ни RR. Всё остальное здесь настоящее.",
         "players": "игроков: {n}", "empty_title": "Пока нет матчей",
-        "empty_hint": "Сыграйте рейтинговый матч, и он появится здесь — карта, ваша команда и "
+        "empty_hint": "Сыграйте рейтинговый матч, и он появится здесь: карта, ваша команда и "
                       "чего он вам стоил.",
         "loading": "Загрузка ваших матчей…", "refresh": "Обновить",
         "signed_out_cta": "Войдите, чтобы увидеть историю матчей.",
@@ -382,10 +382,10 @@ _TRANSLATIONS = {
         "col_kd": "K/D",
         "col_tk": "误杀",
         "col_player": "玩家",
-        "stat_none": "—",
+        "stat_none": "-",
         "rounds_played": "{n} 回合",
         "not_reported": "该游戏模式从未上报这名玩家。",
-        "kills_note": "击杀数是游戏自身的净计数——误杀队友会扣除一次。误杀数另行按击杀记录统计。",
+        "kills_note": "击杀数是游戏自身的净计数，误杀队友会扣除一次。误杀数另行按击杀记录统计。",
         "combat_details": "战斗数据", "combat_complete": "伤害数据完整",
         "combat_partial": "部分", "combat_unavailable": "不可用",
         "combat_partial_note": "部分战斗数据未被记录。",
@@ -409,7 +409,7 @@ _TRANSLATIONS = {
         "score_pending": "无比分", "rr_placement": "定级赛",
         "pending_note": "其中部分对局从未上报结果，因此没有比分和 RR。此处其他信息均为真实数据。",
         "players": "{n} 名玩家", "empty_title": "还没有对局",
-        "empty_hint": "进行一场竞技对局后即会显示在此——地图、你的队伍以及它对你的影响。",
+        "empty_hint": "进行一场竞技对局后即会在此显示地图、你的队伍以及它对你的影响。",
         "loading": "正在加载你的对局…", "refresh": "刷新",
         "signed_out_cta": "登录后可查看你的对局历史。",
         "when_now": "刚刚", "when_min": "{n} 分钟前", "when_hour": "{n} 小时前",

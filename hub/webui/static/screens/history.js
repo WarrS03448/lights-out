@@ -142,7 +142,7 @@
     function emptyState() {
       return ui.emptyState({
         icon: "◆",
-        message: hs("empty_title") + " — " + hs("empty_hint")
+        message: hs("empty_title") + ". " + hs("empty_hint")
       });
     }
 
@@ -271,7 +271,7 @@
     }
 
     // One scoreboard line. Every number is honest or absent: `reported` false means the stat
-    // sweep never reached this player, and each null is an em dash rather than a zero.
+    // sweep never reached this player, and each null uses the missing-stat placeholder.
     function boardRow(p, showTk, d) {
       var fragment = document.createDocumentFragment();
       var row = el("div", "md-player sb" + (p.is_me ? " you" : "") + (p.left ? " left" : "")
@@ -399,7 +399,7 @@
       return row;
     }
 
-    /** One number, or an em dash. Never a 0 standing in for "we were not told". */
+    /** One number, or the missing-stat placeholder. Never use 0 for an unreported stat. */
     function num(value) {
       var cell = el("span", "md-n");
       if (value === null || value === undefined) {
@@ -507,7 +507,7 @@
     function scoreCell(r) {
       var cell = el("div", "hist-score");
       if (r.score && r.score.length === 2) {
-        cell.appendChild(el("span", "hist-score-num", r.score[0] + " — " + r.score[1]));
+        cell.appendChild(el("span", "hist-score-num", r.score[0] + " - " + r.score[1]));
       } else {
         cell.classList.add("pending");
         cell.textContent = hs("score_pending");
@@ -517,7 +517,7 @@
 
     function kdaCell(r) {
       // The player's OWN line, shipped on the row itself so a fifty-row list costs no detail
-      // fetches. Null means the gamemode never reported them, which is not 0 - an em dash says so.
+      // fetches. Null means the gamemode never reported them; keep missing stats distinct from 0.
       var have = (r.kills !== null && r.kills !== undefined
                   && r.deaths !== null && r.deaths !== undefined);
       var cell = el("div", "hist-kda" + (have ? "" : " pending"));
