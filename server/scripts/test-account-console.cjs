@@ -12,11 +12,26 @@ const snapshot = () => ({available:true, updated_at:at, stale:false, rows:[
     linked_steam_id:'', steam_login_id:''},
 ]});
 function service(accounts = {snapshot}) {
-  const l = live.create({whoami:async()=>null, bearer:()=>'', sendJson:()=>{}, badRequest:()=>{},
+  const l = live.create({whoami:async()=>null, bearer:()=>'', sendJson:(res,status,body)=>{res.body=body;}, badRequest:()=>{},
     readBody:async()=>Buffer.alloc(0), prefix:'test:', accountDirectory:accounts});
   l._internals.ADMIN_IDS.add(ADMIN);
   return l;
 }
+test('public stats include only a complete fresh registration total', async t => {
+  let current={...snapshot(),players_registered:27};
+  const l=service({snapshot:()=>current});t.after(()=>l.shutdown());
+  const read=async()=>{
+    const res={};
+    await l.route({},res,'GET','/api/live/stats');
+    return res.body;
+  };
+  assert.equal((await read()).players_registered,27);
+  current={...current,players_registered:0};assert.equal((await read()).players_registered,0);
+  for(const flags of [{stale:true},{available:false}]) {
+    current={...snapshot(),players_registered:27,...flags};
+    assert.equal((await read()).players_registered,null);
+  }
+});
 test('website-only accounts appear without a gameplay session; search finds account and player IDs', async t => {
   const l = service(); t.after(()=>l.shutdown());
   for (const q of ['Website Player', PLAYER, ACCOUNT]) {

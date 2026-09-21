@@ -1,14 +1,15 @@
 'use strict';
 const identity = require('./player-identity.cjs');
 
-// Read-only, bounded background inventory. Page requests never scan account keys.
+// Bounded background inventory. Page requests never scan account keys; the
+// optional registration index recovers historical sign-in evidence once.
 // Keep only an allowlist in memory; credentials and email never reach the console.
-function create({store, prefix = 'hub:', now = Date.now, autostart = true} = {}) {
+function create({store, prefix = 'hub:', now = Date.now, autostart = true, registrations, onUpdate=()=>{}} = {}) {
   const base = prefix + 'accounts:';
   let current = {available:false, stale:false, updated_at:null, rows:[], reassigned:[]};
-  let cycle = null, busy = null, timer = null, stopped = false;
+  let cycle = null, busy = null, timer = null, stopped = false, generation = 0;
   const call = args => store(args, {strict:true, timeout:5000});
-  function startCycle() { return {kind:0, cursor:'0', keys:[], scanned:false, accounts:new Map(), ledgers:new Map()}; }
+  function startCycle() { return {generation, kind:0, cursor:'0', keys:[], scanned:false, accounts:new Map(), ledgers:new Map()}; }
   async function step() {
     if (!store || stopped) return;
     if (busy) return busy;
@@ -68,21 +69,36 @@ function create({store, prefix = 'hub:', now = Date.now, autostart = true} = {})
               linked_steam_id:'', steam_login_id:steam, account_type:'Steam'});
           }
         }
-        current = {available:true, stale:false, updated_at:now(), rows:[...rows.values()], reassigned};
+        let registered=null;
+        if(registrations) {
+          const steam=await registrations.load(cycle.ledgers);
+          const linked=[...cycle.accounts.values()].filter(row=>steam.has(row.linked_steam_id)).length;
+          registered=steam.size+cycle.accounts.size-linked;
+        }
+        if(cycle.generation!==generation)throw Error('Account inventory changed');
+        current = {available:true, stale:false, updated_at:now(), rows:[...rows.values()], reassigned,
+          players_registered:registered};
         cycle = null;
+        onUpdate();
       }
     })().catch(() => {
-      current = {...current, stale:true}; cycle = null;
+      current = {...current, stale:true}; cycle = null; onUpdate();
     }).finally(() => { busy = null; });
     return busy;
   }
   async function run() {
     await step();
-    if (!stopped) { timer = setTimeout(run, cycle ? 250 : 60000); timer.unref?.(); }
+    clearTimeout(timer);
+    if (!stopped) { timer = setTimeout(run, cycle || current.stale ? 1000 : 15000); timer.unref?.(); }
+  }
+  function invalidate() {
+    generation++;current={...current,stale:true};onUpdate();
+    if(!busy)cycle=null;
+    if(autostart&&store&&!stopped){clearTimeout(timer);timer=setTimeout(run,0);timer.unref?.();}
   }
   if (autostart && store) { timer = setTimeout(run,0); timer.unref?.(); }
-  return {snapshot:()=>({...current, stale:current.stale || Boolean(current.updated_at && now()-current.updated_at>120000)}),
-    refresh:step, close:async()=>{stopped=true;clearTimeout(timer);if(busy)await busy;}};
+  return {snapshot:()=>({...current, stale:current.stale || Boolean(current.updated_at && now()-current.updated_at>30000)}),
+    refresh:step, invalidate, close:async()=>{stopped=true;clearTimeout(timer);if(busy)await busy;}};
 }
 
 function enrich(row, snapshot) {
@@ -103,6 +119,6 @@ function summary(rows, snapshot, range = {}) {
     registrations:count(p=>p.account_id && p.account_created >= (range.from||0) && p.account_created <= (range.to||Infinity)),
     note:!available?'Account inventory is loading or unavailable. Showing known player records.':
       snapshot.stale?'Account inventory refresh is delayed; showing the last complete snapshot.':
-      'Current player profiles. Linked sign-in methods count once. Inventory refreshes every minute.'};
+      'Current player profiles. Linked sign-in methods count once. Inventory refreshes every 15 seconds.'};
 }
 module.exports = {create, enrich, summary};

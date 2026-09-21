@@ -1525,6 +1525,15 @@ async function handleProbe(req, res, opts) {
 // upstashCmd/sendJson which are defined above but only exist at call time.
 let authRouter = null;
 const accountActivity = require('./account-activity.cjs').create();
+let registrationIndexService;
+function registrationIndex() {
+  // Private test services may share account storage under a restricted command
+  // allowlist. They must not migrate or expose the public population.
+  if(recording || !process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN)return null;
+  if(!registrationIndexService)registrationIndexService=require('./registered-players.cjs').create({
+    store:upstashCmd,prefix:ACCOUNT_PREFIX,authPrefix:STORE_PREFIX,rosterPrefix:STORE_PREFIX});
+  return registrationIndexService;
+}
 function auth() {
   if (!authRouter) {
     authRouter = authModule.create({
@@ -1536,11 +1545,19 @@ function auth() {
       accountStore:privateAccounts?accountStore:upstashCmd,
       allowSteamId:recording?.allowed,
       privateGameplay:privateAccounts,
+      recordSteamSignIn:async id=>{
+        const index=registrationIndex();
+        if(!index)return;
+        try {if(await index.record(id))accountDirectory().invalidate();}
+        catch(error){accountDirectory().invalidate();throw error;}
+      },
+      onAccountsChanged:()=>accountDirectory().invalidate(),
       accounts:privateAccounts?{...require('./accounts.cjs').configuration(),allowEmail:recording.allowEmail,allowGame:recording.allowed}:undefined,
       ownershipTransaction: ({account,pending},finish) => accountActivity.write(async()=>{
         const ledger=await require('./account-ownership.cjs').readSteam({upstashCmd,prefix:ACCOUNT_PREFIX},pending.steam_id);
         const ids=[...new Set([account.player_id||account.id,ledger?.player_id||pending.steam_id])];
         await live().prepareOwnership(ids);
+        accountDirectory().invalidate();
         const result=await finish();
         if(result===1)live().ownershipChanged({ids,accountId:account.id,steamId:pending.steam_id});
         return result;
@@ -1560,6 +1577,8 @@ function accountDirectory() {
     store:process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
       ? (privateAccounts ? accountStore : upstashCmd) : null,
     prefix:ACCOUNT_PREFIX,
+    registrations:registrationIndex(),
+    onUpdate:()=>liveRouter?.broadcastStats(),
   });
   return accountDirectoryService;
 }

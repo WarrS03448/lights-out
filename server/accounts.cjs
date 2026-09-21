@@ -33,7 +33,7 @@ function summary(account) {
   return {id:account.id,email:account.email,display_name:account.display_name,email_verified:true,
     player_id:account.player_id||account.id,steam_id:account.steam_id||null,created_at:account.created_at};
 }
-function create({upstashCmd,prefix,authPrefix=prefix,sendJson,steamIdentity,revokeSteam,ownershipTransaction,options}) {
+function create({upstashCmd,prefix,authPrefix=prefix,sendJson,steamIdentity,revokeSteam,ownershipTransaction,options,onAccountsChanged=()=>{}}) {
   const config=options ? {durable:true,...options} : configuration();
   let validOrigin=false;
   try {const url=new URL(config.origin);validOrigin=url.protocol==='https:'&&url.origin===config.origin;}catch{}
@@ -194,6 +194,7 @@ function create({upstashCmd,prefix,authPrefix=prefix,sendJson,steamIdentity,revo
       const account={id:accountId,player_id:accountId,profile_used:false,email:pending.email,display_name:name,
         password_hash:await security.hashPassword(input.password),version:1,steam_id:null,created_at:Date.now(),updated_at:Date.now()};
       if(!await db.createAccount(input.token,pending,account))fail(400,'invalid_code','This code is invalid or expired.');
+      onAccountsChanged();
       return sendJson(res,201,{ok:true,account:summary(account)});
     }
     if(action==='login') {
@@ -326,6 +327,7 @@ function create({upstashCmd,prefix,authPrefix=prefix,sendJson,steamIdentity,revo
       const finish=()=>db.finishOwnership(account,bearer(req),{...input,kind},pending,
         security.codeDigest(config.secret,kind+':'+input.challenge,input.code),randomUUID());
       const result=ownershipTransaction ? await ownershipTransaction({account,pending},finish) : await finish();
+      if(result===1)onAccountsChanged();
       if(result===-2)fail(409,'progress_conflict','Both accounts have separate player data. Their progress cannot be combined automatically.');
       if(result===-1)fail(409,'link_conflict','This account association has changed or belongs to another account.');
       if(result!==1)fail(401,'invalid_action_code','This confirmation code is invalid or expired.');

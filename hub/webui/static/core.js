@@ -23,6 +23,7 @@
   var statusEl = document.getElementById("serverstatus");
   var queuedEl = document.getElementById("statqueued");
   var liveEl = document.getElementById("statlive");
+  var registeredEl = document.getElementById("statregistered");
 
   // Nav is delegated: one listener on the container survives renderNav's innerHTML rewrites. A
   // click on an item switches the active screen via set_view; the re-emitted snapshot re-renders.
@@ -43,26 +44,10 @@
   // guessed: 700 is the height the competitive screen (the tallest) needs for the hero to reach
   // Find Match and its readiness note without scrolling.
   //
-  // THE WIDTH IS NOW SET BY THE TOP BAR, not by a screen. 940 was the width the screens were
-  // built down to and the bar fitted in it with nothing to spare, so putting the three service
-  // counts beside the nav (index.html #topstats) made the bar the widest thing in the app.
-  //
-  // 1140 is measured, not guessed. The bar cannot wrap without becoming two lines in a 44px
-  // row, so what matters is the width it NEEDS: padding + nav + gap + counts + window buttons,
-  // with the webfont loaded (measuring before document.fonts.ready reads the fallback and lies
-  // by ~10%). Per language: en 1080, de 1102, fr 1105, es 1131, pt 1133, zh 850 - and ru 1185,
-  // which has both the longest nav of the seven and the longest words in it.
-  //
-  // 1140 IS ALSO THE CEILING. The window's own minimum is 800px wide (hub/webui/window.py
-  // MIN_W) and MIN_SCALE stops the zoom at 0.7, so the widest layout that can ever be delivered
-  // is 800/0.7 = 1142 - measured as 1143 after the 1% quantization below. Ask for more than
-  // that and the smallest window stops scaling and starts CLIPPING, which takes the close
-  // button off the right-hand edge.
-  //
-  // So Russian, and only Russian, still wraps its nav at the very smallest window. That is not
-  // new: measured against the bar as it shipped (no counts, 20px nav gaps, FIT_W 940, so 0.8
-  // at an 800px window) the Russian nav was already on two lines there. Every other language
-  // now fits at every window size, which it did not before.
+  // Keep the measured scale ceiling: 800px minimum / 0.7 = 1142 logical px.
+  // The four counts stay together; whole nav items wrap as needed and the header
+  // grows to contain them. Seven-language browser checks cover 800–1400px with
+  // large counts, loaded webfonts and the real window controls.
   //
   // DOWN ONLY (the Math.min with 1). Zooming past 1 would shrink the LOGICAL viewport below the
   // physical one, and the screens' width breakpoints (@media (max-width: 900px) and friends) are
@@ -343,13 +328,9 @@
   }
 
   function renderStatus() {
-    // The top bar's three counts, in the order Sam asked for them (2026-09-16): online, then
-    // searching, then matches in flight — left to right after the Bug report nav item.
-    //
-    // ALL THREE GO DARK TOGETHER when the stream is down. They are one `stats` broadcast, so a
-    // lost connection freezes all three at once; leaving "3 live games" up next to a dead dot
-    // would be showing a stale number as if it were current. So the two labels are emptied and
-    // the dot says what happened instead of a count.
+    // Online, searching, live games, registered players. All clear when the
+    // stream drops. The registration inventory can independently be unavailable;
+    // a dash preserves the label without claiming an unknown total is zero.
     //
     // `topbar_offline` AND NOT `comp_live_lost`, which is the sentence this used to show: the
     // bar is a row on one line whose width is what sets FIT_W, and "Lost the connection to the
@@ -367,6 +348,11 @@
     }
     if (liveEl) {
       liveEl.textContent = ok ? t("topbar_live", { n: st.live_matches || 0 }) : "";
+    }
+    if (registeredEl) {
+      var registered = st.players_registered;
+      var known = Number.isSafeInteger(registered) && registered >= 0;
+      registeredEl.textContent = ok ? t("topbar_registered", { n: known ? registered : "—" }) : "";
     }
   }
 

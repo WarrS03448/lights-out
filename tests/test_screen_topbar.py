@@ -86,6 +86,25 @@ def test_one_stats_event_sets_all_three_counts():
     assert st["live_matches"] == 42
 
 
+def test_registered_total_is_server_supplied_and_changes_with_stats():
+    panel, s = _panel()
+    for total in (1290, 1291, 0):
+        s.on_live_event({"type": "stats", "online": 10, "queued": 3,
+                         "live_matches": 1, "players_registered": total})
+        assert _status(panel)["players_registered"] == total
+
+
+def test_missing_or_invalid_registered_total_clears_last_known_value():
+    panel, s = _panel()
+    for value in (None, -1, True, "1290", 1.5, 2**53):
+        s.on_live_event({"type": "stats", "players_registered": 1290})
+        s.on_live_event({"type": "stats", "players_registered": value})
+        assert _status(panel)["players_registered"] is None
+    s.on_live_event({"type": "stats", "players_registered": 1290})
+    s.on_live_event({"type": "stats", "online": 5})
+    assert _status(panel)["players_registered"] is None
+
+
 def test_the_slice_is_json_and_never_carries_a_none():
     """The page does `st.online || 0`, which turns null into 0 - but a null would mean the hub
     forgot to ask, and a 0 means the server said nobody. They must not look the same here."""
@@ -148,8 +167,8 @@ def test_online_then_queue_then_live_in_that_order():
     """The order is the ask, left to right."""
     html = _static("index.html")
     block = html[html.index('id="topstats"'):html.index("</header>")]
-    order = [m for m in re.findall(r'id="(serverstatus|statqueued|statlive)"', block)]
-    assert order == ["serverstatus", "statqueued", "statlive"], order
+    order = [m for m in re.findall(r'id="(serverstatus|statqueued|statlive|statregistered)"', block)]
+    assert order == ["serverstatus", "statqueued", "statlive", "statregistered"], order
 
 
 def test_the_nav_is_still_the_last_word_before_the_counts():
@@ -210,7 +229,7 @@ def test_the_bar_fits_the_smallest_window_it_can_be_given():
 def test_every_language_names_the_two_new_counts():
     """A missing string here is the raw key on screen, in the chrome every screen shows."""
     for code in i18n.CODES:
-        for key in ("comp_online", "topbar_queued", "topbar_live"):
+        for key in ("comp_online", "topbar_queued", "topbar_live", "topbar_registered"):
             value = i18n.tr(code, key)
             assert value != key, (code, key)
             assert "{n}" in value, (code, key, value)
@@ -288,6 +307,8 @@ def test_disconnected_client_cannot_deliver_pending_stats():
 
 
 _TESTS = [
+    test_registered_total_is_server_supplied_and_changes_with_stats,
+    test_missing_or_invalid_registered_total_clears_last_known_value,
     test_disconnected_client_cannot_deliver_pending_stats,
     test_signin_never_exposes_preview_queue_counts,
     test_late_queue_responses_cannot_overwrite_server_stats,

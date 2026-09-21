@@ -944,6 +944,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   }
 
   function stats() {
+    const inventory=accountDirectory?.snapshot();
+    const registered=inventory?.players_registered;
     // `queued` stays a count of PEOPLE, not of units. The hub renders it as "n searching" and
     // a five-stack is five people searching; reporting 1 there would be a lie that happens to
     // match our new data structure.
@@ -954,7 +956,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     // connecting -> live - are not. Counting a subset of states would therefore show a figure
     // that is minutes stale; counting the registry shows one that is never wrong.
     return { type: 'stats', online: bySteam.size, queued: queuedPlayers(),
-             live_matches: matches.size, match_size: MATCH_SIZE };
+             live_matches: matches.size, match_size: MATCH_SIZE,
+             players_registered:inventory?.available && !inventory.stale && Number.isSafeInteger(registered) && registered>=0
+               ? registered : null };
   }
 
   /**
@@ -7854,6 +7858,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         }
       } catch { client.res.end(); clearInterval(beat); drop(clientId); return; }
       finally { checking = false; }
+      send(clientId,stats());
       try { client.res.write(': ping\n\n'); } catch { clearInterval(beat); drop(clientId); }
     }, HEARTBEAT_MS);
 
@@ -8694,6 +8699,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   };
   return {
     route,
+    broadcastStats:()=>broadcast(stats()),
     prepareOwnership, ownershipChanged,
     owns,
     shutdown,

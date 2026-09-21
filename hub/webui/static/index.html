@@ -37,9 +37,9 @@
     <header id="topbar">
       <div class="brand-wrap">
         <nav id="nav" class="nav"></nav>
-        <!-- The three service counts, immediately to the right of the nav's last item (Bug
+        <!-- The four service counts, immediately to the right of the nav's last item (Bug
              report): how many are online, how many are searching, how many matches are in
-             flight. They sit HERE and not out at the right edge because that is where the
+             flight, and registered players. They sit HERE because the
              window buttons live now (titlebar.js appends .wincontrols to #topbar) - a figure
              pressed up against Close is a figure nobody reads. Filled by core.js
              renderStatus from the one `status` slice. -->
@@ -47,6 +47,7 @@
           <div class="status-dot" id="serverstatus"></div>
           <span class="topstat" id="statqueued"></span>
           <span class="topstat" id="statlive"></span>
+          <span class="topstat" id="statregistered"></span>
         </div>
       </div>
     </header>

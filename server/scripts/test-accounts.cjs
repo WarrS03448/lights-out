@@ -61,6 +61,8 @@ function sendJson(res, status, body, headers = {}) {
 }
 function makeAuth(options = {}) {
   return authModule.create({upstashCmd: store, prefix, accountPrefix:options.accountPrefix, privateGameplay:options.privateGameplay, sendJson,
+    verify:options.verify, allowSteamId:options.allowSteamId,
+    recordSteamSignIn:options.recordSteamSignIn, onAccountsChanged:options.onAccountsChanged,
     badRequest: (res, error) => sendJson(res,400,{error}),
     accounts: {enabled:true,ownership:true, origin:ORIGIN, secret:'s'.repeat(64),
       sendMail: async message => { if(mailDown) throw Error('smtp password must stay private'); outbox.push(message); },
@@ -146,6 +148,117 @@ beforeEach(async()=>{
 after(async()=>{
   if(server){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
   bridge?.stdin.end();
+});
+
+test('registration inventory counts Steam and website accounts once across repeats, links and disconnects',async()=>{
+  const index=require('../registered-players.cjs').create({store,prefix});
+  auth=makeAuth({recordSteamSignIn:id=>index.record(id)});
+  const account=await register();
+  await steamSession();assert.ok(await auth.whoami('steam-proof'));
+  await auth.whoami('steam-proof');
+  const directory=accountDirectory.create({store,prefix,registrations:index,autostart:false});
+  const refresh=async()=>{await directory.refresh();await directory.refresh();return directory.snapshot();};
+  assert.equal((await refresh()).players_registered,2);
+  assert.equal(await store(['SCARD',prefix+'accounts:registered-steam']),1);
+  let token=await login();await link(token);
+  assert.equal((await refresh()).players_registered,1);
+  token=await login();const preview=await request('disconnect-steam',{password:PASSWORD},token);
+  await request('disconnect-steam/verify',{challenge:preview.body.challenge,
+    code:outbox.findLast(m=>m.kind==='disconnect-steam').token,confirmation:'disconnect-steam-v1'},token);
+  assert.equal((await refresh()).players_registered,2);
+  assert.equal(await store(['TTL',prefix+'accounts:registered-steam']),-1);
+  storeDown=true;await directory.refresh();assert.equal(directory.snapshot().stale,true);
+});
+
+test('registration bootstrap keeps historical sign-ins but excludes gameplay-only and moderation records',async()=>{
+  const second='76561198000000002', third='76561198000000003';
+  await store(['SET',prefix+'auth:token:old-session',JSON.stringify({steam_id:STEAM,created:1})]);
+  await store(['HSET',prefix+'roster',second,JSON.stringify({first_seen:1,auth_method:'steam'}),
+    third,JSON.stringify({first_seen:0}),
+    '12345678-1234-1234-1234-123456789abc',JSON.stringify({first_seen:1,auth_method:'lightsout',game_steam_id:third})]);
+  await store(['SET',prefix+'auth:user:'+third,JSON.stringify({persona:'Profile lookup only'})]);
+  const index=require('../registered-players.cjs').create({store,prefix});
+  const directory=accountDirectory.create({store,prefix,registrations:index,autostart:false});
+  await directory.refresh();assert.equal(directory.snapshot().available,false);
+  await directory.refresh();assert.equal(directory.snapshot().players_registered,2);
+  await store(['DEL',prefix+'auth:token:old-session',prefix+'roster']);
+  const restarted=accountDirectory.create({store,prefix,
+    registrations:require('../registered-players.cjs').create({store,prefix}),autostart:false});
+  await restarted.refresh();await restarted.refresh();assert.equal(restarted.snapshot().players_registered,2);
+});
+
+test('only verified allowed Steam sign-ins are registered before the success response',async()=>{
+  const index=require('../registered-players.cjs').create({store,prefix});
+  let verified=false,allowed=true;
+  auth=makeAuth({verify:async()=>verified,allowSteamId:()=>allowed,recordSteamSignIn:id=>index.record(id)});
+  async function signin(){
+    const start=await request('/api/auth/start');
+    assert.equal(start.status,200);
+    return fetch(base+'/auth/steam/return?code='+start.body.code+'&openid.claimed_id='+
+      encodeURIComponent('https://steamcommunity.com/openid/id/'+STEAM));
+  }
+  assert.equal((await signin()).status,400);
+  assert.equal(await store(['SCARD',prefix+'accounts:registered-steam']),0);
+  verified=true;allowed=false;assert.equal((await signin()).status,403);
+  assert.equal(await store(['SCARD',prefix+'accounts:registered-steam']),0);
+  allowed=true;assert.equal((await signin()).status,200);assert.equal((await signin()).status,200);
+  assert.equal(await store(['SCARD',prefix+'accounts:registered-steam']),1);
+});
+
+test('registration migration failures remain unavailable and retry without double-counting',async()=>{
+  await store(['SET',prefix+'auth:token:old',JSON.stringify({steam_id:STEAM})]);
+  let down=true;
+  const guarded=async args=>{
+    if(down&&args[0]==='MGET')throw Error('migration read failed');
+    const result=await store(args);
+    if(args[0]==='SSCAN')return [result[0],[...result[1],...result[1]]];
+    return result;
+  };
+  const directory=accountDirectory.create({store:guarded,prefix,autostart:false,
+    registrations:require('../registered-players.cjs').create({store:guarded,prefix})});
+  await directory.refresh();await directory.refresh();
+  assert.equal(directory.snapshot().available,false);
+  assert.equal(await store(['GET',prefix+'accounts:registered-steam:v1-ready']),null);
+  down=false;await directory.refresh();await directory.refresh();
+  assert.equal(directory.snapshot().players_registered,1);
+  assert.equal(directory.snapshot().stale,false);
+});
+
+test('registration reads bound oversized scan pages and preserve a true zero',async()=>{
+  const index=require('../registered-players.cjs').create({store,prefix});
+  assert.equal((await index.load(new Map())).size,0);
+  await store(['DEL',prefix+'accounts:registered-steam:v1-ready']);
+  const keys=[];
+  for(let i=0;i<205;i++) {
+    const key=prefix+'auth:token:'+i;keys.push(key);
+    await store(['SET',key,JSON.stringify({steam_id:'765611980'+String(i).padStart(8,'0')})]);
+  }
+  const guarded=async args=>{
+    if(args[0]==='SCAN')return ['0',[...keys,...keys]];
+    if(args[0]==='MGET'||args[0]==='SADD')assert.ok(args.length<=102,'bounded Redis request');
+    return store(args);
+  };
+  const migrated=await require('../registered-players.cjs').create({store:guarded,prefix}).load(new Map());
+  assert.equal(migrated.size,205);
+});
+
+test('registration invalidation during a read cannot publish the earlier count',async()=>{
+  const index=require('../registered-players.cjs').create({store,prefix});
+  let entered,release;
+  const reading=new Promise(resolve=>{entered=resolve;});
+  const gate=new Promise(resolve=>{release=resolve;});
+  let block=false;
+  const directory=accountDirectory.create({store,prefix,autostart:false,registrations:{load:async ledgers=>{
+    const result=await index.load(ledgers);
+    if(block){entered();await gate;}
+    return result;
+  }}});
+  await directory.refresh();await directory.refresh();assert.equal(directory.snapshot().players_registered,0);
+  block=true;await directory.refresh();const pending=directory.refresh();await reading;
+  await index.record(STEAM);directory.invalidate();release();await pending;
+  assert.equal(directory.snapshot().stale,true);
+  block=false;await directory.refresh();await directory.refresh();
+  assert.equal(directory.snapshot().players_registered,1);assert.equal(directory.snapshot().stale,false);
 });
 
 test('a verified email creates an independent account that can sign in without Steam',async()=>{

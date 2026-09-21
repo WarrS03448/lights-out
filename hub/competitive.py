@@ -533,6 +533,7 @@ class Session:
     phase = "signed_out"
     me = None                # {"name", "steam_id", "level", "elo", "bdr", "matches", "wins"}
     online = 0
+    players_registered = None  # Unknown until a complete server count arrives.
     live_matches = 0         # matches in flight service-wide, off the same `stats` broadcast as
                              # `online` and `queue_size`. The top bar shows all three together.
     error = ""               # a line to show in red, or ""
@@ -3714,6 +3715,9 @@ class LiveSession(MockSession):
             self.stats_queued = self.queue_size
             # Absent on a server older than the top-bar counts; 0 is what it was then.
             self.live_matches = int(event.get("live_matches") or 0)
+            registered = event.get("players_registered")
+            self.players_registered = (registered if type(registered) is int
+                                       and 0 <= registered < 2**53 else None)
             self.stats_ready = True
         elif kind == "queued":
             if getattr(self, "_cancel_queue_pending", False):
@@ -5009,7 +5013,7 @@ class CompetitivePanel:
     # ---------------------------------------------------------------- flicker guard
     # The values that move every tick or on every `stats` broadcast, and so must NOT force a
     # rebuild: they are updated in place through _live_labels instead.
-    _SIG_LIVE = ("online", "live_matches", "queue_size", "queue_seconds", "accept_left",
+    _SIG_LIVE = ("online", "live_matches", "players_registered", "queue_size", "queue_seconds", "accept_left",
                  "connect_left")
     # Attributes that never reach the body (they belong to the header-less history view, or are
     # plumbing), so they must not drag the body into a needless rebuild.

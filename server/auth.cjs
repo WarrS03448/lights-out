@@ -129,10 +129,11 @@ async function fetchProfile(steamId) {
 }
 
 function create({ upstashCmd, prefix = 'hub:', accountPrefix=prefix, accountStore=upstashCmd,
-                  allowSteamId=()=>true, privateGameplay=false, sendJson, badRequest, verify, accounts, ownershipTransaction }) {
+                  allowSteamId=()=>true, privateGameplay=false, sendJson, badRequest, verify, accounts, ownershipTransaction,
+                  recordSteamSignIn=async()=>{}, onAccountsChanged=()=>{} }) {
   const store = makeStore(upstashCmd, prefix + 'auth:');
   const accountService = accountsModule.create({upstashCmd:accountStore,prefix:accountPrefix,authPrefix:prefix,sendJson,
-    steamIdentity,ownershipTransaction,options:accounts,revokeSteam:token=>store.del(`token:${token}`)});
+    steamIdentity,ownershipTransaction,onAccountsChanged,options:accounts,revokeSteam:token=>store.del(`token:${token}`)});
   // `verify` exists so tests can exercise the handshake without talking to Steam. It is
   // NEVER set in production: server.cjs does not pass it, so the real check always runs.
   const checkAssertion = verify || verifyWithSteam;
@@ -230,6 +231,7 @@ function create({ upstashCmd, prefix = 'hub:', accountPrefix=prefix, accountStor
     }
     const token = randomToken();
     const ledger=await steamLedger(steamId);
+    await recordSteamSignIn(steamId);
     await store.set(`token:${token}`, { steam_id: steamId, created: Date.now(),steam_generation:ledger?.generation||0 }, TOKEN_TTL_SECONDS);
     await store.set(`link:${code}`, { status: 'ready', steam_id: steamId, token }, LINK_TTL_SECONDS);
 
@@ -282,6 +284,7 @@ function create({ upstashCmd, prefix = 'hub:', accountPrefix=prefix, accountStor
     if (!session) return sendJson(res, 401, { ok: false, error: 'Signed out or expired.' });
     const identity=await resolveSteam(session);
     if(!identity)return sendJson(res,401,{ok:false,error:'Sign in again. This account association has changed.'});
+    await recordSteamSignIn(session.steam_id);
     await store.set(`token:${token}`, session, TOKEN_TTL_SECONDS);
     const profile = await profileFor(session.steam_id);
     let linked=null;
@@ -372,6 +375,7 @@ function create({ upstashCmd, prefix = 'hub:', accountPrefix=prefix, accountStor
     if (!session || !session.steam_id) return null;
     const identity=await resolveSteam(session);
     if(!identity)return null;
+    await recordSteamSignIn(session.steam_id);
     const profile = await profileFor(session.steam_id);
     return { steam_id: session.steam_id, ...identity,authenticated_at:session.created,...profile };
   }

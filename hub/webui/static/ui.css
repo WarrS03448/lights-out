@@ -47,13 +47,13 @@ body {
    * the note on body above). */
   height: 100%;
   display: grid;
-  grid-template-rows: var(--topbar-h) auto minmax(0, 1fr);
+  grid-template-rows: minmax(var(--topbar-h), auto) auto minmax(0, 1fr);
 }
 #topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--sp-4) 0 var(--sp-5);
+  padding: var(--sp-2) var(--sp-4) var(--sp-2) var(--sp-5);
   background: var(--ground);
   border-bottom: 1px solid var(--line-2);
 }
@@ -63,16 +63,14 @@ body {
  *
  * min-width: 0 so that THIS is what yields when the bar is wider than the window - a nav item
  * wrapping is survivable, the window buttons being pushed off the edge is not (titlebar.css
- * .wincontrols). It is only reachable in Russian at the smallest window; core.js FIT_W keeps
- * every other language on one line at every size. */
-.brand-wrap { display: flex; align-items: center; gap: var(--sp-5); min-width: 0; }
+ * .wincontrols). Whole nav items wrap on narrow windows; the header grows with them. */
+.brand-wrap { display: flex; flex: 1; align-items: center; gap: var(--sp-5); min-width: 0; }
 .nav {
   display: flex;
-  /* 16px, not 20: the counts moved into this row (.topstats) and the bar has eight items, three
-   * figures and the window buttons to fit on one line before core.js's FIT_W has to zoom the
-   * whole app down. Four pixels off each of the seven gaps is 28 of them, which is the cheapest
-   * 28px in the bar - nothing here is any harder to hit or to read for it. */
-  gap: var(--sp-4);
+  flex-wrap: wrap;
+  min-width: 0;
+  /* Preserve horizontal spacing, with a compact gap between wrapped nav rows. */
+  gap: 4px var(--sp-4);
   font-family: var(--font-display);
   font-weight: 500;
   font-size: 12px;
@@ -80,12 +78,11 @@ body {
   text-transform: uppercase;
   color: var(--muted);
 }
-.nav .navitem { padding-bottom: 3px; border-bottom: 2px solid transparent; cursor: pointer; }
+.nav .navitem { padding-bottom: 3px; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
 .nav .navitem:hover { color: #fff; }
 .nav .navitem.active { color: #fff; border-bottom-color: var(--accent); }
 /* The service counts, in the bar just right of the nav. A thin rule separates them from the
- * last nav item so they read as a readout rather than as three more tabs, and the row never
- * wraps: on a narrow window the bar is zoomed (body { zoom: var(--ui-scale) }), not reflowed. */
+ * last nav item so they read as a readout. The counts stay on one line while the nav can wrap. */
 .topstats {
   display: flex;
   align-items: center;
