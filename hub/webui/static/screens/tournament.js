@@ -1,10 +1,22 @@
 (function () {
   'use strict';
   var timer = null, lastPoll = -Infinity, scrollTop = 0, draftIdentity = null, draftSeq = null, draft = {}, ledgerOpen = false;
-  window.HubUI.registerScreen('tournament', {render: render});
-  function render(root, state, ctx) {
+  var renderedKey = null, renderedContext = null, syncClock = null;
+  function context(s) {return JSON.stringify([s.identity,s.signed_in,s.language,(s.data||{}).event?.id]);}
+  function screenKey(s) {return JSON.stringify(s,function(key,value){return key==='server_now'?undefined:value;});}
+  function update(root,state,ctx) {
+    var s=state.tournament||{};
+    if(context(s)!==renderedContext)return false;
+    if(screenKey(s)!==renderedKey)render(root,state,ctx,true);
+    else if(syncClock)syncClock(s);
+    return true;
+  }
+  window.HubUI.registerScreen('tournament', {render: render, update: update});
+  function render(root, state, ctx, patch) {
     if (timer !== null) clearInterval(timer);
     var s = state.tournament || {}, strings = s.strings || {}, data = s.data || {};
+    var preserveForm=patch&&draftSeq===s.ticket_seq, readingPosition=patch?root.firstElementChild.scrollTop:scrollTop;
+    renderedKey=screenKey(s);renderedContext=context(s);
     if(draftIdentity!==s.identity){draftIdentity=s.identity;draftSeq=null;draft={};ledgerOpen=false;scrollTop=0;lastPoll=-Infinity;}
     if(draftSeq!==s.ticket_seq){draftSeq=s.ticket_seq;draft={};}
     var event = data.event || {start_at: 1790438400000, end_at: 1790611200000, prize_pool:500, prizes: [250,125,75,37,13]};
@@ -86,7 +98,21 @@
       [category,reference,message,send].forEach(function(n){form.appendChild(n);});form.addEventListener('submit',function(e){e.preventDefault();send.disabled=true;ctx.call('tournament_support',category.value,reference.value,message.value);});support.appendChild(form);
     }
     (data.tickets||[]).slice().reverse().forEach(function(ticket){var item=node('div','tournament-ticket');item.appendChild(node('strong','',st(ticket.status)+' · '+format.format(ticket.at)));item.appendChild(node('p','',ticket.message));(ticket.replies||[]).forEach(function(r){item.appendChild(node('p','tournament-registered',r.message));});support.appendChild(item);});wrap.appendChild(support);
-    root.appendChild(wrap);
+    if(patch){
+      var existing=root.querySelector('.tournament'),oldSupport=existing.querySelector('#tournament-support'),oldForm=oldSupport.querySelector('form');
+      if(preserveForm&&oldForm&&form){
+        // The native dropdown must remain attached, including when tickets,
+        // standings or loading state change. Keep its containing form in place.
+        Array.from(oldSupport.children).forEach(function(n){if(n!==oldForm)n.remove();});
+        var afterForm=false;
+        Array.from(support.children).forEach(function(n){if(n===form){afterForm=true;return;}if(afterForm)oldSupport.appendChild(n);else oldSupport.insertBefore(n,oldForm);});
+        oldForm.querySelector('button').disabled=send.disabled;
+        send=oldForm.querySelector('button');
+      }else{oldSupport.replaceWith(support);oldSupport=support;}
+      Array.from(existing.children).forEach(function(n){if(n!==oldSupport)n.remove();});
+      Array.from(wrap.children).forEach(function(n){if(n.id!=='tournament-support')existing.insertBefore(n,oldSupport);});
+      wrap=existing;
+    }else root.appendChild(wrap);
     var previousPhase=null;
     function tick() {
       if (!wrap.isConnected) {clearInterval(timer);timer=null;lastPoll=-Infinity;return;}
@@ -99,6 +125,7 @@
       clock.hidden=phase==='ended';review.hidden=phase!=='ended'||!data.results_provisional;
       winners.hidden=phase!=='ended';boardTitle.textContent=st(phase==='ended'?'final_standings':'leaders');
       register.hidden=!!data.registered_at||phase==='ended'||!s.signed_in;register.disabled=!!s.loading;
+      if(send)send.disabled=!!s.loading||now>=event.dispute_deadline;
       registered.hidden=!data.registered_at&&s.signed_in;
       table.hidden=phase==='scheduled'||!(data.leaders||[]).length;
       empty.hidden=!table.hidden;empty.textContent=phase==='scheduled'?st('upcoming'):!s.signed_in?st('signin'):!s.data||s.error?st('unavailable'):st('empty');
@@ -107,6 +134,7 @@
     }
     // Phase visibility changes the layout. Restore after those changes so browser
     // scroll anchoring cannot move the reader upward on every snapshot rebuild.
-    tick();wrap.scrollTop=scrollTop;timer=setInterval(tick,1000);
+    syncClock=function(next){serverNow=(next.data||{}).server_now||Date.now();anchor=performance.now();tick();};
+    tick();wrap.scrollTop=patch?readingPosition:scrollTop;timer=setInterval(tick,1000);
   }
 }());

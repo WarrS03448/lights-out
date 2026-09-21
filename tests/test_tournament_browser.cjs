@@ -14,10 +14,10 @@ for lang in i18n.CODES:
  i18n.set_language(lang); result[lang]=state_snapshot(s,panel)
 print(json.dumps(result))
 `],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024}));
-let state=snapshots.en;const verbs=[];
+let state=snapshots.en;const verbs=[],payloads=[];
 const server=http.createServer((req,res)=>{
  const url=new URL(req.url,'http://localhost');
- if(url.pathname.startsWith('/verb/')){verbs.push(url.pathname);res.setHeader('content-type','application/json');res.end('{}');return;}
+ if(url.pathname.startsWith('/verb/')){verbs.push(url.pathname);let body='';req.on('data',chunk=>body+=chunk);req.on('end',()=>{payloads.push({verb:url.pathname,args:JSON.parse(body||'[]')});res.setHeader('content-type','application/json');res.end('{}');});return;}
  if(['/state','/events'].includes(url.pathname)||url.pathname.startsWith('/window/')){res.setHeader('content-type','application/json');res.end(JSON.stringify(url.pathname==='/state'?state:url.pathname==='/events'?{events:[],seq:0}:{maximized:false}));return;}
  const base=path.join(root,'hub/webui/static'),file=path.resolve(base,url.pathname==='/'?'index.html':decodeURIComponent(url.pathname.slice(1)));
  if(!file.startsWith(base+path.sep)||!fs.existsSync(file)){res.writeHead(404);res.end();return;}
@@ -65,11 +65,32 @@ const server=http.createServer((req,res)=>{
  await page.locator('#tournament-category').selectOption('outage');
  await page.locator('.tournament-support-form input').fill('private-match-reference');
  await page.locator('.tournament-support-form textarea').fill('My private support draft');
+ await page.locator('#tournament-category').click();
+ await page.evaluate(()=>{window.supportPicker=document.querySelector('#tournament-category');window.supportForm=document.querySelector('.tournament-support-form');});
+ for(let i=0;i<12;i++){
+   state.tournament.data.server_now+=300;
+   if(i===6){state.tournament.data.tickets=[{status:'open',at:event.start_at,message:'A newly received support update',replies:[]}];state.tournament.loading=true;}
+   if(i===8)state.tournament.loading=false;
+   await page.evaluate(s=>window.__hub.onState(s),state);await page.clock.runFor(50);
+   assert(await page.evaluate(()=>supportPicker.isConnected&&supportPicker.matches(':open')&&document.activeElement===supportPicker&&supportForm===document.querySelector('.tournament-support-form')),'snapshot refresh closed the support dropdown');
+ }
+ assert((await page.locator('.tournament-ticket').textContent()).includes('A newly received support update'),'support data still updates while the dropdown is open');
+ await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
+ assert.equal(await page.locator('#tournament-category').inputValue(),'other','keyboard selection still works after refresh');
+ await page.locator('#tournament-category').selectOption('outage');
  await page.locator('.tournament details summary').click();
  state.tournament.data.server_now++;await page.evaluate(s=>window.__hub.onState(s),state);
  assert.equal(await page.locator('#tournament-category').inputValue(),'outage','refresh must preserve issue type');
  assert.equal(await page.locator('.tournament-support-form textarea').inputValue(),'My private support draft');
  assert.equal(await page.locator('.tournament details').evaluate(e=>e.open),true,'refresh must preserve the open match ledger');
+ const sent=page.waitForResponse(r=>r.url().endsWith('/verb/tournament_support'));
+ await page.locator('.tournament-support-form button').click();await sent;
+ assert.deepEqual(payloads.find(p=>p.verb==='/verb/tournament_support').args,['outage','private-match-reference','My private support draft'],'the retained form submits its current fields');
+ state.tournament.ticket_seq++;await page.evaluate(s=>window.__hub.onState(s),state);
+ assert.equal(await page.locator('.tournament-support-form textarea').inputValue(),'','a confirmed ticket clears its submitted draft');
+ assert.equal(await page.locator('.tournament-support-form input').inputValue(),'');
+ await page.locator('.tournament-support-form textarea').fill('Private account draft');
+ await page.locator('.tournament-support-form input').fill('Private account reference');
  state.tournament.identity='76561198000000999';state.tournament.data.server_now++;await page.evaluate(s=>window.__hub.onState(s),state);
  assert.equal(await page.locator('.tournament-support-form textarea').inputValue(),'','account switch cannot inherit a private draft');
  assert.equal(await page.locator('.tournament-support-form input').inputValue(),'');
