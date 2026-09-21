@@ -339,6 +339,8 @@ def _strings_for(lang: str) -> dict:
     """The active language's screen strings, English-filled so JS can look up any key by name."""
     merged = dict(PROFILE_STRINGS["en"])
     merged.update(PROFILE_STRINGS.get(lang, {}))
+    from .history import strings_for
+    merged["profile_cheater_reverted"] = strings_for(lang)["cheater_reverted"]
     return merged
 
 
@@ -374,6 +376,7 @@ def _recent(rows, limit=5) -> list:
             "map": str(row.get("map") or ""),
             "won": row.get("won"),                    # True / False / None — never coerced
             "cancelled": cancelled,
+            "cheater_reverted": bool(row.get("cheater_reverted")),
             "blamed": bool(row.get("blamed")),
             "elo": row.get("elo"),                    # may be null
             "ended": row.get("ended"),                # ms epoch or null; JS formats it

@@ -47,6 +47,17 @@ test('final receipt contains effective analytical rules and a durable export ref
   assert.ok(plan().analytics_outbox);
 });
 
+test('a result decided before the event cutoff remains eligible when final evidence arrives later',async t=>{
+ const f=fixture(t,10),event=require('../tournament.cjs').EVENT;
+ const originalNow=Date.now;let clock=event.end_at-1000;Date.now=()=>clock;t.after(()=>Date.now=originalNow);
+ f.match.live_at=event.start_at+1000;f.match.created=f.match.live_at;
+ f.L._internals.beginCollection(f.match,1,{1:7,2:2},7);
+ clock=event.end_at+1000;
+ assert.equal((await f.L.finalSnapshot(f.match.host,f.fields)).ok,true);
+ assert.equal(f.plan().receipt.publicMatch.ended,event.end_at-1000);
+ assert(require('../tournament.cjs').matchEntry(f.plan().receipt));
+});
+
 test('non-protocol or escape-inflated combat batches are rejected before state changes',async t=>{
   for(const bad of ['\u0000','\ud800','\\'.repeat(5000)]){
     const {L,match}=fixture(t);
@@ -452,4 +463,20 @@ test('combined capture ceiling preserves bounded partial evidence and still drai
     assert.equal((await L.finalSnapshot(match.host, fields)).ok, true);
     assert.equal(plan().receipt.full.combat_end.complete, false);
   }
+});
+
+test('completion replay overlays corrected RR and current rank without changing the receipt',async t=>{
+ const {L,match,fields,plan,store}=fixture(t,10);assert.equal((await L.finalSnapshot(match.host,fields)).ok,true);
+ const id=match.host,receipt=plan().receipt,original=JSON.stringify(receipt.events[id]);
+ const current={...receipt.ratings[id],progress:1176,matches:10,revision:(receipt.ratings[id].revision||0)+1};
+ await store(['SET','hub:rating:'+id,JSON.stringify(current)]);
+ await store(['SET','hub:cheater:match:'+match.id,JSON.stringify({cheaters:[id],at:Date.now()})]);
+ const response=await L.completion(id,match.id),result=response.result;
+ assert.equal(response.close_allowed,true);assert.equal(result.cheater_reverted,true);
+ assert.equal(result.rr_delta,0);assert.equal(result.delta,0);assert.equal(result.you.rr_delta,0);assert.equal(result.you.arrows,0);
+ const publicRank=require('../progress.cjs').publicProgress(current);assert.equal(result.rr,publicRank.rr);assert.equal(result.you.rr,publicRank.rr);
+ assert.equal(result.scoreboard.find(p=>p.player_id===id).cheater,true);
+ assert.equal(JSON.stringify(receipt.events[id]),original);
+ store.before=async args=>{if(args[0]==='GET'&&args[1]==='hub:cheater:match:'+match.id)throw Error('unavailable');};
+ const unavailable=await L.completion(id,match.id);assert.equal(unavailable.close_allowed,true);assert.equal(unavailable.result,null);
 });

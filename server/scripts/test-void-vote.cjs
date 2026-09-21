@@ -5,9 +5,9 @@ const assert=require('node:assert/strict');
 const live=require('../live.cjs');
 
 function fixture(t, count=10) {
-  const saved=new Map(), events=new Map(); let offline=false, plan, pendingSnapshot;
+  const saved=new Map(), events=new Map(); let offline=false, banReadable=false, plan, pendingSnapshot;
   const store=async args=>{
-    if(offline)throw Error('offline');
+    if(offline&&!(banReadable&&args[0]==='GET'&&args[1].includes(':ban:')))throw Error('offline');
     if(args[0]==='SMEMBERS')return [];
     if(args[0]==='GET')return saved.get(args[1])||null;
     if(args[0]==='HGET')return null;
@@ -46,26 +46,26 @@ function fixture(t, count=10) {
     const res={}; await L.route({headers:{},body},res,'POST','/api/match/void-vote');return res;
   }
   t.after(async()=>{offline=false;await L.shutdown();});
-  return {L,match,ids,games,events,saved,store,post,plan:()=>plan,offline:value=>offline=value,
+  return {L,match,ids,games,events,saved,store,post,plan:()=>plan,offline:(value,allowBanChecks=false)=>{offline=value;banReadable=allowBanChecks;},
     savedDecision:value=>pendingSnapshot=value};
 }
 
-test('only seven distinct authenticated match participants can void, with no rating writes',async t=>{
+test('only six distinct authenticated match participants can void, with no rating writes',async t=>{
   const f=fixture(t);await f.L._internals.ready;
   const body={match_id:f.match.id,yes:true};
   assert.equal((await f.post(null,body)).status,401);
   assert.equal((await f.post(12,body)).status,409);
   assert.equal((await f.post(0,{...body,match_id:'fedcba9876543210'})).status,409);
   assert.equal((await f.post(0,{...body,yes:'true'})).status,409);
-  for(let i=0;i<6;i++) {
+  for(let i=0;i<5;i++) {
     assert.equal((await f.post(i,{...body,player_id:f.ids[9],yes_count:10})).status,200);
     assert.equal((await f.post(i,body)).body.vote.yes,i+1,'a retry is one vote');
     assert.equal(f.L._internals.matches.has(f.match.id),true);
     assert.equal(f.events.get(f.ids[0]).some(e=>e.type==='match_result'),false);
   }
-  assert.equal((await f.post(0,{...body,yes:false})).body.vote.yes,6,'first ballot cannot be replaced');
-  const seventh=await f.post(6,body);
-  assert.equal(seventh.status,200);assert.equal(seventh.body.voided,true);
+  assert.equal((await f.post(0,{...body,yes:false})).body.vote.yes,5,'first ballot cannot be replaced');
+  const sixth=await f.post(5,body);
+  assert.equal(sixth.status,200);assert.equal(sixth.body.voided,true);
   assert.equal(f.L._internals.matches.has(f.match.id),false);
   assert.equal(f.plan().rank_checks.length,0);assert.equal(f.plan().board.length,0);assert.equal(f.plan().hashes.length,0);
   const analytics=require('../analytics-metrics.cjs').projectReceipt(JSON.parse(f.plan().receipt_json));
@@ -84,7 +84,7 @@ test('only seven distinct authenticated match participants can void, with no rat
   assert.equal((await reboot.completion('76561198999999999',f.match.id)).close_allowed,false);
 });
 
-test('starting a vote does not fabricate ballots; small matches cannot reduce seven',async t=>{
+test('starting a vote does not fabricate ballots; small matches cannot reduce six',async t=>{
   const f=fixture(t,2);await f.L._internals.ready;
   assert.equal((await f.post(0,{match_id:f.match.id})).body.vote.yes,0);
   for(let i=0;i<2;i++)assert.equal((await f.post(i,{match_id:f.match.id,yes:true})).status,200);
@@ -96,22 +96,22 @@ test('no votes, non-live matches and invalid game bindings never reach the thres
   const f=fixture(t);await f.L._internals.ready;
   f.match.state='connecting';assert.equal((await f.post(0,{match_id:f.match.id,yes:true})).status,409);
   f.match.state='live';
-  for(let i=0;i<4;i++)await f.post(i,{match_id:f.match.id,yes:false});
-  for(let i=4;i<10;i++)await f.post(i,{match_id:f.match.id,yes:true});
+  for(let i=0;i<5;i++)await f.post(i,{match_id:f.match.id,yes:false});
+  for(let i=5;i<10;i++)await f.post(i,{match_id:f.match.id,yes:true});
   assert.equal(f.L._internals.matches.has(f.match.id),true);
-  assert.equal((await f.post(0,{match_id:f.match.id})).body.vote.yes,6);
+  assert.equal((await f.post(0,{match_id:f.match.id})).body.vote.yes,5);
   f.match.game_bindings={...f.match.game_bindings,[f.ids[9]]:f.games[8]};
   assert.equal((await f.post(9,{match_id:f.match.id,yes:true})).status,409);
 });
 
 test('saved ballots survive restore and storage failure cannot authorize game closure',async t=>{
   const f=fixture(t);await f.L._internals.ready;
-  for(let i=0;i<6;i++)await f.post(i,{match_id:f.match.id,yes:true});
+  for(let i=0;i<5;i++)await f.post(i,{match_id:f.match.id,yes:true});
   const restored=f.L._internals.reviveMatch(JSON.parse([...f.saved.values()].find(v=>v.includes('void_votes'))));
   f.L._internals.matches.set(f.match.id,restored);
-  assert.equal((await f.post(0,{match_id:f.match.id,yes:true})).body.vote.yes,6);
-  f.offline(true);
-  const failed=await f.post(6,{match_id:f.match.id,yes:true});
+  assert.equal((await f.post(0,{match_id:f.match.id,yes:true})).body.vote.yes,5);
+  f.offline(true,true); // Admission succeeds, but persisting the terminal decision fails.
+  const failed=await f.post(5,{match_id:f.match.id,yes:true});
   assert.equal(failed.status,503);
   assert.equal(f.events.get(f.ids[0]).some(e=>e.type==='match_result'),false);
   assert.equal((await f.L.completion(f.ids[0],f.match.id)).close_allowed,false);
@@ -120,13 +120,22 @@ test('saved ballots survive restore and storage failure cannot authorize game cl
   assert.equal((await f.L.completion(f.ids[0],f.match.id)).result.voided,true);
 });
 
-test('a previously saved normal result decision wins over a stale seventh-vote request',async t=>{
+test('unavailable ban checks accept no ballot and require retry after recovery',async t=>{
+ const f=fixture(t);await f.L._internals.ready;
+ for(let i=0;i<5;i++)await f.post(i,{match_id:f.match.id,yes:true});
+ f.offline(true);assert.equal((await f.post(5,{match_id:f.match.id,yes:true})).status,503);
+ f.offline(false);await f.L._internals.flushMatches();
+ assert.equal((await f.L.completion(f.ids[0],f.match.id)).close_allowed,false);
+ assert.equal((await f.post(5,{match_id:f.match.id,yes:true})).body.voided,true);
+});
+
+test('a previously saved normal result decision wins over a stale sixth-vote request',async t=>{
   const f=fixture(t);await f.L._internals.ready;
-  for(let i=0;i<6;i++)await f.post(i,{match_id:f.match.id,yes:true});
+  for(let i=0;i<5;i++)await f.post(i,{match_id:f.match.id,yes:true});
   const snapshot=f.L._internals.serialiseMatch(f.match);
   snapshot.collecting={winner:1,score:{1:7,2:2},limit:7,since:Date.now(),deadline:Date.now()+5000};
   f.savedDecision(snapshot);
-  assert.equal((await f.post(6,{match_id:f.match.id,yes:true})).status,409);
+  assert.equal((await f.post(5,{match_id:f.match.id,yes:true})).status,409);
   assert.equal(Boolean(f.match.void_pending),false);
   assert.equal(Boolean(f.match.final_snapshot),false);
   assert.equal(f.events.get(f.ids[0]).some(e=>e.type==='match_result'),false);

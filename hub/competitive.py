@@ -10,7 +10,7 @@ Sam's design (docs/competitive-ideas.md, decided 2026-09-14):
   * No dedicated servers, so one of the ten players hosts - the one with the best ping.
   * Integrity (Sam, 2026-09-14): verify the game files against known-good hashes, allow
     nothing in ~mods but our own pak, require the hub to stay connected, watch the match
-    stats server-side, and let 7 of 10 players void a match. NO process/module scanning -
+    stats server-side, and let 6 of 10 players void a match. NO process/module scanning -
     Sam ruled that out: the hub never looks outside the game folder.
 
 This module is the WINDOW only. Everything it shows comes from a `Session` object, and
@@ -114,7 +114,7 @@ ACCEPT_SECONDS = 30                  # fallback only: match_found carries the se
                                      # value and that wins. Kept in step with
                                      # live.cjs ACCEPT_SECONDS so the two never disagree
                                      # on a screen the player is being penalised against.
-VOTE_NEEDED = 7                      # 7 of 10 (Sam)
+VOTE_NEEDED = 6                      # 6 of 10 (Sam, 2026-09-21)
 
 # The lobby's two chat logs. "team" is the four people you are playing with; "all" is the
 # whole lobby, the other five included.
@@ -626,6 +626,22 @@ class Session:
     board_loading = False
     board_error = ""
     board_seq = 0
+    tournament_data = None
+    tournament_loading = False
+    tournament_error = ""
+    tournament_received = 0.0
+    tournament_ticket_seq = 0
+    messages_data = None
+    messages_loading = False
+    messages_target = ""
+    messages_thread = None
+    messages_thread_loading = False
+    messages_error = ""
+    messages_sending = False
+    messages_send_seq = 0
+    messages_sent = None
+    messages_pending = None
+    messages_generation = 0
 
     # ONE MATCH, in full. `match_detail_id` is the row that is open ("" when none is); the record
     # itself is whatever the server last returned for it.
@@ -2730,12 +2746,15 @@ class LiveSession(MockSession):
         fields = ("history history_error history_loading history_stale friends friend_requests_in "
                   "friend_requests_out friend_code friend_code_hidden friends_error friends_loading "
                   "party_invites invite_error invite_sent board_rows board_you board_available board_loading "
-                  "board_error match_detail_id match_detail match_detail_loading match_detail_error "
+                  "board_error tournament_data tournament_loading tournament_error tournament_received "
+                  "messages_data messages_loading messages_target messages_thread messages_thread_loading "
+                  "messages_error messages_sending messages_pending messages_sent "
+                  "match_detail_id match_detail match_detail_loading match_detail_error "
                   "report_target report_match report_name report_sent report_error bug_text bug_sending "
                   "bug_sent bug_error bug_last_sent postmatch penalty_until penalty_reason penalty_count penalty_next")
         for name in fields.split():
             setattr(self, name, getattr(MockSession, name, None))
-        for name in ("history_seq", "friends_seq", "board_seq", "report_seq", "bug_seq", "_penalty_gen"):
+        for name in ("history_seq", "friends_seq", "board_seq", "report_seq", "bug_seq", "tournament_ticket_seq", "messages_send_seq", "messages_generation", "_penalty_gen"):
             setattr(self, name, getattr(self, name, 0) + 1)
         self.party = None
         self.party_error = ""
@@ -3651,6 +3670,8 @@ class LiveSession(MockSession):
             return
         if kind == "hello":
             self.connected = True
+            if hasattr(getattr(self, "client", None), "messages"):
+                self.refresh_messages()
             # THE RANK LADDER comes from the server, because every band is an environment dial
             # (server/rating.cjs ladder()). A hub shipping its own copy would keep explaining the
             # old bands the day one is retuned, and nothing would fail to make that visible.
@@ -3682,6 +3703,10 @@ class LiveSession(MockSession):
                 # session ends up with two accept countdowns running (bug 3).
                 self._match_replay_seen = False
                 self._rejoin_deadline = time.monotonic() + REJOIN_GRACE_SECONDS
+        elif kind == "message_update":
+            self.refresh_messages()
+            if self.messages_target and not self.messages_thread_loading:
+                self.open_messages(self.messages_target)
         elif kind in ("friend_update", "friend_request"):
             # A nudge, not a payload: the list is a GET and the server is the only thing that
             # knows what the other side did. Mirrors how history uses history_stale.
@@ -3699,7 +3724,7 @@ class LiveSession(MockSession):
                 # The server now sends progress.publicProgress here, exactly as it does on
                 # match_result: a flat block with `rank` as a plain 1-based integer beside a
                 # top-level `rank_name`. It used to send rating.publicRating, whose `rank` was a
-                # whole nested block - AND which named the rank the player's hidden MMR deserved
+                # whole nested block - AND which named the rank the player's matchmaking rating deserved
                 # rather than the one they had climbed to, so the hero showed one rank on connect
                 # and a different one the moment a match settled.
                 #
@@ -4155,7 +4180,7 @@ class LiveSession(MockSession):
                            "placed_rank": placed_rank}
             if you.get("level") is not None and self.me:
                 self.me["level"] = _int_or(you.get("level")) or self.me.get("level")
-            # the visible rank moves with the hidden rating, so a finished match is exactly when
+            # the visible rank moves with the matchmaking rating, so a finished match is exactly when
             # the badge should change
             if you.get("rank") is not None and self.me:
                 self.me["rank"] = you.get("rank") or None
@@ -4356,6 +4381,149 @@ class LiveSession(MockSession):
         self._changed()
 
     # ---------------------------------------------------------------- leaderboard
+    def refresh_messages(self):
+        if not self.client or not self.me or self.messages_loading:
+            return
+        self.messages_loading = True
+        self._action(self.client.messages, self._messages_result)
+
+    def _messages_result(self, status, body):
+        self.messages_loading = False
+        if status == 200 and isinstance(body, dict) and body.get("ok"):
+            self.messages_data = body
+            self.messages_error = ""
+        else:
+            self.messages_error = "unavailable"
+        self._changed()
+
+    def open_messages(self, target, before=None):
+        if not self.client or not self.me:
+            return
+        target = str(target)
+        self.messages_generation += 1
+        generation = self.messages_generation
+        if target != self.messages_target:
+            self.messages_thread = None
+        self.messages_target = target
+        self.messages_thread_loading = True
+        self.messages_error = ""
+        self._changed()
+        def result(status, body):
+            if generation != self.messages_generation or target != self.messages_target:
+                return
+            self.messages_thread_loading = False
+            if status == 200 and isinstance(body, dict) and body.get("ok"):
+                old = (self.messages_thread or {}).get("messages", [])
+                fresh = body.get("messages", [])
+                if old and fresh and (before or fresh[0]["seq"] <= old[-1]["seq"] + 1):
+                    combined = {m["seq"]: m for m in old + fresh}
+                    newest = max(combined)
+                    body["messages"] = [combined[k] for k in sorted(combined) if k > newest - 500]
+                    if not before:
+                        body["next_before"] = self.messages_thread.get("next_before")
+                self.messages_thread = body
+            else:
+                self.messages_error = "unavailable"
+            self._changed()
+        self._action(lambda client=self.client: client.message_thread(target, before), result)
+
+    def send_private_message(self, text):
+        if not self.client or not self.me or self.messages_sending:
+            return
+        text = str(text).strip()
+        target = self.messages_target
+        if not target or not text or len(text) > 1000:
+            return
+        import uuid
+        pending_by_target = self.messages_pending or {}
+        pending = pending_by_target.get(target)
+        if not pending or pending[:2] != (target, text):
+            pending = (target, text, str(uuid.uuid4()))
+            pending_by_target[target] = pending
+            self.messages_pending = pending_by_target
+        self.messages_sending = True
+        self.messages_error = ""
+        self._changed()
+        def result(status, body):
+            self.messages_sending = False
+            if status == 200 and isinstance(body, dict) and body.get("ok"):
+                self.messages_send_seq += 1
+                self.messages_sent = {"target": target, "text": text, "id": pending[2]}
+                pending_by_target.pop(target, None)
+                self.messages_pending = pending_by_target or None
+                if self.messages_target == target:
+                    self.open_messages(target)
+                self.refresh_messages()
+            elif self.messages_target == target:
+                code = body.get("error") if isinstance(body, dict) else ""
+                self.messages_error = code if code in ("friends_only", "blocked", "rate_limited", "inbox_full") else "unavailable"
+            self._changed()
+        self._action(lambda client=self.client: client.send_message(*pending), result)
+
+    def mark_messages_read(self, target, through_seq):
+        if self.client and self.me:
+            self._action(lambda client=self.client: client.read_messages(str(target), int(through_seq)), lambda status, body: self.refresh_messages() if status == 200 else None)
+
+    def block_message_player(self, target, blocked=True):
+        if not self.client or not self.me:
+            return
+        def result(status, body):
+            if status == 200 and isinstance(body, dict) and body.get("ok"):
+                self.refresh_friends()
+                if self.messages_target == target:
+                    self.open_messages(target)
+            elif self.messages_target == target:
+                self.messages_error = "unavailable"
+                self._changed()
+        self._action(lambda client=self.client: client.block_messages(str(target), bool(blocked)), result)
+
+    def refresh_tournament(self):
+        if not self.client or not self.me or self.tournament_loading:
+            return
+        self.tournament_loading = True
+        self._changed()
+        self._action(self.client.tournament, self._tournament_result)
+
+    def _tournament_result(self, status, body):
+        self.tournament_loading = False
+        if status == 200 and isinstance(body, dict) and body.get("ok"):
+            self.tournament_data = body
+            self.tournament_received = time.monotonic()
+            self.tournament_error = ""
+        else:
+            self.tournament_error = "unavailable"
+        self._changed()
+
+    def register_tournament(self):
+        if not self.client or not self.me or self.tournament_loading:
+            return
+        self.tournament_loading = True
+        self.tournament_error = ""
+        self._changed()
+        self._action(self.client.register_tournament, self._tournament_registered)
+
+    def _tournament_registered(self, status, body):
+        self.tournament_loading = False
+        if status == 200 and isinstance(body, dict) and body.get("ok"):
+            self.refresh_tournament()
+        else:
+            code = body.get("error") if isinstance(body, dict) else ""
+            self.tournament_error = code if code in ("ended", "identity_conflict", "identity_required", "capacity") else "unavailable"
+            self._changed()
+
+    def send_tournament_support(self, category, match_id, message):
+        if not self.client or not self.me or self.tournament_loading:
+            return
+        self.tournament_loading = True
+        self.tournament_error = ""
+        self._changed()
+        self._action(lambda client=self.client: client.tournament_support(str(category), str(match_id), str(message)), self._tournament_ticket_result)
+
+    def _tournament_ticket_result(self, status, body):
+        if status == 200 and isinstance(body, dict) and body.get("ok"):
+            self.tournament_ticket_seq += 1
+        self._tournament_registered(status, body)
+
     def refresh_leaderboard(self):
         if not self.client or self.board_loading:
             return
@@ -5162,6 +5330,8 @@ class CompetitivePanel:
         """A sub-tab, the header avatar, or Back was clicked."""
         if name in ("history", "profile") and self._history_locked():
             return                  # the strip already says so; do not fight the redraw
+        if name == "profile" and hasattr(getattr(self.session, "client", None), "tournament"):
+            self.session.refresh_tournament()
         if name == "profile" and self.view != "profile":
             self._profile_from = self.view      # so Back returns where the player came from
         # Both of these views are built out of the match history, so both ask for it. The

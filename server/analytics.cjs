@@ -3,6 +3,9 @@ const crypto=require('node:crypto');
 const metrics=require('./analytics-metrics.cjs');
 const storage=require('./analytics-store.cjs');
 const combatStorage=require('./combat-storage.cjs');
+const fairPlayRules=require('./fair-play.cjs');
+const namedEvidence=m=>Array.isArray(m.kills)&&(m.kills.length?m.kills.every(k=>k&&Object.hasOwn(k,'killer')&&Object.hasOwn(k,'victim')):Boolean(m.fair_play));
+const reviewOf=m=>Array.isArray(m.kills)?fairPlayRules.inspect(m):m.fair_play||fairPlayRules.inspect(m);
 const {DAY,projectReceipt}=metrics;
 const CLIENT=/^(app|session|ui|request|connection|operation|update|launch|telemetry|auth)\.[a-z0-9_.]{1,50}$/;
 const CLIENT_TYPES=new Set('app.action app.error app.fallback session.start session.end session.previous_unclean ui.action ui.screen request.outcome connection.start connection.state connection.connected connection.disconnected operation.start operation.outcome operation.complete operation.failed update.start update.downloaded update.launched update.failed launch.request launch.outcome telemetry.gap auth.signout auth.sign_out'.split(' '));
@@ -44,10 +47,10 @@ function filters(raw={},now=Date.now(),permanent=false){
     offset:Math.min(1e7,Math.max(0,Math.floor(Number(raw.offset)||0))),limit:Math.min(200,Math.max(1,Math.floor(Number(raw.limit)||50)))};
 }
 function csvCell(value){let s=value==null?'':String(value);if(/^[\s]*[=+@-]/.test(s)||/^[\t\r\n]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}
-function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB_GAME_DATA_RESET_AT||0)}={}){
+function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB_GAME_DATA_RESET_AT||0),projectTournament,backfillVersion='v1'}={}){
   if(!Number.isSafeInteger(resetAt)||resetAt<0)throw Error('Invalid game data reset timestamp');
   const db=storage.create({store,prefix,now}),pending=[],terminals=new Map(),health={dropped:0,write_failures:0,rejected:0,last_error:null};
-  let flushing=null,working=null,stopped=false,outboxCursor='0';
+  let flushing=null,working=null,stopped=false,outboxCursor='0',suspicionCache=null,suspicionRead=null;
   function terminal(receipt){if(terminals.size>=100){health.dropped++;return;}terminals.set(receipt.matchId,receipt);void saveTerminals();}
   let saving=null;
   async function saveTerminals(){
@@ -85,7 +88,12 @@ function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB
   // Reducer/schema changes require an explicit aggregate migration, not replay into v1 totals.
   async function project(receipt,owner=prefix+'settlement:'+(receipt.matchId||receipt.match_id)){
     receipt=await combatStorage.unpack(store,receipt,owner);
-    return db.project(projectReceipt(receipt),metrics.hash(receipt));
+    // Both projections must succeed before the durable outbox is acknowledged. A retry
+    // after either projection succeeds is harmless because both are idempotent.
+    if(projectTournament)await projectTournament(receipt);
+    const result=await db.project(projectReceipt(receipt),metrics.hash(receipt));
+    if(result==='stored')suspicionCache=null;
+    return result;
   }
   async function query(kind,raw={}){
     if(!['events','matches','audits'].includes(kind))throw Error('Unknown analytics collection');
@@ -110,7 +118,33 @@ function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB
     if(!/^[A-Za-z0-9_.:-]{1,80}$/.test(id))throw Error('Invalid match ID');
     let row=await db.detail(id);
     if(!row&&store){const key=prefix+'settlement:'+id,receipt=await db.call(['GET',key]);if(receipt)row=projectReceipt(await combatStorage.unpack(store,JSON.parse(receipt),key));}
-    return row;
+    return row?{...row,fair_play:reviewOf(row)}:null;
+  }
+  const upgradedReviews=new Map();
+  async function currentReviews(rows){
+    const result=new Map(),missing=[];
+    for(const m of rows){
+      if(!m)continue;
+      const key=m.id+':'+m.at;
+      if(m.fair_play?.rule_version===fairPlayRules.RULE_VERSION){result.set(m,{review:m.fair_play,complete:true});continue;}
+      if(upgradedReviews.has(key)){result.set(m,upgradedReviews.get(key));continue;}
+      if(Array.isArray(m.kills)){result.set(m,{review:reviewOf(m),complete:namedEvidence(m)});continue;}
+      missing.push(m);
+    }
+    const full=await db.details(missing.map(m=>m.id));
+    missing.forEach((m,i)=>{
+      const evidence=full[i],usable=evidence?.id===m.id&&evidence.at===m.at&&Array.isArray(evidence.kills);
+      const item={review:usable?reviewOf(evidence):m.fair_play||fairPlayRules.inspect(m),complete:Boolean(usable&&namedEvidence(evidence))};result.set(m,item);
+      if(usable){upgradedReviews.set(m.id+':'+m.at,item);if(upgradedReviews.size>5000)upgradedReviews.delete(upgradedReviews.keys().next().value);}
+    });return rows.map(m=>result.get(m)||{review:{alerts:[]},complete:false});
+  }
+  async function fairPlay(raw={}){
+    const data=await query('matches',{...raw,size:10,limit:100});
+    const reviews=await currentReviews(data.rows),rows=data.rows.flatMap((m,i)=>reviews[i].review.alerts.map(a=>({...a,map:m.map,version:m.version})));
+    return {...data,available:false,complete:false,rows:[],matches_examined:0,enforcement:'none',rule_version:fairPlayRules.RULE_VERSION};
+  }
+  async function suspicionEvidence(){
+    return {at:now(),byPlayer:new Map(),available:false,complete:false,scanned:0,legacy_matches:0};
   }
   async function combat(id,offset=0){
     if(!/^[A-Za-z0-9_.:-]{1,80}$/.test(id))throw Error('Invalid match ID');
@@ -144,13 +178,14 @@ function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB
         if(!String(key).startsWith(prefix+'settlement:')&&!String(key).startsWith(db.base+'terminal:'))continue;
         await consume(key);
       }
-      const done=await db.call(['GET',db.base+'backfill_done:v1']);
+      const done=await db.call(['GET',db.base+'backfill_done:'+backfillVersion]);
       if(!done){
-        const cursor=await db.call(['GET',db.base+'backfill_cursor'])||'0';
+        const cursorKey=db.base+'backfill_cursor'+(backfillVersion==='v1'?'':':'+backfillVersion);
+        const cursor=await db.call(['GET',cursorKey])||'0';
         const result=await db.call(['SCAN',String(cursor),'MATCH',prefix+'settlement:*','COUNT','10']);
         for(const key of result?.[1]||[]){if(String(key).includes(':combat:v1:'))continue;await db.call(['SADD',db.base+'outbox',key]);await consume(key);}
-        await db.call(['SET',db.base+'backfill_cursor',String(result[0])]);
-        if(String(result[0])==='0')await db.call(['SET',db.base+'backfill_done:v1',String(now())]);
+        await db.call(['SET',cursorKey,String(result[0])]);
+        if(String(result[0])==='0')await db.call(['SET',db.base+'backfill_done:'+backfillVersion,String(now())]);
       }
       if(!failed)health.last_error=null;
     })().catch(()=>{health.write_failures++;health.last_error='Storage unavailable or a projection needs repair';}).finally(()=>{working=null;});return working;
@@ -164,6 +199,6 @@ function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB
   const timer=setInterval(()=>{void flush();},2000);timer.unref?.();
   const worker=setInterval(()=>{void maintenance();},15000);worker.unref?.();
   async function close(){stopped=true;clearInterval(timer);clearInterval(worker);await saveTerminals();if(working)await working;for(let i=0;i<25&&pending.length;i++){const before=pending.length;await flush();if(pending.length===before)break;}}
-  return {emit,ingest,flush,project,terminal,query,detail,combat,summary,reliability,status,maintenance,close,db};
+  return {emit,ingest,flush,project,terminal,query,detail,fairPlay,suspicionEvidence,combat,summary,reliability,status,maintenance,close,db};
 }
 module.exports={create,cleanEvent,projectReceipt,filters,csvCell,ruleSnapshot:metrics.ruleSnapshot};

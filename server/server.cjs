@@ -48,10 +48,22 @@ const recording=recordingModule.config();
 const ACCOUNT_PREFIX=process.env.HUB_ACCOUNT_STORE_PREFIX||STORE_PREFIX;
 const privateAccounts=recording?.mode==='account-test';
 let analyticsService;
+let tournamentService;
+function tournament() {
+  if(!tournamentService)tournamentService=require('./tournament.cjs').create({
+    store:process.env.UPSTASH_REDIS_REST_URL&&process.env.UPSTASH_REDIS_REST_TOKEN?upstashCmd:null,
+    prefix:STORE_PREFIX,
+    finalizationHealth:()=>analytics().status(),
+    notifySupport:(actor,body,context)=>live().adminMessage(actor,body,context),
+  });
+  return tournamentService;
+}
 function analytics() {
   if (!analyticsService) analyticsService = analyticsModule.create({
     store: process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN ? (args,options)=>upstashCmd(args,{...options,timeout:5000}) : null,
     prefix: STORE_PREFIX,
+    projectTournament:async receipt=>{await live().correctCheaterMatches(receipt);await tournament().project(receipt);},
+    backfillVersion:'tournament-launch-2026-v1',
   });
   return analyticsService;
 }
@@ -1587,6 +1599,7 @@ function admin() {
     adminRouter = adminModule.create({
       upstashCmd,
       analytics: analytics(),
+      tournament: tournament(),
       prefix: STORE_PREFIX,
       live,
       // Reused, never reimplemented: posting the assertion back to Steam is the single step that
@@ -1615,6 +1628,7 @@ function live() {
       process.env.UPSTASH_REDIS_REST_TOKEN ? upstashCmd : null;
     liveRouter = liveModule.create({
       analytics: analytics(),
+      tournament: tournament(),
       accountDirectory: accountDirectory(),
       whoami: (token) => auth().whoami(token),
       admitGameplay: (token,identity) => auth().admitGameplay(token,identity),
@@ -1694,6 +1708,13 @@ async function router(req, res) {
 
   if ((method === 'GET' || method === 'HEAD') && (pathname === '/about' || pathname === '/about.html')) {
     return handleAbout(req, res);
+  }
+
+  if((method==='GET'||method==='HEAD')&&(pathname==='/tournament'||pathname==='/tournament.html'))return handleHtmlPage(req,res,path.join(PUBLIC_DIR,'tournament.html'));
+  if(method==='GET'&&pathname==='/api/public/tournament'){
+    res.setHeader('cache-control','no-store');
+    if(recording)return notFound(res);
+    try{return sendJson(res,200,await tournament().view());}catch{return sendJson(res,503,{ok:false,error:'Event data unavailable.'});}
   }
 
   if ((method === 'GET' || method === 'HEAD') && (pathname === '/ranked' || pathname === '/ranked.html')) {

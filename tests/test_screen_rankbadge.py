@@ -21,8 +21,8 @@ it can be drawn at all:
     fetched over HTTP and cannot see the ladder itself.
   * the sprite really does hold all 25 symbols, and index.html loads it before any screen that
     draws one.
-  * the ranked panel says nothing about the hidden rating. That is a product rule, not a detail:
-    "we dont even want the players to know there is a hidden rating" (Sam, 2026-09-15).
+  * the ranked panel says nothing about the matchmaking rating. That is a product rule, not a detail:
+    "we dont even want the players to know there is a matchmaking rating" (Sam, 2026-09-15).
 
 Same shape as the other tests/test_screen_*.py: plain asserts on the JSON snapshot dict, no Tk, no
 pywebview, no network.
@@ -132,7 +132,7 @@ def test_the_flat_match_result_shape_still_produces_a_rank_block():
     .publicProgress, spread flat, with `rank` a plain 1-based integer beside a top-level name.
 
     Both events carry the same call now. They used to carry different ones - `rating` named the
-    rank the player's hidden MMR deserved and `match_result` the rank they had climbed to - from
+    rank the player's matchmaking rating deserved and `match_result` the rank they had climbed to - from
     different ladders with different names, so a finished match could rename a player's rank out
     from under the badge they had been looking at all session."""
     rank = _rank_after({"type": "match_result", "won": True, "delta": 2, "level": 5,
@@ -333,7 +333,7 @@ def _default_names(path, const):
 def test_the_names_live_in_exactly_one_file():
     """server/ladder.cjs, and nowhere else.
 
-    progress.cjs owns the visible RR ladder and rating.cjs owns hidden MMR; both need to know the
+    progress.cjs owns the visible RR ladder and rating.cjs owns matchmaking rating; both need to know the
     ladder, neither can require the other (progress already requires rating), and both keeping a
     copy is precisely how this repository came to have TWO ladders - Static..Blackout in one and
     Rookie..Reaper in the other - with a hub drawing a badge from one beside a tier label from
@@ -401,10 +401,10 @@ def test_the_tk_badge_has_a_colour_for_every_rank():
 
 # ---------------------------------------------------------------- what the panel may not say
 def test_the_ranked_panel_never_mentions_a_hidden_rating():
-    """Sam, 2026-09-15: "we dont even want the players to know there is a hidden rating."
+    """Sam, 2026-09-15: "we dont even want the players to know there is a matchmaking rating."
 
     "How ranked works" used to open on the kicker "Two systems, one number" and carry a whole note
-    - rank_hidden - explaining that matchmaking uses a separate hidden rating. Every word of it was
+    - rank_hidden - explaining that matchmaking uses a separate matchmaking rating. Every word of it was
     true, and it is exactly the thing a player is never told.
 
     Asserted of the STRINGS and in EVERY language, not of the English copy, because a translation
@@ -416,7 +416,7 @@ def test_the_ranked_panel_never_mentions_a_hidden_rating():
 
     # Latin-script tells survive translation - a Russian or Chinese string still spells "Elo".
     # Whole words only: "elo" is inside "below" and "belongs", both of which are ordinary copy.
-    UNIVERSAL = re.compile(r"(elo|mmr|glicko)|matchmaking rating|hidden rating", re.I)
+    UNIVERSAL = re.compile(r"(elo|mmr|glicko)|matchmaking rating|matchmaking rating", re.I)
     for lang, table in i18n.STRINGS.items():
         for key, value in table.items():
             if not key.startswith("rank_"):

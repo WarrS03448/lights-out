@@ -88,10 +88,10 @@ const PRESET_NAME_MAX = 48;
 function defaultPresets() {
   return [
     { id: 'overview', name: 'Overview', sort: 'last_seen', dir: 'desc',
-      columns: ['persona', 'player_id', 'account_type', 'status', 'rank_name', 'matches', 'win_rate', 'kd',
+      columns: ['persona', 'player_id', 'account_type', 'status', 'cheater_score', 'rank_name', 'matches', 'win_rate', 'kd',
                 'seconds', 'last_seen', 'actions'] },
-    { id: 'moderation', name: 'Moderation', sort: 'reports', dir: 'desc',
-      columns: ['persona', 'player_id', 'account_type', 'reports', 'reporters', 'reports_made', 'team_kills',
+    { id: 'moderation', name: 'Moderation', sort: 'cheater_score', dir: 'desc',
+      columns: ['persona', 'player_id', 'account_type', 'cheater_score', 'reports', 'reporters', 'reports_made', 'team_kills',
                 'abandons', 'no_shows', 'banned', 'last_seen', 'actions'] },
     { id: 'performance', name: 'Performance', sort: 'progress', dir: 'desc',
       columns: ['persona', 'rank_name', 'rr', 'mmr', 'played', 'kills', 'deaths', 'kd', 'kpr',
@@ -131,7 +131,11 @@ function cleanPrefs(raw) {
   if (!presets.length) presets.push(...defaultPresets());
   const wanted = String((raw && raw.active) || '');
   const active = presets.some((p) => p.id === wanted) ? wanted : presets[0].id;
-  return { presets, active };
+  // One-time upgrade of existing presets; later explicit column choices stay respected.
+  if(!raw?.cheater_score_column_v1){
+    for(const p of presets)if((p.id===active||p.id==='moderation')&&!p.columns.includes('cheater_score'))p.columns.splice(Math.min(3,p.columns.length),0,'cheater_score');
+  }
+  return { presets, active, cheater_score_column_v1:true };
 }
 
 function baseUrlOf(req) {
@@ -257,6 +261,8 @@ const PLAYERS_JS = `
                                          : 'permanent', 'warn'));
         if (row.ban_reason) td.appendChild(text(' ' + row.ban_reason));
       }
+    } else if (column.type === 'suspicion') {
+      td.appendChild(text('Unavailable'));td.title='Hosted moderation is unavailable in this source build.';
     } else if (column.type === 'date') {
       td.textContent = ago(v);
       if (v) td.title = new Date(v).toLocaleString();
@@ -369,6 +375,9 @@ const PLAYERS_JS = `
 
   function actions(td, row) {
     var who = row.persona || row.player_id;
+    td.appendChild(button('Message', 'Send a Lights Out Admin message', false, function () {
+      window.openAdminMessage(row.player_id, who);
+    }));
     if (row.admin) {
       // An admin cannot be banned (live.cjs refuses it), and a console that offers a button it
       // knows will be refused is a console nobody trusts the rest of.
@@ -423,7 +432,7 @@ const PLAYERS_JS = `
                 + ' ' + (parts[1] || 1) + '.');
         });
     }));
-    td.appendChild(button('Elo', 'Set the hidden MMR the matchmaker reads', false, function () {
+    td.appendChild(button('Elo', 'Set the matchmaking rating the matchmaker reads', false, function () {
       ask({ title: 'Set the MMR of ' + who,
             body: 'The hidden number the matchmaker reads. Players never see it, and this does '
               + 'not move their rank.\\n\\nIts deviation is reset with it, so the next few matches '
@@ -507,6 +516,8 @@ const PLAYERS_JS = `
     });
     document.getElementById('account-note').textContent = (accounts.note || 'Account inventory unavailable.')
       + ' Lights Out totals include linked accounts. Hub connections include reconnects.';
+    var corrections=document.getElementById('correction-status');
+    corrections.textContent=m.corrections===null?'Match reversal job status is unavailable.':(m.corrections||[]).map(function(j){return j.player_id+': '+(j.error||'Reversing affected results')+' ('+j.matched+' matching receipts, '+j.scanned+' records checked).';}).join(' ');
     var parts = [];
     parts.push((m.found || 0) + ' of ' + (m.total || 0) + ' known player profiles');
     if ((m.shown || 0) < (m.found || 0)) parts.push('showing the first ' + m.shown);
@@ -636,7 +647,7 @@ const PLAYERS_JS = `
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ presets: state.presets, active: state.active }),
+      body: JSON.stringify({ presets: state.presets, active: state.active, cheater_score_column_v1:true }),
     }).then(function (r) { return r.json(); }).then(function (data) {
       if (!data || !data.ok) throw new Error((data && data.error) || 'refused');
       state.presets = data.presets;
@@ -708,7 +719,7 @@ const PLAYERS_JS = `
 }());
 `;
 
-function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics }) {
+function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics, tournament }) {
   const key = (token) => `${prefix}adminsession:${token}`;
   const store = {
     async get(k) {
@@ -841,6 +852,7 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
          border:1px solid var(--line); color:var(--muted); }
   .tag.strong { color:var(--text); border-color:var(--text); }
   .tag.warn { color:var(--gold); border-color:var(--gold); }
+  .tag.danger { color:#ff7d88; border-color:#ff7d88; }
   .acts { margin-left:auto; display:flex; gap:6px; }
   .strip { display:flex; gap:2px; flex-wrap:wrap; margin:6px 0; }
   .rd { width:18px; height:18px; display:grid; place-items:center; font-size:9px;
@@ -895,6 +907,11 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
   tr.banned td { opacity:.6; }
   th.c-num, th.c-ratio, th.c-pct, td.c-num, td.c-ratio, td.c-pct { text-align:right; }
   td.c-id { font-family:ui-monospace,Consolas,monospace; color:var(--muted); }
+  td.c-suspicion { min-width:145px; }
+  td.c-suspicion details { margin-top:5px; font-size:11px; }
+  td.c-suspicion details[open] { width:390px; max-width:65vw; white-space:normal; overflow-wrap:anywhere; }
+  td.c-suspicion summary { cursor:pointer; color:var(--muted); }
+  td.c-suspicion li { margin-bottom:8px; }
   td.c-name a { color:var(--text); text-decoration:none; }
   td.c-name a:hover { color:var(--accent); text-decoration:underline; }
   td.c-name .unnamed { font-family:ui-monospace,Consolas,monospace; color:var(--muted); }
@@ -928,7 +945,7 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
   .sheetacts { display:flex; gap:8px; justify-content:flex-end; }
   .btn.danger { border-color:var(--accent); color:var(--accent); }
   .btn.danger:hover { background:var(--accent); color:#fff; }
-</style></head><body><div class="wrap${wrapClass ? ' ' + wrapClass : ''}">${body}</div></body></html>`;
+</style></head><body><div class="wrap${wrapClass ? ' ' + wrapClass : ''}">${body}</div>${require('./admin-messages.cjs').body}</body></html>`;
   }
 
   function signinPage(base, message = '') {
@@ -1047,9 +1064,10 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
       `<a class="${here === key ? 'on' : ''}" href="${esc(href)}">${esc(label)}</a>`;
     return `<header>
       <h1>Lights Out admin</h1>
-      <nav class="nav">${tab('/admin', 'overview', 'Overview')}${tab('/admin/players', 'players', 'Players')}${tab('/admin/analytics', 'analytics', 'Analytics')}</nav>
+      <nav class="nav">${tab('/admin', 'overview', 'Overview')}${tab('/admin/players', 'players', 'Players')}${tab('/admin/analytics', 'analytics', 'Analytics')}${tab('/admin/events', 'events', 'Events')}${tab('/admin/messages', 'messages', 'Messages')}</nav>
       <span class="who">${esc(me.persona || me.steam_id)} &middot;
         <a href="/admin/logout">Sign out</a></span>
+      <button class="btn" data-message="">Send message</button>
     </header>`;
   }
 
@@ -1081,6 +1099,7 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
       ${chrome(me, 'players')}
       <div class="stats" id="account-stats"></div>
       <p class="note" id="account-note">Loading account inventory…</p>
+      <p class="note" id="correction-status" role="status"></p>
       <div class="bar">
         <input id="q" type="search" autocomplete="off" spellcheck="false"
                placeholder="Search name, player ID, account ID or Steam ID">
@@ -1170,8 +1189,36 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
     }
 
     const me = await sessionOf(req);
-    if (!me && pathname.startsWith('/admin/analytics/')) { json(res,401,{ok:false,error:'Sign in required.'}); return true; }
+    if (!me && (pathname.startsWith('/admin/analytics/') || pathname.startsWith('/admin/events/') || pathname.startsWith('/admin/messages/'))) { json(res,401,{ok:false,error:'Sign in required.'}); return true; }
     if (!me) { send(res, 200, signinPage(base)); return true; }
+
+    if(pathname==='/admin/messages'&&method==='GET'){send(res,200,page('Messages - Lights Out admin',chrome(me,'messages')+require('./admin-messages.cjs').chatBody,'','wide'));return true;}
+    if(['/admin/messages/data','/admin/messages/thread','/admin/messages/read'].includes(pathname)){
+      const write=pathname.endsWith('/read');if(method!==(write?'POST':'GET')){json(res,405,{ok:false,error:'method_not_allowed'});return true;}
+      try{if(write&&!String(req.headers['content-type']||'').includes('application/json')){json(res,415,{ok:false,error:'Send JSON.'});return true;}
+        const result=write?await live().adminMessagesRead(me.steam_id,JSON.parse(await body(req,4096)||'{}')):await live().adminMessages(me.steam_id,pathname.endsWith('/thread')?url.searchParams.get('target')||'invalid':null,url.searchParams.get('before'));
+        json(res,result.ok?200:409,result);
+      }catch{json(res,503,{ok:false,error:'Message storage unavailable.'});}return true;
+    }
+
+    if(pathname==='/admin/messages/send'&&method==='POST'){
+      if(!String(req.headers['content-type']||'').includes('application/json')){json(res,415,{ok:false,error:'Send JSON.'});return true;}
+      try{const ask=JSON.parse(await body(req,8192)||'{}'),result=await live().adminMessage(me.steam_id,ask);json(res,result.ok?200:409,result);}
+      catch{json(res,503,{ok:false,error:'Message storage unavailable.'});}return true;
+    }
+
+    if(pathname==='/admin/events/action'&&method==='POST') {
+      if(!String(req.headers['content-type']||'').includes('application/json')){json(res,415,{ok:false,error:'Send JSON.'});return true;}
+      try {const ask=JSON.parse(await body(req,4096)||'{}');const result=await tournament.adminAction(me.steam_id,ask);json(res,result.ok?200:409,result);}
+      catch {json(res,503,{ok:false,error:'Event operation unavailable. Refresh before trying again.'});}return true;
+    }
+    if(pathname==='/admin/events'||pathname==='/admin/events/data') {
+      if(method!=='GET'){json(res,405,{ok:false,error:'Use GET.'});return true;}
+      if(pathname==='/admin/events')send(res,200,page('Events - Lights Out admin',chrome(me,'events')+require('./admin-events.cjs').body,'','wide'));
+      else try {if(!tournament)throw Error();json(res,200,await tournament.adminView());}
+      catch {json(res,503,{ok:false,error:'Event storage unavailable. Try again shortly.'});}
+      return true;
+    }
 
     if (pathname === '/admin/analytics' || pathname.startsWith('/admin/analytics/')) {
       if(method!=='GET'){json(res,405,{ok:false,error:'Use GET.'});return true;}
@@ -1189,6 +1236,7 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
         else if(pathname.endsWith('/audits'))json(res,200,await analytics.query('audits',options));
         else if(pathname.endsWith('/health'))json(res,200,{ok:true,...await analytics.status()});
         else if(pathname.endsWith('/reliability'))json(res,200,await analytics.reliability(options));
+        else if(pathname.endsWith('/fairplay'))json(res,200,await analytics.fairPlay(options));
         else if(pathname.endsWith('/match'))json(res,200,{ok:true,match:await analytics.detail(String(options.id||''))});
         else if(pathname.endsWith('/combat'))json(res,200,{ok:true,...await analytics.combat(String(options.id||''),options.offset)});
         else if(pathname.endsWith('/export')){
@@ -1257,7 +1305,9 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics 
       const what = String(ask.action || '');
       const on = { steam_id: String(ask.steam_id || '') };
       let out;
-      if (what === 'ban') {
+      if (what === 'ban_cheater') {
+        out = await live().banAccount(me.steam_id,{...on,category:'cheating',reason:String(ask.reason||''),operation_id:String(ask.operation_id||'')});
+      } else if (what === 'ban') {
         out = await live().banAccount(me.steam_id, {
           ...on, days: Number(ask.days) || 0,
           reason: String(ask.reason || '').slice(0, 200) || 'admin console',

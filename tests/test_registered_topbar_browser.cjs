@@ -46,35 +46,27 @@ const server = http.createServer((req,res) => {
     const page=await browser.newPage({viewport:{width:1400,height:850}});
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto('http://127.0.0.1:'+server.address().port);
-    await page.locator('#statregistered').waitFor();
+    await page.locator('#statlive').waitFor();
     await page.evaluate(()=>document.fonts.ready);
     async function render(next) {state=structuredClone(next);await page.evaluate(s=>window.__hub.onState(s),state);}
-    assert.equal(await page.locator('#statregistered').textContent(),'1234567 players registered');
-    for(const total of [1291,0,null]) {
-      await render({...snapshots.en,status:{...snapshots.en.status,players_registered:total}});
-      assert.equal(await page.locator('#statregistered').textContent(),`${total===null?'—':total} players registered`);
-    }
-    await render({...snapshots.en,status:{...snapshots.en.status,connected:false}});
-    assert.equal(await page.locator('#statregistered').textContent(),'');
+    assert.equal(await page.locator('#statregistered').count(),0);
     for(const [lang,snapshot] of Object.entries(snapshots)) {
       await render(snapshot);
       for(const width of [1400,1200,800]) {
         await page.setViewportSize({width,height:760});
         const bounds=await page.evaluate(()=>{
           const box=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return {x:r.x,right:r.right,y:r.y,bottom:r.bottom};};
-          return {registered:box('#statregistered'),live:box('#statlive'),controls:box('.wincontrols'),bar:box('#topbar'),nav:[...document.querySelectorAll('.navitem')].map(e=>{const r=e.getBoundingClientRect();return {x:r.x,right:r.right,y:r.y,bottom:r.bottom};})};
+          return {mail:box('#messages-toggle'),live:box('#statlive'),controls:box('.wincontrols'),bar:box('#topbar'),nav:[...document.querySelectorAll('.navitem')].map(e=>{const r=e.getBoundingClientRect();return {x:r.x,right:r.right,y:r.y,bottom:r.bottom};})};
         });
-        assert(bounds.registered.x>=bounds.live.right,`${lang}/${width}: registered must follow Live Games`);
-        assert(Math.abs(bounds.registered.y-bounds.live.y)<1,`${lang}/${width}: counts stay on the same row`);
-        assert(bounds.registered.right<=bounds.controls.x,`${lang}/${width}: count overlaps window controls`);
+        assert(bounds.live.right<=bounds.controls.x,`${lang}/${width}: counts overlap controls`);
         assert(bounds.controls.right<=width+1,`${lang}/${width}: window controls clipped`);
         for(const item of bounds.nav)assert(item.y>=bounds.bar.y && item.bottom<=bounds.bar.bottom+1,`${lang}/${width}: navigation clipped vertically`);
       }
     }
     await render(snapshots.en);await page.setViewportSize({width:1400,height:850});
     fs.mkdirSync(path.join(root,'build'),{recursive:true});
-    await page.screenshot({path:path.join(root,'build/players-registered.png')});
+    await page.screenshot({path:path.join(root,'build/client-topbar.png')});
     assert.deepEqual(errors,[]);
-    console.log('Registered top bar: live updates, zero/unknown/offline, seven languages and three window sizes passed.');
-  } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}
+    console.log('Top bar: registered count absent, seven languages and three window sizes passed.');
+  } finally {await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});

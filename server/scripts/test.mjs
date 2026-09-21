@@ -2682,7 +2682,7 @@ async function main() {
     });
 
     // THE VISIBLE LADDER IS progress.cjs's, and only progress.cjs's. These used to be asserted
-    // against rating.rankOf, which named a rank from the player's hidden MMR - a second answer to
+    // against rating.rankOf, which named a rank from the player's matchmaking rating - a second answer to
     // the same question, from a module that had no business answering it.
     await test('the visible rank: ranks, divisions and 0-99 RR', () => {
       const P = L_progress;
@@ -2710,7 +2710,7 @@ async function main() {
       assert.equal(P.divisionOf(secondRank), 1);
     });
 
-    // Sam, 2026-09-16: "lets swap it so a penalty doesnt cost any hidden rating and instead
+    // Sam, 2026-09-16: "lets swap it so a penalty doesnt cost any matchmaking rating and instead
     // costs RR". It used to come off the Glicko rating, which is the one number we have promised
     // never to show anybody - so the punishment was invisible on the day it landed and only
     // surfaced over the following matches, as convergence dragged the rank down after it.
@@ -2836,7 +2836,7 @@ async function main() {
       assert.ok(placed.rank !== null && placed.rank_name);
     });
 
-    // A VISIBLE RANK PLAYERS SEE AND A HIDDEN MMR THEY DO NOT (Sam, 2026-09-15). The board is
+    // A VISIBLE RANK PLAYERS SEE AND A matchmaking rating THEY DO NOT (Sam, 2026-09-15). The board is
     // where the two used to collide: it was ORDERED by the Glicko-2 rating and LABELLED from it,
     // so it could seat a player above somebody whose visible rank was higher, and it shipped the
     // hidden number to the client in every row.
@@ -2888,7 +2888,7 @@ async function main() {
       };
     };
 
-    await test('the leaderboard is ordered by the VISIBLE rank, not by hidden MMR', async () => {
+    await test('the leaderboard is ordered by the VISIBLE rank, not by matchmaking rating', async () => {
       const L = liveModule.create({
         whoami: async () => null, bearer: () => '', sendJson: () => {}, badRequest: () => {},
         readBody: async () => Buffer.alloc(0), upstashCmd: memoryStore(), prefix: 'lb',
@@ -3906,7 +3906,10 @@ async function main() {
       });
       assert.deepEqual(clean.presets.map((p) => p.id), ['mine'],
                        'a preset with no usable column would draw a blank page');
-      assert.deepEqual(clean.presets[0].columns, ['persona', 'kills']);
+      assert.deepEqual(clean.presets[0].columns, ['persona', 'kills', 'cheater_score']);
+      assert.equal(clean.cheater_score_column_v1,true);
+      const chosen=adminModule.cleanPrefs({...clean,presets:[{...clean.presets[0],columns:['persona']}]});
+      assert.deepEqual(chosen.presets[0].columns,['persona'],'after migration a moderator may hide the column');
       assert.equal(clean.active, 'mine', 'the active set must be one that exists');
 
       const none = adminModule.cleanPrefs(null);

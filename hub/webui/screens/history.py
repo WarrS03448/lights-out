@@ -35,6 +35,8 @@ _EN = {
     **round_strings("en"),
     **player_damage_strings("en"),
     "title": "Match history",
+    "cheater_reverted": "CHEATER DETECTED, RR RESULTS REVERTED",
+    "cheater_label": "CHEATER",
     "match_detail": "Match detail",
     "rounds": "Rounds",
     "team": "Team {n}",
@@ -425,6 +427,16 @@ def strings_for(lang: str) -> dict:
     merged.update(player_damage_strings(lang))
     merged.update(round_strings(lang))
     merged["res_voided"] = i18n.STRINGS.get(lang, i18n.STRINGS["en"])["comp_result_void"]
+    notice, label = {
+        "en": ("CHEATER DETECTED, RR RESULTS REVERTED", "CHEATER"),
+        "de": ("CHEATER ERKANNT, RR-ERGEBNISSE RÜCKGÄNGIG GEMACHT", "CHEATER"),
+        "es": ("TRAMPOSO DETECTADO, RESULTADOS DE RR REVERTIDOS", "TRAMPOSO"),
+        "fr": ("TRICHEUR DÉTECTÉ, RÉSULTATS RR ANNULÉS", "TRICHEUR"),
+        "pt": ("TRAPACEIRO DETECTADO, RESULTADOS DE RR REVERTIDOS", "TRAPACEIRO"),
+        "ru": ("ОБНАРУЖЕН ЧИТЕР, ИЗМЕНЕНИЯ RR ОТМЕНЕНЫ", "ЧИТЕР"),
+        "zh": ("检测到作弊者，RR 结果已撤销", "作弊者"),
+    }.get(lang, ("CHEATER DETECTED, RR RESULTS REVERTED", "CHEATER"))
+    merged.update(cheater_reverted=notice, cheater_label=label)
     return merged
 
 
@@ -540,6 +552,7 @@ def _row(row: dict) -> dict:
         "team_kills": _int_or_none(row.get("team_kills")),
         "result": _result(row),
         "preview": bool(row.get("preview")),
+        "cheater_reverted": bool(row.get("cheater_reverted")),
     }
 
 
@@ -574,6 +587,7 @@ def _scoreboard(rec, players):
             "name": who.get("name") or sid,
             "team": int(r.get("team") or who.get("team") or 0),
             "is_me": bool(who.get("is_me")),
+            "cheater": bool(who.get("cheater") or r.get("cheater")),
             "left": bool(who.get("left")),
             # False when the stat sweep never reached them. The row is still drawn — the board has
             # to match the two teams — but every number on it is a dash.
@@ -663,6 +677,7 @@ def _detail(rec, my_id: str):
             "name": p.get("persona") or sid,
             "team": int(p.get("team") or 0),
             "is_me": bool(my_id) and sid == my_id,
+            "cheater": bool(p.get("cheater")),
             "left": bool(p.get("left")),
             "connected": bool(p.get("connected")),
             # Only present when a penalty was applied; None means "nothing happened to them".
@@ -677,6 +692,7 @@ def _detail(rec, my_id: str):
     return {
         "id": str(rec.get("id") or ""),
         "map": rec.get("map") or "",
+        "cheater_reverted": bool(rec.get("cheater_reverted")),
         "outcome": rec.get("outcome") or "",
         "reason": rec.get("reason") or "",
         "created": rec.get("created") or 0,

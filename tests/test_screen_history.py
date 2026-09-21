@@ -129,7 +129,7 @@ def test_won_and_score_round_trip_when_present():
 
 def test_the_rr_column_is_the_rr_the_match_moved_not_the_arrows():
     """SAM, 2026-09-16: "we are only gaining and losing 1-3 RR". The RR column printed `delta` - an
-    arrow count, drawn from the hidden rating - with "RR" after it."""
+    arrow count, drawn from the matchmaking rating - with "RR" after it."""
     row = {"id": "m9", "ended": 5000, "map": "Rome", "outcome": "played", "reason": "",
            "blamed": False, "team": 1, "side": "attack", "host": False, "players": 2,
            "won": True, "score": [7, 4], "delta": 2, "rr_delta": 23, "placement": False,

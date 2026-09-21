@@ -20,7 +20,7 @@ def test_live_vote_uses_server_and_rejects_stale_replies():
     session.cast_vote(True)
     assert len(calls) == 2
     session.on_live_event({"type": "match_void_vote", "match_id": "fedcba9876543210",
-                           "vote": {"yes": 7, "voted": False}})
+                           "vote": {"yes": 6, "voted": False}})
     session._void_vote_result(session.match_id, 200, {"vote": {"yes": 1, "no": 0, "voted": False}})
     assert session.vote["yes"] == 6 and session.vote["voted"] is True
     assert session.phase == "live"

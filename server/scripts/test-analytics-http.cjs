@@ -29,7 +29,7 @@ test('analytics admin endpoints recheck sign-in and render a useful page',async(
     const page=await fetch(base+'/admin/analytics',options);assert.equal(page.status,200);assert.match(await page.text(),/Match explorer/);
     const data=await fetch(base+'/admin/analytics/data',options);assert.equal(data.status,200);assert.equal((await data.json()).ok,true);
     allowed=false;
-    for(const route of ['data','match?id=one','export','audits','events'])assert.equal((await fetch(base+'/admin/analytics/'+route,options)).status,401);
+    for(const route of ['data','match?id=one','export','audits','events','fairplay'])assert.equal((await fetch(base+'/admin/analytics/'+route,options)).status,401);
   }finally{await new Promise(r=>app.close(r));}
 });
 

@@ -11,6 +11,7 @@ const numeric = o => Object.fromEntries(Object.entries(o || {}).filter(([k,v])=>
 // Only these containers/scalars survive the evidence projection. Never serialize a match object.
 const EVIDENCE = new Set(('player_id game_steam_id round n at t ev kind phase state from to who host map team team_id steam_id steamId persona name kills deaths team_kills won winner score score_limit seconds duration duration_seconds elapsed alive spawns spawnCount roundsWon roundsPlayed lateJoin spectator reported coverage status enemyDamage friendlyDamage damageTaken damageDealt assists headshots shots hits adr accuracy weapon weaponStats playerStats weaponStats coverage damage objectives ratingsEligible measured actual expected excess impactInTeam impactInLobby decisive integrity presence quality kpr survival spr roundWinShare clutch clutches teamKills roundsPlayed seq epoch observer a b old new max loss relation ignored attack bone distance at bt ref complete terminal gaps roster bound reason code by blame expired connected left data_collected source valid raw start end index players teams events timeline stats score_before score_after first_kill last_kill duration_known rounds_played final_stats net_kills enemy_kills damage_dealt damage_taken teamkill round_number winner_team rows metrics value total count complete_damage complete_shots').split(' '));
 for(const k of 'scoreboard ratings rating rd parties waited tolerance delta spread network region predicted_win attack defense attacker defender side duration_ms start_at end_at round_seconds alive_start alive_end combat damage_dealt damage_taken health samples'.split(' '))EVIDENCE.add(k);
+for(const k of 'killer victim killerTeam victimTeam teamKill suicide world inferred alive0 alive1'.split(' '))EVIDENCE.add(k);
 function evidence(value, depth=0) {
   if (depth>12) return null;
   if (value===null || typeof value==='boolean') return value;
@@ -81,6 +82,7 @@ function projectReceipt(r) {
     coverage:{reported:players.filter(p=>p.coverage.reported).length,players:ids.length,damage:players.filter(p=>p.coverage.damage).length,ratings:rows.length},
     predicted_win:number(r.analytics_context?.predicted_win),duration_basis:'Formation to match end'};
   out.test_match=out.match_size!==10;
+  out.fair_play=require('./fair-play.cjs').inspect(out);
   return out;
 }
 function cohort(m){return pick(m,['map','mode','version','rules_id','match_size','region']);}

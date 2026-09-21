@@ -155,7 +155,7 @@ function levelOf(record) {
 // player ... similar to valorant where there are ranks with 3 subranks in each rank, you start at
 // each sub rank at 0 and getting to 100 moves you up sub ranks".
 //
-// TWO SYSTEMS, TWO STORED NUMBERS. Hidden MMR estimates skill; progress.cjs accumulates visible
+// TWO SYSTEMS, TWO STORED NUMBERS. matchmaking rating estimates skill; progress.cjs accumulates visible
 // RR independently and uses these thresholds to interpolate its continuous convergence target.
 // This module carries progress through updates but never derives or changes it.
 //

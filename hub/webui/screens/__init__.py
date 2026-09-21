@@ -36,7 +36,7 @@ SCREEN_VERBS = {}
 # The screens, imported explicitly below. Keep in sync with the *.py files in this package (a test
 # enforces it). Order is irrelevant: registries are keyed by name and merged.
 _SCREEN_MODULES = ("competitive", "gamemodes", "profile", "history", "leaderboard",
-                   "friends", "settings", "postmatch", "bugreport")
+                   "friends", "settings", "postmatch", "bugreport", "tournament", "messages")
 
 
 def register_snapshot(name):
@@ -93,4 +93,6 @@ from . import (  # noqa: E402,F401  (intentionally at the bottom: registry funcs
     settings,
     postmatch,
     bugreport,
+    tournament,
+    messages,
 )

@@ -1,11 +1,11 @@
 {
   "catalogue_version": 1,
   "hub": {
-    "version": "2.5.0",
-    "download_url": "https://lightsout.up.railway.app/hub/LightsOut-Setup-2.5.0.exe",
+    "version": "2.6.0",
+    "download_url": "https://lightsout.up.railway.app/hub/LightsOut-Setup-2.6.0.exe",
     "page_url": "https://lightsout.up.railway.app/",
-    "sha256": "37b0e58bb4f6dfbaedfb92edc29fba54d12e120592a3a3a8047a6b8e828dd272",
-    "size": 24042656,
+    "sha256": "0e52acb37bef148065a98866feba50df0efd4e3a2671ed19498f88c767d64075",
+    "size": 24076296,
     "kind": "inno-setup"
   },
   "gamemodes": [

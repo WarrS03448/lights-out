@@ -35,23 +35,23 @@ test('real Lua preserves votes across restart, commits one void and protects ran
   L._internals.matches.set(match.id,match);
   for(const id of ids)L._internals.inMatch.set(id,match.id);
   const post=async (i,yes=true)=>{const res={};await L.route({headers:{},token:ids[i],body:{match_id:match.id,yes}},res,'POST','/api/match/void-vote');return res;};
-  for(let i=0;i<6;i++)assert.equal((await post(i)).status,200);
+  for(let i=0;i<5;i++)assert.equal((await post(i)).status,200);
   assert.equal((await L.completion(ids[0],match.id)).close_allowed,false);
   await L.shutdown();L=live.create(options);await L._internals.ready;
   t.after(()=>L.shutdown());
-  assert.equal((await post(0)).body.vote.yes,6);
+  assert.equal((await post(0)).body.vote.yes,5);
   const rankKey='hub:rating:'+ids[0],rankBefore=JSON.stringify({rating:1280,progress:240,matches:20,wins:11,losses:9,revision:4});
   await store(['SET',rankKey,rankBefore]);
   const before=await store(['KEYS','hub:rating:*']);
   const staleSnapshot=await store(['GET','hub:live:match:'+match.id]);
   blockResult=true;
-  const replies=await Promise.all([post(6),post(6),post(7),post(8)]);
+  const replies=await Promise.all([post(5),post(5),post(6),post(7)]);
   assert.ok(replies.every(r=>r.status===503),JSON.stringify(replies));
   assert.equal((await L.completion(ids[9],match.id)).close_allowed,false);
   const settledKey=L._internals.settlementKey(match.id);
   const kept=await require('../settlement.cjs').snapshot(store,
     [settledKey,'hub:live:match:'+match.id,'hub:live:matches'],match.id,staleSnapshot,86400);
-  assert.ok(kept?.pendingMatch?.void_pending,'a stale worker cannot erase a saved seven-vote decision');
+  assert.ok(kept?.pendingMatch?.void_pending,'a stale worker cannot erase a saved six-vote decision');
   const scored=blockedCommand.slice(),plan=JSON.parse(scored.at(-1));
   const competing=JSON.parse(plan.receipt_json);competing.voided=false;
   plan.receipt_json=JSON.stringify(competing);scored[scored.length-1]=JSON.stringify(plan);

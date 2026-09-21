@@ -2,7 +2,7 @@
  * THE LADDER. One file, because there is one ladder and two modules that need it.
  *
  * `progress.cjs` owns the VISIBLE rank - what a player sees, climbed in RR. `rating.cjs` owns the
- * HIDDEN MMR - what the matchmaker reads, and it needs to know how many rungs the ladder has so
+ * matchmaking rating - what the matchmaker reads, and it needs to know how many rungs the ladder has so
  * it can say which one an MMR deserves. Neither can require the other (progress already requires
  * rating), and both of them keeping their own copy is exactly how this repository ended up with
  * two ladders: `Static, Witness, Responder, Operator, Enforcer, Nightwatch, Ghostframe, Blackout`

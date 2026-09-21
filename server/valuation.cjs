@@ -599,7 +599,7 @@ function valuation(match, stats, ratings, winner) {
 
       // HOW MUCH OF THE VISIBLE PAYOUT THIS PLAYER GETS - which is not `weight`.
       //
-      // `weight` is evidence: how much this match may teach the HIDDEN rating. Two of its terms do
+      // `weight` is evidence: how much this match may teach the matchmaking rating. Two of its terms do
       // not belong on the ladder a player watches. `mm.quality` is the matchmaker's opinion of a
       // pairing nobody in it chose, and one we never show (NEVER PRICE A MATCH, live.cjs).
       // `decisive` is the scoreline, which RR already pays through its own round-differential

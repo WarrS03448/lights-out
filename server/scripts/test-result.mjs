@@ -278,7 +278,7 @@ test('the history row gets the result written into it', () => {
   assert.equal(rowAfter.score, '7-4', 'and the score from this player\'s point of view');
   // Two fresh accounts, so this was a PLACEMENT match: RR is frozen at 0 by design, and the row
   // says so rather than leaving a list to print "0 RR" - or, as it used to, arrows drawn from the
-  // hidden rating that moved while the visible one could not.
+  // matchmaking rating that moved while the visible one could not.
   assert.equal(rowAfter.placement, true);
   assert.equal(rowAfter.rr_delta, 0);
   assert.equal(rowAfter.delta, 0, 'the arrows are drawn from RR, and RR did not move');
@@ -300,7 +300,7 @@ function placedPair(svc) {
 
 test("a placed player's history row carries the RR the match moved (Sam, 2026-09-16)", () => {
   // "we are only gaining and losing 1-3 RR": the list printed `delta` - an arrow count, drawn from
-  // the hidden rating - with "RR" after it.
+  // the matchmaking rating - with "RR" after it.
   const svc = service();
   placedPair(svc);
   const match = liveMatch(svc);

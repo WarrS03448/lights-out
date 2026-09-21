@@ -227,7 +227,7 @@ test('RR is not docked for the pairing: a quality-0 match pays full RR (Sam, 202
   const complete = { ...STATS, rounds: 13, players: ROSTER.map(row => ({ ...row, roundsPlayed: 13 })) };
   const rows = V.valuation(matchOf({ 1: 7, 2: 6 }, { mm: { quality: 0 } }), complete, flat(), 1);
   for (const row of rows) {
-    assert.equal(row.weight, V.WEIGHT_FLOOR, 'the hidden rating still learns less from it');
+    assert.equal(row.weight, V.WEIGHT_FLOOR, 'the matchmaking rating still learns less from it');
     assert.equal(row.rrWeight, 1, `but the visible payout is whole (${row.rrWeight})`);
   }
 });

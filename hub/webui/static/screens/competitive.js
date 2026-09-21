@@ -480,7 +480,7 @@
 
       // WHAT IS LEFT TO SAY once the ladder is explained. There is no section about the hidden
       // rating and there must not be one: Sam, 2026-09-15, "we dont even want the players to know
-      // there is a hidden rating". This panel used to open on "Two systems, one number" and carry
+      // there is a matchmaking rating". This panel used to open on "Two systems, one number" and carry
       // a whole note about matchmaking using a separate rating - which is true, and is exactly the
       // thing a player is never told. rank_hidden is gone from hub/i18n.py, not just from here.
       var rest = el("div", "rank-block");
@@ -1395,7 +1395,7 @@
       var card = el("div", "vote-card");
       card.appendChild(el("div", "section-title", t("comp_vote_title")));
       card.appendChild(el("div", "vote-body", t("comp_vote_body")));
-      card.appendChild(el("div", "vote-count", t("comp_vote_count", { n: v.yes || 0, needed: v.needed || 7 })));
+      card.appendChild(el("div", "vote-count", t("comp_vote_count", { n: v.yes || 0, needed: v.needed || 6 })));
       if (v.pending) {
         card.appendChild(el("div", "vote-body", t("comp_vote_pending")));
       } else if (!v.voted) {

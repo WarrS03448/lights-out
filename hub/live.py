@@ -621,6 +621,30 @@ class LiveClient:
     def leaderboard(self, limit=50):
         return self._get("/api/leaderboard?limit=%d" % int(limit))
 
+    def tournament(self):
+        return self._get("/api/tournament")
+
+    def register_tournament(self):
+        return self._post("/api/tournament/register", {})
+
+    def tournament_support(self, category, match_id, message):
+        return self._post("/api/tournament/support", {"category": category, "match_id": match_id, "message": message})
+
+    def messages(self):
+        return self._get("/api/messages")
+
+    def message_thread(self, target, before=None):
+        return self._get("/api/messages/thread?target=%s%s" % (urllib.parse.quote(str(target)), "&before=%d" % int(before) if before else ""))
+
+    def send_message(self, target, text, client_id):
+        return self._post("/api/messages/send", {"target": target, "text": text, "client_id": client_id})
+
+    def read_messages(self, target, through_seq):
+        return self._post("/api/messages/read", {"target": target, "through_seq": through_seq})
+
+    def block_messages(self, target, blocked):
+        return self._post("/api/messages/block", {"target": target, "blocked": bool(blocked)})
+
     # ---------------------------------------------------------------- the stream
     def _run(self):
         attempt = 0

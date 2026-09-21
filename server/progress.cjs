@@ -7,7 +7,7 @@
  *
  * ================================================================== WHY THERE ARE TWO NUMBERS
  *
- * Valorant runs two: a hidden MMR that decides matchmaking and payouts, and a visible Rank
+ * Valorant runs two: a matchmaking rating that decides matchmaking and payouts, and a visible Rank
  * Rating that chases it. We had one. This file is the second.
  *
  *   rating.cjs   MMR   - Glicko-2, hidden, what the matchmaker sorts on, what a result moves
@@ -36,7 +36,7 @@
  * Two hard rules of Riot's, both enforced below and both tested:
  *
  *   * YOU CANNOT GAIN RR ON A LOSS. Whatever the performance bonus says, a loss is a loss.
- *   * YOU CAN GAIN MMR ON A LOSS. Strong individual play still moves the hidden rating up.
+ *   * YOU CAN GAIN MMR ON A LOSS. Strong individual play still moves the matchmaking rating up.
  *     That one is not implemented here - it falls out of valuation.cjs handing Glicko a score
  *     of up to PERF_BAND for a good loser, which beats a heavy underdog's expected score. It
  *     is noted here because the two rules only make sense as a pair.
@@ -250,7 +250,7 @@ function rankName(progress) {
  * This is what `hello` ships as `ladder.ranks` and what the hub's rank badges are keyed by: a
  * rank's INDEX is its position in `names`, so a rename needs no client release (docs/ranks.md).
  * It comes from HERE and not from rating.cjs because this is the ladder a player climbs - the
- * one they see. rating.cjs describes the hidden MMR underneath it and has no names at all.
+ * one they see. rating.cjs describes the matchmaking rating underneath it and has no names at all.
  */
 function ranks() {
   return {
@@ -526,7 +526,7 @@ function award(before, after, opts = {}) {
  * show anybody - so the punishment was invisible on the day it landed and then leaked out over
  * the following matches as convergence dragged the visible rank down after it. A player could
  * not have told you it had happened, let alone why. Sam, 2026-09-16: "lets swap it so a penalty
- * doesnt cost any hidden rating and instead costs RR."
+ * doesnt cost any matchmaking rating and instead costs RR."
  *
  * So a penalty is now exactly what the Penalties screen says it is: RR off the total, today.
  *

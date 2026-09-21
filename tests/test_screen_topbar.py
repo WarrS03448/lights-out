@@ -168,14 +168,15 @@ def test_online_then_queue_then_live_in_that_order():
     html = _static("index.html")
     block = html[html.index('id="topstats"'):html.index("</header>")]
     order = [m for m in re.findall(r'id="(serverstatus|statqueued|statlive|statregistered)"', block)]
-    assert order == ["serverstatus", "statqueued", "statlive", "statregistered"], order
+    assert order == ["serverstatus", "statqueued", "statlive"], order
+    assert 'id="statregistered"' not in html
 
 
 def test_the_nav_is_still_the_last_word_before_the_counts():
-    """Bug report is the item the counts sit next to, so it stays last in the nav."""
+    """Tournament follows Bug report and is the last item before the counts."""
     core = _static("core.js")
     items = re.findall(r'\{ view: "(\w+)",', core)
-    assert items[-1] == "bugreport", items
+    assert items[-2:] == ["bugreport", "tournament"], items
 
 
 def test_a_dropped_stream_empties_the_two_counts():

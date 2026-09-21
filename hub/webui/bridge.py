@@ -68,7 +68,7 @@ class Api:
     def set_view(self, name):
         # Nav lives in Python so it survives i18n/state (plan): switch the active screen on the UI
         # thread; the re-emitted snapshot carries the new view and the router renders it.
-        if name in ("competitive", "gamemodes", "friends", "profile", "history", "leaderboard", "settings", "bugreport"):
+        if name in ("competitive", "gamemodes", "friends", "profile", "history", "leaderboard", "settings", "bugreport", "tournament", "messages"):
             telemetry.emit("ui.screen", screen=name)
         self.panel.post(lambda: self.panel.set_view(str(name or "")))
 

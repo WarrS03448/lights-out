@@ -23,7 +23,6 @@
   var statusEl = document.getElementById("serverstatus");
   var queuedEl = document.getElementById("statqueued");
   var liveEl = document.getElementById("statlive");
-  var registeredEl = document.getElementById("statregistered");
 
   // Nav is delegated: one listener on the container survives renderNav's innerHTML rewrites. A
   // click on an item switches the active screen via set_view; the re-emitted snapshot re-renders.
@@ -319,7 +318,8 @@
       // Sam, 2026-09-16: "the settings button at the top - let's put another button that's
       // called Bug report". Last, next to Settings, because it is the same kind of thing:
       // somewhere you go about the app rather than about the game you are playing.
-      { view: "bugreport",   label: t("nav_bugreport") }
+      { view: "bugreport",   label: t("nav_bugreport") },
+      { view: "tournament",  label: t("nav_tournament") }
     ];
 
     navEl.innerHTML = items.map(function (it) {
@@ -348,11 +348,6 @@
     }
     if (liveEl) {
       liveEl.textContent = ok ? t("topbar_live", { n: st.live_matches || 0 }) : "";
-    }
-    if (registeredEl) {
-      var registered = st.players_registered;
-      var known = Number.isSafeInteger(registered) && registered >= 0;
-      registeredEl.textContent = ok ? t("topbar_registered", { n: known ? registered : "—" }) : "";
     }
   }
 

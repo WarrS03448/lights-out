@@ -31,12 +31,12 @@ const {chromium}=require('playwright');
     }
     snapshot.lang='en';snapshot.strings=data.languages.en;
     await page.evaluate(s=>window.__hub.onState(s),snapshot);
-    const button=page.getByRole('button',{name:'Cheater in the game? Click to vote to void match. 7/10 Votes Required',exact:true});
+    const button=page.getByRole('button',{name:'Cheater in the game? Click to vote to void match. 6/10 Votes Required',exact:true});
     await page.screenshot({path:'work-void-vote-button.png'});
     await button.focus();await page.keyboard.press('Enter');
     await page.waitForFunction(()=>true);
     assert(calls.some(c=>c.path==='/verb/start_vote'));
-    snapshot.comp.live.vote={yes:6,no:0,needed:7,voted:false};
+    snapshot.comp.live.vote={yes:5,no:0,needed:6,voted:false};
     await page.evaluate(s=>window.__hub.onState(s),snapshot);
     await page.getByRole('button',{name:'Yes',exact:true}).click();
     assert(calls.some(c=>c.path==='/verb/cast_vote'&&c.body[0]===true));

@@ -77,6 +77,8 @@
 .hist-row.res-fault     { border-left-color: var(--accent); }
 .hist-row.res-cancelled, .hist-row.res-voided { border-left-color: var(--gold); }
 .hist-row.res-played    { border-left-color: var(--line); }
+.cheater-label { color:#ff5667; font-weight:800; font-size:11px; margin-left:6px; }
+.cheater-reverted-notice { color:#ff7885; font-weight:800; font-size:12px; line-height:1.5; margin-bottom:8px; white-space:normal; }
 
 /* result cell (leading) */
 .hist-result {

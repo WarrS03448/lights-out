@@ -259,6 +259,8 @@
         idRow.appendChild(idHolder);
       }
       side.appendChild(idRow);
+      var eventState=state.tournament||{},eventData=eventState.data||{},eventStrings=eventState.strings||{};
+      (eventData.badges||[]).forEach(function(badge){side.appendChild(el("span","tournament-badge",(eventStrings[badge.type]||badge.type)+(badge.rank?" #"+badge.rank:"")));});
 
       // THE RANK CARD. The name and the RR come from `auth.rank` - the same block the competitive
       // hero draws - rather than from a tier this screen worked out from `level`. The two
@@ -341,7 +343,7 @@
           leading: el("span", "recent-res " + res.cls, res.letter),
           children: [
             el("div", "recent-map", m.map || "—"),
-            el("div", "recent-meta", eloText(m.elo) + (m.ended ? " · " + whenText(m.ended) : ""))
+            el("div", m.cheater_reverted ? "cheater-reverted-notice" : "recent-meta", m.cheater_reverted ? pt("profile_cheater_reverted") : eloText(m.elo) + (m.ended ? " · " + whenText(m.ended) : ""))
           ]
         });
         if (m.id) {

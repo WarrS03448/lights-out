@@ -313,6 +313,7 @@ const PLAYER_COLUMNS = [
   { key: 'reports', label: 'Reports', type: 'num' },
   { key: 'reporters', label: 'Reporters', type: 'num' },
   { key: 'reports_made', label: 'Reports filed', type: 'num' },
+  { key: 'cheater_score', label: 'Cheater score', type: 'suspicion' },
   { key: 'banned', label: 'Banned', type: 'ban' },
   { key: 'sessions', label: 'Hub connections', type: 'num' },
   { key: 'first_seen', label: 'First seen', type: 'date' },
@@ -417,7 +418,7 @@ const PARTY_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 // /api/report and /api/leaderboard fell through its router to a 404. A second, hand-copied list of
 // paths in the caller is what made a fully-implemented feature dead on arrival, so there is one
 // list now and `owns()` is what server.cjs asks. ADD A ROUTE HERE OR IT IS NOT REACHABLE.
-const NEEDS_AUTH = ['/api/match/combat-warning', '/api/live', '/api/queue/join', '/api/queue/leave',
+const NEEDS_AUTH = ['/api/messages', '/api/messages/thread', '/api/messages/send', '/api/messages/read', '/api/messages/block', '/api/tournament', '/api/tournament/register', '/api/tournament/support', '/api/match/combat-warning', '/api/live', '/api/queue/join', '/api/queue/leave',
                     '/api/network/relay', '/api/network/profile', '/api/network/peers',
                     '/api/network/signal', '/api/network/pings',
                     '/api/match/accept', '/api/match/leave',
@@ -543,11 +544,11 @@ const CONNECT_SECONDS = Math.max(5, Number(process.env.COMP_CONNECT_SECONDS) || 
 // and is not implemented yet. Both hang off the same penalty store below.
 const NO_SHOW_BAN_SECONDS = Math.max(5, Number(process.env.COMP_NO_SHOW_BAN_SECONDS) || 300);
 
-// IT IS RR NOW, NOT ELO. The points came off the hidden Glicko rating until 2026-09-16, which
+// IT IS RR NOW, NOT ELO. The points came off the matchmaking rating until 2026-09-16, which
 // meant the only part of the punishment a player could actually be shown was the clock: the rest
 // landed on a number we never print and then seeped into their rank over the following matches,
 // by which time nothing connected it to the match they walked out of. Sam: "lets swap it so a
-// penalty doesnt cost any hidden rating and instead costs RR." So it is RR, it comes off the
+// penalty doesnt cost any matchmaking rating and instead costs RR." So it is RR, it comes off the
 // visible total, and it comes off the moment the penalty lands (progress.penalise).
 //
 // COMP_NO_SHOW_ELO still works as the dial's old name - it is set in deployments and in the test
@@ -762,7 +763,7 @@ function banFirstTeam(poolSize, advantageTeam) {
 
 const HEARTBEAT_MS = 15000;          // SSE comment frames, so proxies keep the pipe open
 
-function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, upstashCmd, prefix, analytics, accountDirectory, admitGameplay, activityGate,
+function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, upstashCmd, prefix, analytics, tournament, accountDirectory, admitGameplay, activityGate,
                  collectSeconds, requiredVersions, profileOf, relayIssuer, expectedRules, rankedRules, privateSoloSteam='' }) {
   const soloMatch=match=>Boolean(privateSoloSteam&&identity.validSteam(privateSoloSteam)&&match?.players?.length===1&&
     identity.gameFor(match,match.host)===privateSoloSteam&&match.players[0].player_id===match.host);
@@ -861,7 +862,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
 
   const reports = new Map();
   const reportsLoaded = new Set();
+  const reportLoadTimes = new Map(), reportsUnavailable = new Set();
   let reportIndexRead = null;
+  let reportIndexAt = 0, reportIndexAvailable = typeof upstashCmd !== 'function';
 
   // steamId -> directory record (blankCareer). The same arrangement as ratings and penalties:
   // memory is the truth for the life of the process, the roster hash is the copy that survives a
@@ -892,11 +895,26 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   const partyInvites = new Map();
 
   const store = typeof upstashCmd === 'function' ? upstashCmd : null;
+  const restitution = require('./cheater-restitution.cjs').create({store,prefix,
+    withRatings:(ids,fn)=>withRatingLocks(ids,async()=>{await Promise.all(ids.map(drainRatingWrites));return fn();}),
+    committed:async(rows,fresh)=>{
+      for(const row of rows){
+        // Never restore the old correction snapshot over a later match on replay.
+        if(store)await readRating(row.player_id);else if(fresh)ratings.set(row.player_id,row.after);
+        pushRating(row.player_id,ratingOf(row.player_id));
+      }
+      refreshReaperCut(true);
+    }});
+  const restitutionTick=setInterval(()=>{restitution.run().catch(()=>{});},15000);
+  restitutionTick.unref?.();
+  const messages = require('./messages.cjs').create({store,prefix,
+    nudge:id=>sendTo(id,{type:'message_update'}),
+    nameOf:async id=>{await loadProfile(id);return personaOf(id);}});
   const penaltyKey = (steamId) => `${prefix || 'hub:'}penalty:${steamId}`;
   const ratingKey = (steamId) => `${prefix || 'hub:'}rating:${steamId}`;
   const reportKey = (steamId) => `${prefix || 'hub:'}reports:${steamId}`;
   const bugsKey = () => `${prefix || 'hub:'}bugs`;
-  // THE LEADERBOARD, ordered by the VISIBLE ladder (RR), not by hidden MMR.
+  // THE LEADERBOARD, ordered by the VISIBLE ladder (RR), not by matchmaking rating.
   //
   // A NEW KEY, deliberately. The old `leaderboard` set is scored in rating points and this one is
   // scored in RR; writing the new score into the old set would leave the two scales mixed for
@@ -1457,7 +1475,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * Record a no-show. Returns what the player should be told.
    *
    * The points figure used to be RECORDED AND NOT APPLIED, because there was no rank service to
-   * apply it to. Then it was applied to the HIDDEN rating, which a player never sees. It is RR
+   * apply it to. Then it was applied to the matchmaking rating, which a player never sees. It is RR
    * now (progress.penalise): the ladder they watch, moved the moment the offence lands.
    *
    * It is `penalise`, not `update`: the player did not play, so it must not touch their RD, must
@@ -1676,6 +1694,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     return {
       id: match.id,
       created: match.created,
+      started: match.live_at || null,
       ended: record.ended,
       outcome: record.outcome,
       reason: record.reason || '',
@@ -1859,11 +1878,11 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
               try { applyReceiptRow(rows[i], identity.parse(receipts[i]), steamId); } catch { /* keep original */ }
             }
           }
-          return rows;
+          return await restitution.annotate(rows);
         }
       } catch { /* fall through to memory */ }
     }
-    return (history.get(steamId) || []).slice(0, HISTORY_KEEP);
+    return restitution.annotate((history.get(steamId) || []).slice(0, HISTORY_KEEP));
   }
 
   /** One full match, or null. Only the players who were in it may read it. */
@@ -1913,6 +1932,12 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         const detail = combatLib.summaryAcross(retainedCombat, identity.gameFor(identity.freezeMatch(full), row.player_id), null);
         return { ...row, combat: { ...row.combat, playerStats: identity.combatSummary(full, detail).playerStats } };
       }) };
+    }
+    [full]=await restitution.annotate([full]);
+    if(full.cheater_reverted){
+      const cheaters=new Set(full.cheaters||[]);
+      full.players=full.players.map(p=>({...p,cheater:cheaters.has(p.player_id),rr_delta:0,delta:0}));
+      full.scoreboard=(full.scoreboard||[]).map(p=>({...p,cheater:cheaters.has(p.player_id)}));
     }
     return identity.wire(full);
   }
@@ -2145,7 +2170,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         return;
       }
       if (receipt) {
-        if (receipt.data_collected === true) { acceptCommitted(match, receipt); return; }
+        if (receipt.data_collected === true) { await acceptCommitted(match, receipt); return; }
         if (!match.settling && matches.get(match.id) === match) {
           hydrateSettlement(receipt.rows);
           completeMatch(match, receipt.winner, receipt.score, receipt.limit, receipt.rows);
@@ -4051,13 +4076,13 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   // never mistaken for one.
   async function loadBan(steamId) {
     const id = String(steamId || '');
-    if (bansLoaded.has(id) || !store) return bans.get(id) || null;
+    if (!store) return bans.get(id) || null;
+    // Every authenticated request observes durable moderation from other instances.
+    // An unavailable check is retryable; it must not cache permanent permission.
+    const raw = await store(['GET', banKey(id)], {strict:true,timeout:5000});
+    if (raw) bans.set(id, typeof raw === 'string' ? identity.parse(raw) : identity.hydrate(structuredClone(raw)));
+    else bans.delete(id);
     bansLoaded.add(id);
-    try {
-      const raw = await store(['GET', banKey(id)]);
-      if (raw) bans.set(id, typeof raw === 'string' ? identity.parse(raw) : identity.hydrate(structuredClone(raw)));
-    } catch { /* an unreadable ban is no ban: fail OPEN, because failing closed on a storage
-                 hiccup would lock out the whole player base */ }
     return bans.get(id) || null;
   }
 
@@ -4074,6 +4099,14 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const target = String((body && (body.player_id || body.steam_id)) || '');
     if (!identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
     if (isAdmin(target)) return { ok: false, error: 'that account is an admin' };
+    if(body?.category==='cheating'){
+      const saved=await restitution.begin(String(adminId),{target,operation_id:body.operation_id,reason:body.reason});
+      bans.set(target,saved.ban);bansLoaded.add(target);
+      try{removeFromQueue(target);}catch{}
+      for(const clientId of [...(bySteam.get(target)||[])]){send(clientId,{type:'banned',reason:'Cheating',until:0});drop(clientId);}
+      void restitution.run().catch(()=>{});
+      return {ok:true,banned:target,until:0,corrections:'queued',decision_id:saved.decision.id};
+    }
     const days = Number((body && body.days) || 0);
     const rec = {
       at: Date.now(),
@@ -4083,13 +4116,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       // cannot quietly restart itself on a redeploy.
       until: days > 0 ? Date.now() + days * 24 * 3600 * 1000 : 0,
     };
+    if (store) await restitution.setBan(String(adminId),target,rec);
     bans.set(target, rec);
     bansLoaded.add(target);
-    if (store) {
-      const args = ['SET', banKey(target), JSON.stringify(rec)];
-      if (rec.until) args.push('EX', String(Math.ceil((rec.until - Date.now()) / 1000)));
-      Promise.resolve(store(args)).catch(() => { /* in-memory still holds for this process */ });
-    }
     // Put them out of whatever they are in right now, or the ban does not start until they
     // happen to close the app.
     try { removeFromQueue(target); } catch { /* not queued */ }
@@ -4107,9 +4136,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (!isAdmin(adminId)) return { ok: false, error: 'not an admin' };
     const target = String((body && (body.player_id || body.steam_id)) || '');
     if (!identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
+    if (store) await restitution.setBan(String(adminId),target,null);
     bans.delete(target);
     bansLoaded.add(target);
-    if (store) Promise.resolve(store(['DEL', banKey(target)])).catch(() => {});
     console.log('[admin] %s unbanned %s', adminId, target);
     return { ok: true, unbanned: target };
   }
@@ -4526,6 +4555,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       reports: live ? live.length : (c.reports_in || 0),
       reporters: live ? new Set(live.map((r) => r.by)).size : (c.reporters || 0),
       reports_made: c.reports_out || 0,
+      cheater_score: null,
+      suspicion: { available: false, status: 'unavailable' },
       banned: Boolean(ban),
       ban_until: ban ? (ban.until || 0) : 0,
       ban_reason: ban ? (ban.reason || '') : '',
@@ -4577,6 +4608,11 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
 
   async function adminPlayers(steamId, opts = {}) {
     if (!isAdmin(steamId)) return { ok: false, error: 'not an admin' };
+    let reviewEvidence=null;
+    if(opts.include_suspicion!==false){
+      await loadReportIndex();
+      try{reviewEvidence=await analytics?.suspicionEvidence?.();}catch{reviewEvidence={available:false};}
+    }
     const population = await accountPopulation();
 
     const q = String(opts.q || '').trim().toLowerCase().slice(0, 64);
@@ -4598,6 +4634,14 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         .some(value=>String(value||'').toLowerCase().includes(q)));
     }
     const found = rows.length;
+    if(opts.include_suspicion!==false){
+      const evaluatedAt=Date.now();
+      for(const row of rows){
+        row.suspicion=require('./suspicion.cjs').score({player:row.player_id,alerts:reviewEvidence?.byPlayer?.get(row.player_id)||[],reports:reports.get(row.player_id)||[],now:evaluatedAt,
+          available:Boolean(reviewEvidence?.available)&&reportIndexAvailable&&!reportsUnavailable.has(row.player_id),complete:reviewEvidence?.complete!==false});
+        row.cheater_score=row.suspicion.available?row.suspicion.score:null;
+      }
+    }
     const at = (r) => {
       const v = r[sort];
       return v === null || v === undefined ? (column && column.text ? '' : -1) : v;
@@ -4638,6 +4682,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       now: Date.now(),
       columns: PLAYER_COLUMNS,
       accounts,
+      corrections:opts.include_suspicion===false?[]:await restitution.statuses().then(jobs=>jobs.map(j=>({player_id:j.decision.player_id,status:j.status,scanned:j.scanned,matched:j.matched,error:j.error}))).catch(()=>null),
       rows,
       // What the footer says, and the three numbers are three different questions: how many
       // accounts there are, how many the search matched, and how many are on this page.
@@ -4915,6 +4960,19 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     for (const id of new Set(ids.filter(Boolean))) sendTo(id, { type: 'friend_update' });
   }
 
+  async function durableFriend(me,target,action){
+    try{const result=await store(['EVAL',require('./friend-relationships.cjs').CHANGE,'8',friendsKey(me),friendsKey(target),reqInKey(me),reqOutKey(me),reqInKey(target),reqOutKey(target),(prefix||'hub:')+'message:blocks:'+me,(prefix||'hub:')+'message:blocks:'+target,me,target,action,String(MAX_FRIENDS),String(MAX_FRIEND_REQUESTS)],{strict:true});
+      if(!Array.isArray(result))throw Error('Invalid relationship result');const status=result[0];if(status==='error')return {ok:false,error:result[1]};
+      if(status==='accepted'||status==='friends'){setOf(friends,me).add(target);setOf(friends,target).add(me);for(const map of [reqIn,reqOut]){setOf(map,me).delete(target);setOf(map,target).delete(me);}}
+      if(status==='sent'||status==='pending'){setOf(reqOut,me).add(target);setOf(reqIn,target).add(me);}
+      if(status==='declined'){setOf(reqIn,me).delete(target);setOf(reqOut,target).delete(me);}
+      if(status==='cancelled'){setOf(reqOut,me).delete(target);setOf(reqIn,target).delete(me);}
+      if(status==='removed'){setOf(friends,me).delete(target);setOf(friends,target).delete(me);}
+      if(status==='sent')sendTo(target,{type:'friend_request',from:{player_id:me,persona:personaOf(me)}});
+      friendsChanged(me,...(status==='declined'?[]:[target]));return {ok:true,...(['friends','pending'].includes(status)?{already:status}:{[status]:true})};
+    }catch{return {ok:false,error:'Friend storage unavailable.'};}
+  }
+
   /**
    * Send a friend request, by code or by steam id.
    *
@@ -4929,6 +4987,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (body && body.code) target = await ownerOfCode(body.code);
     if (!identity.validPlayer(target)) return { ok: false, error: 'no such friend code' };
     if (target === me) return { ok: false, error: 'that is your own code' };
+    if(store)return durableFriend(me,target,'request');
 
     await Promise.all([loadFriends(me), loadFriends(target)]);
     if (setOf(friends, me).has(target)) return { ok: true, already: 'friends' };
@@ -4953,6 +5012,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const me = String(meId || '');
     const target = String((body && body.target) || '');
     if (!identity.validPlayer(me) || !identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
+    if(store)return durableFriend(me,target,'accept');
     await Promise.all([loadFriends(me), loadFriends(target)]);
     if (!setOf(reqIn, me).has(target)) return { ok: false, error: 'no request from them' };
     if (setOf(friends, me).size >= MAX_FRIENDS) return { ok: false, error: 'your friends list is full' };
@@ -4970,6 +5030,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const me = String(meId || '');
     const target = String((body && body.target) || '');
     if (!identity.validPlayer(me) || !identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
+    if(store)return durableFriend(me,target,'decline');
     await Promise.all([loadFriends(me), loadFriends(target)]);
     writeSet(reqInKey(me), me, reqIn, target, false);
     writeSet(reqOutKey(target), target, reqOut, me, false);
@@ -4983,6 +5044,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const me = String(meId || '');
     const target = String((body && body.target) || '');
     if (!identity.validPlayer(me) || !identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
+    if(store)return durableFriend(me,target,'cancel');
     await Promise.all([loadFriends(me), loadFriends(target)]);
     writeSet(reqOutKey(me), me, reqOut, target, false);
     writeSet(reqInKey(target), target, reqIn, me, false);
@@ -4994,6 +5056,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const me = String(meId || '');
     const target = String((body && body.target) || '');
     if (!identity.validPlayer(me) || !identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
+    if(store)return durableFriend(me,target,'remove');
     await Promise.all([loadFriends(me), loadFriends(target)]);
     writeSet(friendsKey(me), me, friends, target, false);
     writeSet(friendsKey(target), target, friends, me, false);
@@ -5069,7 +5132,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       // `you` off the page it is the ZCOUNT position, which is the same number.
       const seated = rank >= 1 && rank <= REAPER_SLOTS && boardScore(r) >= REAPER_AT;
       // THE VISIBLE LADDER, the same call the hero and the match result are drawn from. Reading
-      // the rank off the hidden rating here is what let the board disagree with a player's own
+      // the rank off the matchmaking rating here is what let the board disagree with a player's own
       // badge. `placing` cannot normally be true on a board row - placing players are not indexed
       // - but `you` is built with this too, and they can be.
       const k = progressLib.publicProgress(r, { top: seated });
@@ -5120,6 +5183,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   // ---------------------------------------------------------------- reports
   function loadReportIndex() {
     if (!store) return Promise.resolve();
+    if(reportIndexRead&&reportIndexAt&&Date.now()-reportIndexAt>60000)reportIndexRead=null;
     if (!reportIndexRead) {
       reportIndexRead = (async () => {
         const keyPrefix = reportKey('');
@@ -5135,19 +5199,20 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
             await Promise.all(ids.slice(i, i + 20).map(loadReports));
           }
         } while (cursor !== '0');
+        reportIndexAt=Date.now();reportIndexAvailable=true;
       })().catch(() => {
         // Keep this process's reports available, and retry discovery on the next refresh.
         reportIndexRead = null;
+        reportIndexAvailable=false;
       });
     }
     return reportIndexRead;
   }
 
   async function loadReports(steamId) {
-    if (reportsLoaded.has(steamId) || !store) return reports.get(steamId) || [];
-    reportsLoaded.add(steamId);
+    if (!store || reportsLoaded.has(steamId)&&Date.now()-(reportLoadTimes.get(steamId)||0)<60000) return reports.get(steamId) || [];
     try {
-      const raw = await store(['GET', reportKey(steamId)]);
+      const raw = await store(['GET', reportKey(steamId)],{strict:true});
       if (raw) {
         const parsed = typeof raw === 'string' ? identity.parse(raw) : identity.hydrate(structuredClone(raw));
         if (Array.isArray(parsed)) {
@@ -5156,15 +5221,17 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
           const known = reports.get(steamId) || [];
           const seen = new Set(known.map((r) => `${r.by}:${r.match_id}`));
           reports.set(steamId, known.concat(parsed.filter((r) => !seen.has(`${r.by}:${r.match_id}`))));
-        }
+        }else throw Error('Invalid reports');
       }
-    } catch { /* a missing or malformed record is simply a player nobody has reported */ }
+      reportsLoaded.add(steamId);reportLoadTimes.set(steamId,Date.now());reportsUnavailable.delete(steamId);
+    } catch { reportsLoaded.delete(steamId);reportsUnavailable.add(steamId); }
     return reports.get(steamId) || [];
   }
 
   function saveReports(steamId, list) {
     reports.set(steamId, list);
     reportsLoaded.add(steamId);
+    reportLoadTimes.set(steamId,Date.now());
     if (!store) return;
     Promise.resolve(store(['SET', reportKey(steamId), JSON.stringify(list),
                            'EX', String(REPORT_TTL_SECONDS)]))
@@ -5413,7 +5480,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   }
 
   // Ballots belong to authenticated, frozen game identities, never to a client-supplied count.
-  // Seven is absolute, including in a private/test match with fewer than ten humans.
+  // Six is absolute, including in a private/test match with fewer than ten humans.
   function voidVotePayload(match, recipient) {
     if (!(match.void_votes instanceof Map)) return null;
     const voters = new Set(), counts = { yes: 0, no: 0 };
@@ -5422,7 +5489,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       if (!game || voters.has(game) || typeof yes !== 'boolean') continue;
       voters.add(game); counts[yes ? 'yes' : 'no']++;
     }
-    return { caller: match.void_caller || '', ...counts, needed: 7,
+    return { caller: match.void_caller || '', ...counts, needed: 6,
       voted: match.void_votes.has(recipient), pending: Boolean(match.void_pending) };
   }
 
@@ -5452,7 +5519,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         match.void_caller = match.players.find(p => p.player_id === player).persona || '';
       }
       if (Object.hasOwn(body, 'yes') && !match.void_votes.has(player)) match.void_votes.set(player, body.yes);
-      if (voidVotePayload(match, player).yes >= 7) {
+      if (voidVotePayload(match, player).yes >= 6) {
         match.void_pending = Date.now();
         match.final_snapshot = JSON.stringify({ voided: true });
         clearTimeout(match.timer); clearTimeout(match.collectTimer);
@@ -5468,8 +5535,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   }
 
   async function finishVoidVote(match) {
-    if (matches.get(match.id) !== match || !match.void_pending || voidVotePayload(match, '').yes < 7)
-      return { ok: false, error: 'Seven player votes are required.' };
+    if (matches.get(match.id) !== match || !match.void_pending || voidVotePayload(match, '').yes < 6)
+      return { ok: false, error: 'Six player votes are required.' };
     try {
       // Save the decision before any completion event. A restart retries this exact void,
       // and final score reports cannot turn it into a rated result while storage is down.
@@ -5478,7 +5545,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         const accepted = await readReceipt(match.id);
         return { ok: true, voided: accepted?.voided === true, match_id: match.id };
       }
-      if (!match.void_pending || match.collecting || (voidVotePayload(match, '')?.yes || 0) < 7)
+      if (!match.void_pending || match.collecting || (voidVotePayload(match, '')?.yes || 0) < 6)
         return { ok: false, error: 'The match is already finishing.' };
       const ids = everyone(match).map(p => p.player_id), now = Date.now();
       const record = { ended: match.void_pending, outcome: 'voided', reason: 'vote', map: match.map,
@@ -5510,7 +5577,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
           data_collected: true, close_allowed: true, close_after: receipt.close_after };
       }
       const saved = await require('./result-commit.cjs').commit(store, keys, plan);
-      acceptCommitted(match, saved);
+      await acceptCommitted(match, saved);
       return { ok: true, match_id: match.id, voided: saved.voided === true };
     } catch {
       broadcastVoidVote(match);
@@ -6823,6 +6890,20 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       ? { ...event, round_details: rounds } : event;
   }
 
+  async function deliveredCompletionEvent(receipt, steamId) {
+    try {
+      const original=completionEvent(receipt,steamId);
+      if(!original||original.voided)return original||null;
+      const [event]=await restitution.annotate([{...original,id:receipt.match_id}]);
+      if(!event.cheater_reverted)return original;
+      const current=store?await readRating(steamId):ratingOf(steamId);
+      const rank=progressLib.publicProgress(current,{top:isReaper(steamId,current.progress)});
+      const movement={...rank,matches:current.matches,wins:current.wins,losses:current.losses,delta:0,rr_delta:0,arrows:0,placed:false,bdr_delta:rank.bdr===null?null:0,bdr_before:rank.bdr};
+      const cheaters=new Set(event.cheaters||[]);
+      return {...event,...movement,you:{...event.you,...movement},scoreboard:(event.scoreboard||[]).map(p=>({...p,cheater:cheaters.has(p.player_id),delta:0,rr_delta:0}))};
+    } catch { return null; } // The durable receipt still authorizes cleanup when the optional display is unavailable.
+  }
+
   async function completion(steamId, matchId) {
     const id = String(matchId || '');
     const pending = { ok: false, match_id: id, data_collected: false, close_allowed: false };
@@ -6831,11 +6912,11 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       const receipt = await readReceipt(id);
       if (!receipt || !receipt.participants.includes(steamId)) return pending;
       return { ok: true, match_id: id, data_collected: true, close_allowed: true,
-        collected_at: receipt.collected_at, close_after: receipt.close_after, result: completionEvent(receipt, steamId) };
+        collected_at: receipt.collected_at, close_after: receipt.close_after, result: await deliveredCompletionEvent(receipt, steamId) };
     } catch { return pending; }
   }
 
-  function acceptCommitted(match, receipt) {
+  async function acceptCommitted(match, receipt) {
     resultReceipts.set(receipt.match_id, receipt);
     archived.set(receipt.match_id, receipt.full);
     // A lost-response retry can arrive after another match. Its receipt proves
@@ -6862,11 +6943,12 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         if (inMatch.get(id) === match.id) inMatch.delete(id);
       }
       match.credited = true;
-      for (const id of Object.keys(receipt.events)) {
-        sendTo(id, completionEvent(receipt, id));
+      await Promise.all(Object.keys(receipt.events).map(async id => {
+        const event=await deliveredCompletionEvent(receipt,id);
+        if(event)sendTo(id,event);
         sendTo(id, { type: 'match_over', match_id: match.id, score: receipt.full.score,
           data_collected: true, close_allowed: true });
-      }
+      }));
       broadcast(stats()); drainQueue();
     }
   }
@@ -6882,7 +6964,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       const receipt = await readReceipt(id);
       if (receipt) {
         if (receipt.host !== host) return reject('not the host');
-        acceptCommitted(matches.get(id), receipt);
+        await acceptCommitted(matches.get(id), receipt);
         return { ok: true, match_id: id, data_collected: true, close_allowed: true };
       }
       const match = matches.get(id);
@@ -6940,7 +7022,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       if (match.final_snapshot && match.final_snapshot !== fingerprint) return reject('final snapshot changed');
       if (resultSaves.has(id)) return await resultSaves.get(id);
       match.final_snapshot = fingerprint;
-      match.final_ended_at ||= Date.now();
+      const receivedAt=Date.now(),decidedAt=match.collecting?.since;
+      match.final_ended_at ||= Number.isSafeInteger(decidedAt)&&decidedAt>0&&decidedAt<=receivedAt?decidedAt:receivedAt;
       clearTimeout(match.timer); match.timer = null; match.deadline = 0; match.expiry = '';
       for (const sid of ids) frozenCareers.add(sid);
       const priorRows = new Map((match.stats?.players || []).map(row => [row.steamId, row]));
@@ -7033,7 +7116,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
           plan.hashes.push({ index: rosterIndex, field: sid, value: JSON.stringify(rec) });
         }
         const saved = await require('./result-commit.cjs').commit(store, keys, plan);
-        acceptCommitted(match, saved);
+        await acceptCommitted(match, saved);
         return { ok: true, match_id: id, data_collected: true, close_allowed: true };
       });
       resultSaves.set(id, save);
@@ -7882,7 +7965,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     // forget: a rank that could not be read must not hold up a match replay below it.
     //
     // THE VISIBLE RANK, from the same call `match_result` uses. This used to send
-    // `ratingLib.publicRating`, which named the rank the player's HIDDEN MMR deserved - so the
+    // `ratingLib.publicRating`, which named the rank the player's matchmaking rating deserved - so the
     // hub showed one rank when the stream came up and a different one the moment a match settled,
     // and the badge appeared to move for reasons that had nothing to do with that match.
     //
@@ -8560,24 +8643,61 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     // them for it. It only RECORDS; the one place that refuses anything is handleQueueJoin.
     noteVersions(req, account.player_id);
     // ONE CHOKE POINT. Every competitive route is behind this check, including the stream, so a
-    // banned account cannot queue, accept, report, add friends or even watch - and there is no
+    // banned account cannot queue, accept, report, add friends or watch. Official support remains
+    // accessible so a banned entrant can appeal and read an administrator response. There is no
     // second place to forget. 403 with the reason, because a player who does not know they are
     // banned files a bug against the hub instead.
-    await Promise.all([loadBan(account.player_id), loadBan(account.game_steam_id)]);
+    try { await Promise.all([...new Set([account.player_id,account.game_steam_id])].map(loadBan)); }
+    catch { sendJson(res,503,{ok:false,error:'Account status is temporarily unavailable. Try again shortly.'});return true; }
     const ban = banOf(account.player_id) || banOf(account.game_steam_id);
-    if (ban) {
+    const supportAccess=['/api/tournament','/api/tournament/support','/api/messages','/api/messages/thread','/api/messages/send','/api/messages/read'].includes(pathname);
+    if (ban && !supportAccess) {
       sendJson(res, 403, { ok: false, error: 'banned', reason: ban.reason || '',
                            until: ban.until || 0 });
       return true;
     }
     // Opening the stream writes the durable profile directory as well as
     // connection state, so it needs the same ownership claim as player actions.
-    if(admitGameplay && (pathname==='/api/live' || method==='POST') && !pathname.startsWith('/api/network/') && !pathname.startsWith('/api/admin/')) {
+    if(admitGameplay && !(ban && supportAccess) && (pathname==='/api/live' || method==='POST') && !pathname.startsWith('/api/network/') && !pathname.startsWith('/api/admin/')) {
       try {
         if(!await admitGameplay(bearer(req),account)) {
           sendJson(res,401,{ok:false,error:'Your account changed. Sign in again.'});return true;
         }
       } catch {sendJson(res,503,{ok:false,error:'Account verification is temporarily unavailable.'});return true;}
+    }
+    if(pathname.startsWith('/api/messages')) {
+      res.setHeader('cache-control','no-store, private');
+      const read=pathname==='/api/messages'||pathname==='/api/messages/thread';
+      if(method!==(read?'GET':'POST')){sendJson(res,405,{ok:false,error:'method_not_allowed'});return true;}
+      try {
+        if(pathname==='/api/messages')await tournament?.flushNotifications?.();
+        let result;
+        if(pathname==='/api/messages'){
+          result=await messages.inbox(account.player_id);
+          if(ban&&result.ok){result.threads=result.threads.filter(t=>t.target==='admin');result.unread=result.threads.reduce((n,t)=>n+t.unread,0);}
+        }else if(pathname==='/api/messages/thread'){
+          if(ban&&url.searchParams.get('target')!=='admin'){sendJson(res,403,{ok:false,error:'banned'});return true;}
+          result=await messages.thread(account.player_id,url.searchParams.get('target')||'',url.searchParams.get('before'));
+        }
+        else {const body=await readJsonBody(req);
+          if(ban&&body.target!=='admin'){sendJson(res,403,{ok:false,error:'banned'});return true;}
+          if(pathname.endsWith('/send'))result=await messages.send(account.player_id,body);
+          else if(pathname.endsWith('/read'))result=await messages.markRead(account.player_id,body.target,body.through_seq);
+          else {result=await messages.block(account.player_id,body.target,body.blocked!==false);if(result.ok&&body.blocked!==false){for(const map of [friends,reqIn,reqOut]){setOf(map,account.player_id).delete(body.target);setOf(map,body.target).delete(account.player_id);}friendsChanged(account.player_id,body.target);}}
+        }
+        sendJson(res,result.ok?200:409,result);
+      }catch{sendJson(res,503,{ok:false,error:'unavailable'});}return true;
+    }
+    if (pathname === '/api/tournament' || pathname === '/api/tournament/register' || pathname === '/api/tournament/support') {
+      res.setHeader('cache-control','no-store, private');
+      if(method!==(pathname==='/api/tournament'?'GET':'POST')){sendJson(res,405,{ok:false,error:'method_not_allowed'});return true;}
+      try {
+        if(!tournament)throw Error('Event unavailable');
+        // Body identity and score are deliberately ignored: verified account and receipts only.
+        const result=pathname.endsWith('/support')?await tournament.support(account.player_id,await readJsonBody(req)):pathname.endsWith('/register')?await tournament.register(account):await tournament.view(account.player_id);
+        sendJson(res,result.ok?200:409,result);
+      } catch {sendJson(res,503,{ok:false,error:'unavailable'});}
+      return true;
     }
     if (pathname === '/api/live' && method === 'GET') { await handleStream(req, res, account); return true; }
     if (pathname.startsWith('/api/network/')) { await handleNetwork(req,res,account,pathname,method); return true; }
@@ -8711,6 +8831,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   async function shutdown() {
     stopping = true;
     clearInterval(matchTick);
+    clearInterval(restitutionTick);
     await Promise.allSettled([...matchOperations.values()]);
     try { await flushMatches(); } catch { /* the pending state remains retryable */ }
     await Promise.allSettled([...matchWriting.values(), ...ratingWriting.values(), ...penaltyWriting.values(), ...ratingOperations.values(),
@@ -8821,6 +8942,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     return result?.then ? result.then(identity.wire) : identity.wire(result);
   };
   return {
+    correctCheaterMatches:receipt=>restitution.project(receipt),
+    correctionJobs:()=>restitution.statuses(),
     route,
     broadcastStats:()=>broadcast(stats()),
     prepareOwnership, ownershipChanged,
@@ -8846,6 +8969,22 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     setElo,
     setRank,
     isAdmin,
+    async adminMessage(actor,body,context=null){
+      if(!isAdmin(actor))return {ok:false,error:'not_an_admin'};
+      if(!identity.validPlayer(body?.target))return {ok:false,error:'invalid_recipient'};
+      const directory=await adminPlayers(actor,{player_id:body.target,limit:1,include_suspicion:false});
+      if(!directory.rows?.some(r=>identity.playerOf(r)===body.target))return {ok:false,error:'unknown_player'};
+      return messages.send(actor,body,{admin:true,context});
+    },
+    async adminMessages(actor,target,before){
+      if(!isAdmin(actor))return {ok:false,error:'not_an_admin'};
+      await tournament?.flushNotifications?.();
+      return target?messages.adminThread(target,before):messages.adminInbox(before);
+    },
+    async adminMessagesRead(actor,body){
+      if(!isAdmin(actor))return {ok:false,error:'not_an_admin'};
+      return messages.adminRead(body.target,body.through_seq);
+    },
     banAccount,
     unbanAccount,
     banOf,

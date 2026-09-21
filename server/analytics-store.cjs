@@ -109,6 +109,13 @@ function create({store,prefix='hub:',now=Date.now}={}){
     return {rows:values.map(v=>{try{return JSON.parse(v);}catch{return null;}}),exhausted:keys.length<f.scan};
   }
   async function detail(id){if(!store)return memory.matches.get(id)||null;const raw=await call(['GET',base+'match:'+id]);return raw?JSON.parse(raw):null;}
+  async function details(ids){
+    if(!Array.isArray(ids)||ids.length>200||ids.some(id=>typeof id!=='string'||!/^[A-Za-z0-9_.:-]{1,80}$/.test(id)))throw Error('Invalid match detail batch');
+    if(!store)return ids.map(id=>memory.matches.get(id)||null);
+    const result=[];
+    for(let i=0;i<ids.length;i+=10){const values=await call(['MGET',...ids.slice(i,i+10).map(id=>base+'match:'+id)]);if(!Array.isArray(values)||values.length!==Math.min(10,ids.length-i))throw Error('Match details unavailable');result.push(...values.map(raw=>{try{return raw?JSON.parse(raw):null;}catch{return null;}}));}
+    return result;
+  }
   async function buckets(from,to,kind='day'){
     if(!store)return [...memory[kind==='day'?'buckets':'reliability'].values()].filter(b=>Date.parse(b.day)>=Math.floor(from/DAY)*DAY&&Date.parse(b.day)<=to);
     const days=[];for(let t=Math.floor(from/DAY)*DAY;t<=to;t+=DAY)days.push(new Date(t).toISOString().slice(0,10));
@@ -121,6 +128,6 @@ function create({store,prefix='hub:',now=Date.now}={}){
     const raw=await call(['HGETALL',base+'health']);const values=Array.isArray(raw)?Object.fromEntries(raw.reduce((a,v,i)=>{if(i%2===0)a.push([v,raw[i+1]]);return a;},[])):raw||{};
     return {...values,persisted:true,outbox:await call(['SCARD',base+'outbox'])};
   }
-  return {writeEvents,project,page,detail,buckets,status,call,base,persisted:Boolean(store),retention:RETENTION};
+  return {writeEvents,project,page,detail,details,buckets,status,call,base,persisted:Boolean(store),retention:RETENTION};
 }
 module.exports={create,EVENTS,PROJECT,RETENTION};

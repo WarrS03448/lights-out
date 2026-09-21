@@ -18,7 +18,7 @@ The official Windows installer is digitally signed by **Samuel Warren**.
 
 ## What is included
 
-This public source release corresponds to **Lights Out 2.5.0**,
+This public source release corresponds to **Lights Out 2.6.0**,
 **Bodybomb 5v5 1.0.28**, and **Capture the Flag 1.0.4**.
 
 | Folder | Contents |
@@ -37,6 +37,11 @@ operations history, credentials and player data are not part of this repository.
 Game levels, artwork and other stock assets are read from the player's own install.
 The borrowed UI click/report/map-ban recordings are omitted; these optional cues
 are silent in a source build unless you supply appropriately licensed replacements.
+
+Version 2.6.0 adds tournament registration and results, friend and official admin
+messages, event support, and six-player void voting. Hosted fair-play review and
+result-correction providers are not distributed; their source-build adapters
+explicitly report unavailable. See [release notes](docs/release-2.6.0.md).
 
 ## Run the website and service locally
 

@@ -177,6 +177,7 @@
       } else if (h.open_error) {
         children.push(el("div", "hist-note", h.open_error));
       } else if (d) {
+        if (d.cheater_reverted) { children.push(el("div", "cheater-reverted-notice", hs("cheater_reverted"))); }
         var head = el("div", "md-head" + (d.score ? "" : " no-score"));
         head.appendChild(el("div", "md-map", d.map || hs("no_map")));
         if (d.score) {
@@ -300,7 +301,9 @@
       var combat = p.combat || {};
       var status = combat.status || "unavailable";
       var cell = el("span", prefix + "-pidentity");
-      cell.appendChild(el("span", prefix + "-pname", p.name));
+      var name = el("span", prefix + "-pname", p.name);
+      if (p.cheater) { name.appendChild(el("span", "cheater-label", hs("cheater_label"))); }
+      cell.appendChild(name);
       cell.appendChild(el("span", "combat-status status-" + status, combatStatus(status)));
       var toggle = ui.btn("combat-toggle", hs("combat_details"), function () {
         var willOpen = panel.hidden;
@@ -392,7 +395,9 @@
     // The roster line drawn when there is no board at all - what this panel has always shown.
     function plainRow(p, d) {
       var row = el("div", "md-player" + (p.is_me ? " you" : "") + (p.left ? " left" : ""));
-      row.appendChild(el("span", "md-pname", p.name));
+      var name = el("span", "md-pname", p.name);
+      if (p.cheater) { name.appendChild(el("span", "cheater-label", hs("cheater_label"))); }
+      row.appendChild(name);
       if (p.elo) { row.appendChild(el("span", "md-elo", String(p.elo))); }
       var act = actionCell(p, d);
       if (act.firstChild) { row.appendChild(act.firstChild); }
@@ -442,7 +447,7 @@
       // relative time trails. The left accent + result colour come from the res-* class.
       var row = ui.listRow({
         leading: resultCell(r),
-        children: [metrics(r)],
+        children: r.cheater_reverted ? [el("div", "cheater-reverted-notice", hs("cheater_reverted")), metrics(r)] : [metrics(r)],
         trailing: whenCell(r)
       });
       row.classList.add("hist-row", "res-" + r.result);

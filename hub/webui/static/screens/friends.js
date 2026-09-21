@@ -325,6 +325,11 @@
         menu.appendChild(item);
       }
       action("invite", "friend_invite", !p.can_invite || p.in_party || p.invited);
+      var messageItem = ui.btn("fr-menu-item", ((state.messages || {}).strings || {}).new_message || "Message", function () {
+        closeMenu(true); window.HubUI.openMessages(p.steam_id);
+      });
+      messageItem.setAttribute("role", "menuitem");
+      menu.appendChild(messageItem);
       action("remove", "friend_remove", false, "danger");
       menu.addEventListener("keydown", function (e) {
         var items = Array.prototype.slice.call(menu.querySelectorAll("button:not(:disabled)"));
