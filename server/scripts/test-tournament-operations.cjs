@@ -71,7 +71,7 @@ test('a smaller qualified field can confirm and award the published places',asyn
  await store(['SET','hub:analytics:backfill_done:tournament-launch-2026-v1','1']);
  const svc=api.create({store,now:()=>end+86400001});
  assert.equal((await svc.adminAction(admin,{action:'confirm'})).ok,true);
- assert.deepEqual((await svc.view(regs[0].player_id)).winners.map(w=>w.prize_usd),[250,125,75,37]);
+ assert.deepEqual((await svc.view(regs[0].player_id)).winners.map(w=>w.prize_usd),[250,125,75,35]);
 });
 
 test('all players tied at fifth receive the full prize, confirmation, badges and payout tracking',async t=>{
@@ -84,8 +84,8 @@ test('all players tied at fifth receive the full prize, confirmation, badges and
  const svc=api.create({store,now:()=>end+86400001});
  const preview=await svc.view(regs[6].player_id);
  assert.deepEqual(preview.winners.map(w=>w.rank),[1,2,3,4,5,5,5]);
- assert.deepEqual(preview.winners.map(w=>w.prize_usd),[250,125,75,37,13,13,13]);
- assert.equal(preview.winners.reduce((sum,w)=>sum+w.prize_usd,0),526);
+ assert.deepEqual(preview.winners.map(w=>w.prize_usd),[250,125,75,35,15,15,15]);
+ assert.equal(preview.winners.reduce((sum,w)=>sum+w.prize_usd,0),530);
  assert.equal((await svc.adminAction(admin,{action:'confirm'})).ok,true);
  // Read through a fresh service to verify the durable confirmation includes every shared place.
  const restored=api.create({store,now:()=>end+86400001});

@@ -19,7 +19,7 @@
     renderedKey=screenKey(s);renderedContext=context(s);
     if(draftIdentity!==s.identity){draftIdentity=s.identity;draftSeq=null;draft={};ledgerOpen=false;scrollTop=0;lastPoll=-Infinity;}
     if(draftSeq!==s.ticket_seq){draftSeq=s.ticket_seq;draft={};}
-    var event = data.event || {start_at: 1790438400000, end_at: 1790611200000, prize_pool:500, prizes: [250,125,75,37,13]};
+    var event = data.event || {start_at: 1790438400000, end_at: 1790611200000, prize_pool:500, prizes: [250,125,75,35,15]};
     var el = ctx.ui.el, anchor = performance.now(), serverNow = data.server_now || Date.now();
     function st(key) { return strings[key] || key; }
     function money(amount) { return '$'+Number(amount).toFixed(Number.isInteger(Number(amount))?0:2)+' USD'; }

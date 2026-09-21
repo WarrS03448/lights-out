@@ -10,7 +10,7 @@ function receipt(id='m1',at=start+1000,delta=25){return {matchId:id,data_collect
 const reg=(at=start-1000)=>({player_id:ids[0],game_steam_id:ids[0],persona:'Sam',registered_at:at});
 test('schedule automatically enters live and ends at exact Central boundaries',()=>{
  assert.equal(api.phase(start-1),'scheduled');assert.equal(api.phase(start),'live');assert.equal(api.phase(end-1),'live');assert.equal(api.phase(end),'ended');
- assert.deepEqual(api.EVENT.prizes,[250,125,75,37,13]);assert.equal(api.EVENT.prize_pool,500);assert.equal(api.EVENT.prizes.reduce((sum,amount)=>sum+amount,0),api.EVENT.prize_pool);assert.deepEqual(api.EVENT.payout_methods,['Zelle','Venmo','PayPal']);
+ assert.deepEqual(api.EVENT.prizes,[250,125,75,35,15]);assert.equal(api.EVENT.prize_pool,500);assert.equal(api.EVENT.prizes.reduce((sum,amount)=>sum+amount,0),api.EVENT.prize_pool);assert.deepEqual(api.EVENT.payout_methods,['Zelle','Venmo','PayPal']);
 });
 test('only full completed ranked receipts within the interval qualify',()=>{
  assert.ok(api.matchEntry(receipt()));
@@ -54,12 +54,12 @@ test('ended event awards full shared-place USD prizes after both tiebreakers',as
  const entry=api.matchEntry(receipt());entry.rows.forEach((r,i)=>{r.delta=100-i;});
  const svc=api.create({now:()=>clock,store:async()=>[regs.map(r=>JSON.stringify(r)),Array.from({length:5},(_,i)=>JSON.stringify({...entry,id:'test'+i})),'',[]]});
  assert.deepEqual((await svc.view(ids[0])).winners,[]);clock=end;
- const data=await svc.view(ids[0]);assert.equal(data.winners.length,5);assert.deepEqual(data.winners.map(r=>r.prize_usd),[250,125,75,37,13]);assert.equal(data.results_provisional,true);
+ const data=await svc.view(ids[0]);assert.equal(data.winners.length,5);assert.deepEqual(data.winners.map(r=>r.prize_usd),[250,125,75,35,15]);assert.equal(data.results_provisional,true);
  entry.rows[1].delta=100;
  const tied=api.create({now:()=>end,store:async()=>[regs.map(r=>JSON.stringify(r)),Array.from({length:5},(_,i)=>JSON.stringify({...entry,id:'test'+i})),'',[]]});
  const shared=(await tied.view(ids[0])).winners;
  assert.deepEqual(shared.map(r=>r.rank),[1,1,3,4,5]);
- assert.deepEqual(shared.map(r=>r.prize_usd),[250,250,75,37,13]);
+ assert.deepEqual(shared.map(r=>r.prize_usd),[250,250,75,35,15]);
 });
 test('live route ignores supplied identity and requires an authenticated account',async t=>{
  let actor=null,registered=null;

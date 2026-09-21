@@ -3,8 +3,8 @@
 const identity=require('./player-identity.cjs');
 const EVENT=Object.freeze({id:'launch-2026',title:'Lights Out Launch Tournament',
  start_at:Date.parse('2026-09-26T16:00:00Z'),end_at:Date.parse('2026-09-28T16:00:00Z'),
- timezone:'America/Chicago',currency:'USD',prize_pool:500,prizes:[250,125,75,37,13],
- payout_methods:['Zelle','Venmo','PayPal'],minimum_matches:5,dispute_deadline:Date.parse('2026-09-29T16:00:00Z'),payout_days:7,rules_version:2});
+ timezone:'America/Chicago',currency:'USD',prize_pool:500,prizes:[250,125,75,35,15],
+ payout_methods:['Zelle','Venmo','PayPal'],minimum_matches:5,dispute_deadline:Date.parse('2026-09-29T16:00:00Z'),payout_days:7,rules_version:3});
 const phase=(at=Date.now(),event=EVENT)=>at<event.start_at?'scheduled':at<event.end_at?'live':'ended';
 const compareScore=(a,b)=>b.net_rr-a.net_rr||b.wins-a.wins||a.reached_at-b.reached_at;
 // Shared places each receive the full prize, including every tie at the last prize place.
