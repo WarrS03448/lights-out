@@ -57,7 +57,7 @@ function matchEntry(receipt,includeCandidates=false){
  for(const r of receipt.rows){
    const p=people.get(r.steamId),delta=r.rr?.delta;
    if(!p||!identity.validPlayer(r.steamId)||!identity.validSteam(p.game_steam_id)||!Number.isSafeInteger(delta))return null;
-   rows.push({player_id:r.steamId,game_steam_id:p.game_steam_id,delta,won:!receipt.draw&&r.won===true});
+   rows.push({player_id:r.steamId,game_steam_id:p.game_steam_id,delta,placement:Boolean(r.rr.placing||r.rr.placed||(r.before&&require('./rating.cjs').isPlacing(r.before))),won:!receipt.draw&&r.won===true});
  }
  if(new Set(rows.map(r=>r.player_id)).size!==10||new Set(rows.map(r=>r.game_steam_id)).size!==10)return null;
  return {id,started:m.started,ended:m.ended,rows:rows.sort((a,b)=>a.player_id.localeCompare(b.player_id))};
@@ -67,7 +67,7 @@ function standings(registrations,matches,event=EVENT,exclusions={},reverted=new 
  for(const r of registrations)players.set(r.player_id,{...r,net_rr:0,gained_rr:0,lost_rr:0,wins:0,matches:0,reached_at:null,history:[],disqualified:!!exclusions[r.player_id]});
  for(const m of ordered)for(const r of m.rows){
    const p=players.get(r.player_id);if(!p)continue;
-   const reason=reverted.has(m.id)?'cheater_reverted':m.reason|| (p.game_steam_id!==r.game_steam_id?'account_mismatch':m.started<p.registered_at?'before_registration':m.started<event.start_at?'before_start':m.ended>=event.end_at?'after_cutoff':null);
+   const reason=reverted.has(m.id)?'cheater_reverted':m.reason|| (r.placement?'placement':p.game_steam_id!==r.game_steam_id?'account_mismatch':m.started<p.registered_at?'before_registration':m.started<event.start_at?'before_start':m.ended>=event.end_at?'after_cutoff':null);
    if(reason){p.history.push({match_id:m.id,started:m.started,ended:m.ended,delta:r.delta,counted:false,reason,total:p.net_rr});continue;}
    p.net_rr+=r.delta;p.gained_rr+=Math.max(0,r.delta);p.lost_rr+=Math.max(0,-r.delta);p.wins+=r.won?1:0;p.matches++;
    p.history.push({match_id:m.id,started:m.started,ended:m.ended,delta:r.delta,won:r.won,counted:true,total:p.net_rr});

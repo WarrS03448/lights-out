@@ -567,12 +567,12 @@ a { color: inherit; }
  * The app never has to do this — it is one fixed window that zooms. A phone is the majority of
  * the traffic that reaches a download page. Most of the scaling above is already in the clamp()s;
  * what is left is the chrome and the things that must stop sitting side by side. */
-@media (max-width: 760px) {
+@media (max-width: 1100px) {
   .topbar { height: auto; }
   .topbar .wrap { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-2) var(--sp-4); padding-top: var(--sp-1); padding-bottom: var(--sp-2); }
   .brand-wrap { display: contents; }
   .brand { grid-column: 1; grid-row: 1; }
-  .source-link { grid-column: 2; grid-row: 1; }
+  .source-link, .header-actions { grid-column: 2; grid-row: 1; }
   .nav {
     grid-column: 1 / -1; grid-row: 2;
     min-width: 0; overflow-x: auto; scrollbar-width: none;
@@ -607,3 +607,6 @@ a { color: inherit; }
 /* Highlight account creation wherever the public navigation offers it. */
 .nav a[href="/account"], .foot-links a[href="/account"] { color: var(--accent); }
 .nav a[href="/account"]:hover, .foot-links a[href="/account"]:hover { color: var(--accent-lit); }
+
+/* Keep combined source/community actions together in the shared header. */
+.header-actions { display:flex; align-items:center; gap:var(--sp-2); flex:none; }

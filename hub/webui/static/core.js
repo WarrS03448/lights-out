@@ -79,6 +79,7 @@
 
   // ---------------------------------------------------------------- screen registry
   var screens = {};                              // view name -> { render(root, state, ctx) }
+  var renderedScreen = null;
   HubUI._screens = screens;
   HubUI.registerScreen = function (name, module) {
     if (!name || !module || typeof module.render !== "function") {
@@ -205,7 +206,6 @@
     // selection by id, rebuild, then restore, so typing survives. Generalized from app.js's
     // join-code handling so every screen's inputs are protected.
     var saved = captureInputs();
-    app.innerHTML = "";
     clearOverlays();
     renderScreen();
     renderOverlays();
@@ -238,6 +238,8 @@
     var screen = view === "friends" ? "profile" : view;
     var module = (screen && screens[screen]) || null;
     if (!module) {
+      app.innerHTML = "";
+      renderedScreen = null;
       // Unknown/unregistered view: fail honestly rather than blank.
       var msg = view ? ("No screen registered for view: " + view) : "No view in snapshot";
       app.appendChild(HubUI.el("div", "boot", msg));
@@ -250,7 +252,14 @@
       return;
     }
     var ctx = { call: call, ui: HubUI, t: HubUI.t, state: state };
-    module.render(app, state, ctx);
+    // Screens may update their existing DOM to preserve native controls during
+    // polling. Returning true means the update handled the latest snapshot.
+    if (module !== renderedScreen || typeof module.update !== "function" ||
+        module.update(app, state, ctx) !== true) {
+      app.innerHTML = "";
+      module.render(app, state, ctx);
+    }
+    renderedScreen = module;
   }
 
   // Every registered overlay, on every render, whatever the view is. AFTER renderScreen, so an

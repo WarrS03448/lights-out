@@ -86,7 +86,7 @@
       [category,reference,message,send].forEach(function(n){form.appendChild(n);});form.addEventListener('submit',function(e){e.preventDefault();send.disabled=true;ctx.call('tournament_support',category.value,reference.value,message.value);});support.appendChild(form);
     }
     (data.tickets||[]).slice().reverse().forEach(function(ticket){var item=node('div','tournament-ticket');item.appendChild(node('strong','',st(ticket.status)+' · '+format.format(ticket.at)));item.appendChild(node('p','',ticket.message));(ticket.replies||[]).forEach(function(r){item.appendChild(node('p','tournament-registered',r.message));});support.appendChild(item);});wrap.appendChild(support);
-    root.appendChild(wrap);wrap.scrollTop=scrollTop;
+    root.appendChild(wrap);
     var previousPhase=null;
     function tick() {
       if (!wrap.isConnected) {clearInterval(timer);timer=null;lastPoll=-Infinity;return;}
@@ -105,6 +105,8 @@
       if(s.signed_in&&!s.loading&&(performance.now()-lastPoll>=15000||previousPhase!==null&&previousPhase!==phase)) {lastPoll=performance.now();ctx.call('tournament_refresh');}
       previousPhase=phase;
     }
-    tick();timer=setInterval(tick,1000);
+    // Phase visibility changes the layout. Restore after those changes so browser
+    // scroll anchoring cannot move the reader upward on every snapshot rebuild.
+    tick();wrap.scrollTop=scrollTop;timer=setInterval(tick,1000);
   }
 }());

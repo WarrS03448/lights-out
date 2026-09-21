@@ -19,8 +19,8 @@ test('only full completed ranked receipts within the interval qualify',()=>{
 test('net RR includes losses, ignores placement seed and late registration has no retroactive credit',()=>{
  const a=receipt('a',start+2000,30),b=receipt('b',start+4000,-10),c=receipt('c',start+6000,0);b.publicMatch.started=start+2000;b.rows[0].won=false;c.publicMatch.started=start+4000;c.rows[0].rr.placed=true;c.rows[0].after={progress:9000};
  const entries=[a,b,c].map(api.matchEntry);
- const [row]=api.standings([reg()],entries);assert.equal(row.net_rr,20);assert.equal(row.gained_rr,30);assert.equal(row.lost_rr,10);assert.equal(row.matches,3);
- const [late]=api.standings([reg(start+1000)],entries);assert.equal(late.net_rr,-10);assert.equal(late.matches,2);
+ const [row]=api.standings([reg()],entries);assert.equal(row.net_rr,20);assert.equal(row.gained_rr,30);assert.equal(row.lost_rr,10);assert.equal(row.matches,2);assert.equal(row.history[2].reason,'placement');
+ const [late]=api.standings([reg(start+1000)],entries);assert.equal(late.net_rr,-10);assert.equal(late.matches,1);
  assert.equal(api.standings([{...reg(),game_steam_id:ids[1]}],entries)[0].matches,0);
 });
 test('receipt order does not affect results; ties use wins then first reaching final total',()=>{
@@ -81,4 +81,13 @@ test('public tournament route and assets need no login, and every main website n
    assert.equal((await fetch(base+'/api/public/tournament')).status,503,'unavailable storage must not claim an empty successful leaderboard');
    const dir=require('node:path').join(__dirname,'../public');for(const name of fs.readdirSync(dir).filter(n=>n.endsWith('.html'))){const html=fs.readFileSync(require('node:path').join(dir,name),'utf8');if(html.includes('href="/leaderboards"'))assert(html.includes('href="/tournament"'),name);}
  }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
+});
+
+test('a placement draw without RR flags is excluded for that player only',()=>{
+ const r=receipt();r.draw=true;r.rows[0].before={matches:0};r.rows[0].rr={delta:0};
+ const entry=api.matchEntry(r),registrations=[reg(),{...reg(),player_id:ids[1],game_steam_id:ids[1]}];
+ const rows=api.standings(registrations,[entry]);
+ assert.equal(rows.find(p=>p.player_id===ids[0]).matches,0);
+ assert.equal(rows.find(p=>p.player_id===ids[0]).history[0].reason,'placement');
+ assert.equal(rows.find(p=>p.player_id===ids[1]).matches,1);
 });

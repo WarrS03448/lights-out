@@ -27,6 +27,37 @@ const server=http.createServer((req,res)=>{const url=new URL(req.url,'http://loc
  try{const page=await browser.newPage({viewport:{width:1400,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.clock.install();const url='http://127.0.0.1:'+server.address().port;await page.goto(url);await page.locator('.mail').waitFor();
  async function show(lang='en',identity=a,target='admin'){state=structuredClone(snapshots[lang]);state.friends.list=[{steam_id:b,persona:'My Friend'}];Object.assign(state.messages,{signed_in:true,identity,target,seq:0,data:{unread:2,threads:[{target:'admin',persona:'Lights Out Admin',official:true,unread:2,last_text:'Your ticket has a response.'}]},thread:{messages:[{seq:1,sender:'admin',official:true,text:'<script>bad()</script>',at:Date.now()}],blocked:false},error:''});await page.evaluate(s=>window.__hub.onState(s),state);}
  await show();assert.equal(await page.locator('#messages-unread').textContent(),'2');assert.equal(await page.locator('.mail-select option').count(),2);assert.equal(await page.locator('.mail-message script').count(),0);assert(await page.locator('.mail-compose').isVisible());
+ // A native dropdown cannot stay open if a snapshot detaches its control.
+ await page.locator('.mail-select').click();
+ await page.evaluate(()=>{window.friendPicker=document.querySelector('.mail-select');});
+ for(let i=0;i<12;i++){
+   state.tournament.data={server_now:Date.now()+i*300};
+   if(i===6)state.messages.data.unread=3;
+   await page.evaluate(s=>window.__hub.onState(s),state);await page.clock.runFor(50);
+   assert(await page.evaluate(()=>friendPicker.isConnected&&friendPicker===document.querySelector('.mail-select')&&document.activeElement===friendPicker),'refresh closed the friend picker');
+ }
+ assert.equal(await page.locator('#messages-unread').textContent(),'3','unread count must keep updating with the picker open');
+ await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');await page.waitForTimeout(50);
+ assert(calls.some(c=>c.path==='/verb/messages_open'&&c.body[0]===b),'the open picker must still select a friend after refresh');
+ assert.equal(await page.locator('.mail-select').inputValue(),'','a friend can be selected again after visiting another conversation');
+ await page.locator('.mail-select').click();
+ state.friends.list.push({steam_id:'76561198000000003',persona:'New Friend'});
+ await page.evaluate(s=>window.__hub.onState(s),state);
+ assert(await page.evaluate(()=>friendPicker.isConnected&&document.activeElement===friendPicker));
+ assert.equal(await page.locator('.mail-select option').count(),2,'do not modify an open native menu');
+ await page.keyboard.press('Escape');await page.locator('.mail-compose textarea').focus();
+ assert.equal(await page.locator('.mail-select option').count(),3,'apply the latest friends after the interaction');
+ // Read acknowledgments still run after background visibility changes without rebuilding.
+ await page.evaluate(()=>Object.defineProperty(document,'hidden',{configurable:true,value:true}));
+ state.messages.thread.messages.push({seq:2,sender:'admin',official:true,text:'An unread message',at:Date.now()});
+ await page.evaluate(s=>window.__hub.onState(s),state);await page.waitForTimeout(50);
+ const readsBefore=calls.filter(c=>c.path==='/verb/messages_read').length;
+ await page.evaluate(()=>{delete document.hidden;});state.tournament.data.server_now++;
+ await page.evaluate(s=>window.__hub.onState(s),state);await page.waitForTimeout(50);
+ assert.equal(calls.filter(c=>c.path==='/verb/messages_read').length,readsBefore+1,'read acknowledgment resumes when visible with unchanged message data');
+ await page.clock.runFor(15100);state.tournament.data.server_now++;
+ await page.evaluate(s=>window.__hub.onState(s),state);await page.waitForTimeout(50);
+ assert(calls.filter(c=>c.path==='/verb/messages_read').length>readsBefore+1,'read acknowledgment retries even without new mail');
  await page.locator('.mail-compose textarea').fill('A private reply');await page.evaluate(s=>window.__hub.onState(s),state);assert.equal(await page.locator('.mail-compose textarea').inputValue(),'A private reply');
  await page.locator('.mail-compose button').click();await page.waitForTimeout(50);assert(calls.some(c=>c.path==='/verb/messages_send'&&c.body[0]==='A private reply'));
  await show('en',b);assert.equal(await page.locator('.mail-compose textarea').inputValue(),'','another account must not inherit the previous draft');

@@ -31,6 +31,20 @@ const server=http.createServer((req,res)=>{
  await show({});
  assert.equal(await page.locator('.tournament-pool').textContent(),'$500 USD');
  assert.deepEqual(await page.locator('.tournament-prize strong').allTextContents(),['$250 USD','$125 USD','$75 USD','$37 USD','$13 USD']);
+ // The bridge advances server_now on every snapshot, even between standings polls.
+ for(const width of [1400,800])for(const lang of Object.keys(snapshots))for(const at of [event.start_at-60000,event.start_at+60000,event.end_at+60000]){
+   await page.setViewportSize({width,height:950});await show({server_now:at},lang);
+   await page.evaluate(()=>document.fonts.ready);await page.clock.runFor(100);
+   await page.locator('.tournament').evaluate(n=>{n.scrollTop=500;});await page.clock.runFor(50);
+   const readingPosition=await page.locator('.tournament').evaluate(n=>n.scrollTop);assert(readingPosition>0,'unable to scroll fixture at '+width+'/'+lang+'/'+at+': '+JSON.stringify(await page.locator('.tournament').evaluate(n=>({top:n.scrollTop,height:n.clientHeight,content:n.scrollHeight}))));
+   for(let i=0;i<5;i++){
+     state.tournament.data.server_now+=300;await page.evaluate(s=>window.__hub.onState(s),state);await page.clock.runFor(50);
+     const position=await page.locator('.tournament').evaluate(n=>n.scrollTop);
+     assert(Math.abs(position-readingPosition)<=1,'snapshot refresh moved the tournament from '+readingPosition+' to '+position+' at '+width+'/'+lang+'/'+at);
+   }
+ }
+ await page.setViewportSize({width:1400,height:950});
+ await show({});
  assert.equal(await page.locator('#tournament-payout-agreement').textContent(),'By playing in this tournament, you agree to receive any winnings through Zelle, Venmo, or PayPal.');
  assert.equal(await page.locator('[data-view="bugreport"] + [data-view="tournament"]').count(),1);
  const nav=await page.locator('[data-view="tournament"]').evaluate(e=>({color:getComputedStyle(e).color,weight:getComputedStyle(e).fontWeight}));assert.equal(nav.color,'rgb(255, 79, 88)');assert(+nav.weight>=700);

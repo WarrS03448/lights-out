@@ -72,6 +72,20 @@ for _code, _text in {
 }.items():
     STRINGS[_code]["cheater_reverted"] = _text
 
+# Explicit entry requirements and evidence channels on every localized rules page.
+for _code, (_placement, _footage, _label) in {
+    "en": ("You must complete your placement matches and receive a rank first. Placement matches do not count toward tournament RR or the five eligible matches required for prizes.", "Recorded footage of any cheaters may be submitted in our Discord or on our Reddit page for quicker action.", "Placement match"),
+    "de": ("Du musst zuerst deine Platzierungsspiele abschließen und einen Rang erhalten. Platzierungsspiele zählen weder für Turnier-RR noch für die fünf für Preise erforderlichen Matches.", "Aufnahmen von Cheatern können für eine schnellere Bearbeitung in unserem Discord oder auf unserer Reddit-Seite eingereicht werden.", "Platzierungsspiel"),
+    "es": ("Primero debes completar tus partidas de posicionamiento y obtener un rango. Estas partidas no cuentan para los RR del torneo ni para las cinco partidas válidas requeridas para premios.", "Puedes enviar grabaciones de tramposos en nuestro Discord o en nuestra página de Reddit para que actuemos más rápido.", "Partida de posicionamiento"),
+    "fr": ("Vous devez d’abord terminer vos matchs de placement et obtenir un rang. Ces matchs ne comptent ni pour les RR du tournoi ni pour les cinq matchs requis pour les prix.", "Des vidéos de tricheurs peuvent être envoyées sur notre Discord ou notre page Reddit pour une intervention plus rapide.", "Match de placement"),
+    "pt": ("Primeiro, conclua suas partidas de colocação e receba um rank. Elas não contam para os RR do torneio nem para as cinco partidas válidas exigidas para prêmios.", "Gravações de trapaceiros podem ser enviadas no nosso Discord ou na nossa página do Reddit para agilizar a ação.", "Partida de colocação"),
+    "ru": ("Сначала завершите калибровочные матчи и получите ранг. Эти матчи не учитываются в RR турнира и в пяти зачётных матчах, необходимых для призов.", "Видеозаписи с читерами можно отправить в наш Discord или на нашу страницу Reddit для более быстрого рассмотрения.", "Калибровочный матч"),
+    "zh": ("你必须先完成定级赛并获得段位。定级赛不计入锦标赛 RR，也不计入获得奖金所需的五场有效比赛。", "可在我们的 Discord 或 Reddit 页面提交作弊者的录像，以便更快处理。", "定级赛"),
+}.items():
+    STRINGS[_code]["rules"] = _placement + " " + STRINGS[_code]["rules"]
+    STRINGS[_code]["fair_play"] += " " + _footage
+    STRINGS[_code]["placement"] = _label
+
 @register_snapshot("tournament")
 def snapshot(session, panel):
     data = dict(getattr(session, "tournament_data", None) or {})

@@ -2160,8 +2160,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         [settlementKey(match.id), liveMatchKey(match.id), liveIndexKey(), authorityKey(match.id)], match.id, json, LIVE_STATE_TTL_SECONDS);
       if (receipt && receipt.pendingMatch) {
         for (const key of ['timer', 'collectTimer', 'stage_timer', 'ban_timer']) if (match[key]) clearTimeout(match[key]);
+        if (receipt.pendingMatch.void_pending) delete match.collecting;
         if (match.void_pending && !receipt.pendingMatch.void_pending) {
           delete match.void_pending;
+          delete match.void_reason;
           if (match.final_snapshot === JSON.stringify({ voided: true })) delete match.final_snapshot;
         }
         Object.assign(match, reviveMatch(receipt.pendingMatch));
@@ -4099,11 +4101,22 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const target = String((body && (body.player_id || body.steam_id)) || '');
     if (!identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
     if (isAdmin(target)) return { ok: false, error: 'that account is an admin' };
+    const match = matches.get(inMatch.get(target)) || [...matches.values()].find(m =>
+      m.players.some(p => identity.gameFor(m, p.player_id) === target));
+    const owner = match?.players.find(p => p.player_id === target || identity.gameFor(match, p.player_id) === target)?.player_id || target;
+    if (isAdmin(owner)) return { ok: false, error: 'that account is an admin' };
+    return matchOperation(match?.id || 'ban:'+target, async () => {
+    // Serialise against local final reports, and atomically save the durable void
+    // with the ban so a restart cannot leave a banned player's match running.
+    const active = match && matches.get(match.id) === match && match.state === 'live';
+    if (active && !match.collecting && !match.settling && !match.final_snapshot) await persistLive(match);
+    const matchKeys = active ? [liveMatchKey(match.id), settlementKey(match.id)] : [];
     if(body?.category==='cheating'){
-      const saved=await restitution.begin(String(adminId),{target,operation_id:body.operation_id,reason:body.reason});
+      const saved=await restitution.begin(String(adminId),{target,operation_id:body.operation_id,reason:body.reason},matchKeys);
       bans.set(target,saved.ban);bansLoaded.add(target);
-      try{removeFromQueue(target);}catch{}
-      for(const clientId of [...(bySteam.get(target)||[])]){send(clientId,{type:'banned',reason:'Cheating',until:0});drop(clientId);}
+      await voidMatchForBan(match);
+      try{removeFromQueue(owner);}catch{}
+      for(const clientId of [...(bySteam.get(owner)||[])]){send(clientId,{type:'banned',reason:'Cheating',until:0});drop(clientId);}
       void restitution.run().catch(()=>{});
       return {ok:true,banned:target,until:0,corrections:'queued',decision_id:saved.decision.id};
     }
@@ -4116,13 +4129,14 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       // cannot quietly restart itself on a redeploy.
       until: days > 0 ? Date.now() + days * 24 * 3600 * 1000 : 0,
     };
-    if (store) await restitution.setBan(String(adminId),target,rec);
+    if (store) await restitution.setBan(String(adminId),target,rec,matchKeys);
     bans.set(target, rec);
     bansLoaded.add(target);
+    await voidMatchForBan(match);
     // Put them out of whatever they are in right now, or the ban does not start until they
     // happen to close the app.
-    try { removeFromQueue(target); } catch { /* not queued */ }
-    for (const clientId of [...(bySteam.get(target) || [])]) {
+    try { removeFromQueue(owner); } catch { /* not queued */ }
+    for (const clientId of [...(bySteam.get(owner) || [])]) {
       send(clientId, { type: 'banned', reason: rec.reason, until: rec.until });
       drop(clientId);
     }
@@ -4130,6 +4144,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
                 rec.until ? ` until ${new Date(rec.until).toISOString()}` : ' permanently',
                 rec.reason || 'no reason given');
     return { ok: true, banned: target, until: rec.until };
+    });
   }
 
   async function unbanAccount(adminId, body) {
@@ -5534,8 +5549,24 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     });
   }
 
+  async function voidMatchForBan(match) {
+    if (!match || matches.get(match.id) !== match || match.collecting || match.settling || match.finished) return;
+    if (match.void_pending) return finishVoidVote(match);
+    if (match.final_snapshot) return;
+    if (match.state !== 'live') { await closeMatch(match, 'player_banned'); return; }
+    match.void_pending = Date.now(); match.void_reason = 'ban';
+    match.final_snapshot = JSON.stringify({ voided: true });
+    clearTimeout(match.timer); clearTimeout(match.collectTimer);
+    match.timer = match.collectTimer = null;
+    return finishVoidVote(match);
+  }
+
+  function hasVoidDecision(match) {
+    return Boolean(match.void_pending && (match.void_reason === 'ban' || (voidVotePayload(match, '')?.yes || 0) >= 6));
+  }
+
   async function finishVoidVote(match) {
-    if (matches.get(match.id) !== match || !match.void_pending || voidVotePayload(match, '').yes < 6)
+    if (matches.get(match.id) !== match || !hasVoidDecision(match))
       return { ok: false, error: 'Six player votes are required.' };
     try {
       // Save the decision before any completion event. A restart retries this exact void,
@@ -5545,12 +5576,12 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         const accepted = await readReceipt(match.id);
         return { ok: true, voided: accepted?.voided === true, match_id: match.id };
       }
-      if (!match.void_pending || match.collecting || (voidVotePayload(match, '')?.yes || 0) < 6)
+      if (!hasVoidDecision(match) || match.collecting)
         return { ok: false, error: 'The match is already finishing.' };
-      const ids = everyone(match).map(p => p.player_id), now = Date.now();
-      const record = { ended: match.void_pending, outcome: 'voided', reason: 'vote', map: match.map,
+      const ids = everyone(match).map(p => p.player_id), now = Date.now(), reason = match.void_reason === 'ban' ? 'ban' : 'vote';
+      const record = { ended: match.void_pending, outcome: 'voided', reason, map: match.map,
         host: match.host, sides: match.sides || {} };
-      const full = { ...fullRecord(match, record), voided: true, void_reason: 'vote', won_team: null,
+      const full = { ...fullRecord(match, record), voided: true, void_reason: reason, won_team: null,
         score: null, data_collected: true };
       const receipt = { version: settlementLib.VERSION, matchId: match.id, match_id: match.id,
         host: match.host, host_epoch: match.host_epoch || 0, at: now, collected_at: now, close_after: now + 5000,
@@ -5568,15 +5599,15 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         authority: add(authorityKey(match.id), 'string'), host: match.host, host_epoch: match.host_epoch || 0 };
       plan.writes.push({ index: add(matchKey(match.id), 'string'), value: JSON.stringify(full), ttl: MATCH_TTL_SECONDS });
       for (const sid of ids) {
-        const row = { ...historyRow(match, record, sid), outcome: 'voided', reason: 'vote',
+        const row = { ...historyRow(match, record, sid), outcome: 'voided', reason,
           voided: true, won: null, score: null, delta: 0, rr_delta: 0 };
         receipt.history[sid] = row;
         plan.histories.push({ index: add(historyKey(sid), 'list'), value: JSON.stringify(row) });
-        receipt.events[sid] = { type: 'match_result', match_id: match.id, voided: true, void_reason: 'vote',
+        receipt.events[sid] = { type: 'match_result', match_id: match.id, voided: true, void_reason: reason,
           won: null, score: null, delta: 0, rr_delta: 0, map: match.map, scoreboard: receipt.board,
           data_collected: true, close_allowed: true, close_after: receipt.close_after };
       }
-      const saved = await require('./result-commit.cjs').commit(store, keys, plan);
+      const saved = store ? await require('./result-commit.cjs').commit(store, keys, plan) : receipt;
       await acceptCommitted(match, saved);
       return { ok: true, match_id: match.id, voided: saved.voided === true };
     } catch {
@@ -7126,6 +7157,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         for (const p of matches.get(id)?.players || []) { ratingLoaded.delete(p.player_id); ratings.delete(p.player_id); }
       }
       console.error('[result] save pending %s: %s', id, err.message);
+      // A ban on another worker can atomically supersede this unsaved score.
+      if (String(err.message).includes('saved void decision') && matches.has(id)) {
+        try { await persistLive(matches.get(id)); } catch { /* next report retries */ }
+      }
       return reject('final data is not saved yet');
     }
   }
@@ -7160,6 +7195,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const ids = everyone(match).map(p => p.player_id);
     match.settling = withRatingLocks(ids, async () => {
       await snapshot;
+      if (match.void_pending) return null;
       // A different container may already have durably decided this match.
       ({ winner, score, limit } = match.collecting);
       for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -7200,7 +7236,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       // Keep the match and decided score; the regular tick retries. No changed
       // rank or success event is published until Redis confirms a receipt.
       note(match, 'settlement-pending', {});
-      match.collecting.deadline = Date.now() + 2000;
+      if (match.collecting) match.collecting.deadline = Date.now() + 2000;
       return null;
     }).finally(() => { match.settling = null; });
     return match.settling;

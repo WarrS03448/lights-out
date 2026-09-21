@@ -17,7 +17,7 @@
     "test:rating": "node --test scripts/test-rating-load.cjs scripts/test-rating-invariants.cjs scripts/test-rating-durability.cjs",
     "test:analytics": "node --test scripts/test-account-console.cjs scripts/test-analytics.cjs scripts/test-analytics-http.cjs",
     "test:privacy": "node --test scripts/test-ip-privacy.cjs scripts/test-relay.cjs scripts/test-analytics.cjs scripts/test-analytics-http.cjs",
-    "test:void": "node --test scripts/test-void-vote.cjs scripts/test-void-vote-storage.cjs",
+    "test:void": "node --test scripts/test-void-vote.cjs scripts/test-void-vote-storage.cjs scripts/test-ban-void.cjs",
     "test:tournament": "node --test scripts/test-tournament.cjs scripts/test-tournament-operations.cjs",
     "test:messages": "node --test scripts/test-messages.cjs",
     "test:moderation-adapters": "node --test scripts/test-moderation-adapters.cjs"

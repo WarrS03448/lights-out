@@ -6,19 +6,19 @@
 .tournament h1 {font-size:36px;margin:8px 0;letter-spacing:-.035em;}
 .tournament h2 {font-size:16px;margin:0 0 14px;}
 .tournament-subtitle {font-size:17px;margin:0 0 18px;color:var(--muted);}
-.tournament-status {font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line-2);border-radius:4px;padding:5px 9px;}
+.tournament-status {font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line-2);border-radius:0;padding:5px 9px;}
 .tournament-status[data-phase="live"] {color:#ff4f58;border-color:#923239;background:#381b20;}
 .tournament-clock {text-align:right;min-width:260px;}
 .tournament-clock-label {font-size:12px;color:var(--muted);margin-bottom:7px;}
 .tournament-digits {font-size:40px;font-weight:750;font-variant-numeric:tabular-nums;letter-spacing:.03em;}
 .tournament-grid {display:grid;grid-template-columns:minmax(0,1.65fr) minmax(240px,1fr);gap:20px;}
-.tournament-card {border:1px solid var(--line-2);background:var(--panel);border-radius:8px;padding:22px;}
+.tournament-card {border:1px solid var(--line-2);background:var(--panel);border-radius:0;padding:22px;}
 .tournament-clock-units {font-size:10px;letter-spacing:.1em;color:var(--muted);margin-top:7px;}
 .tournament-dates {font-size:17px;font-weight:650;margin:0 0 6px;}
 .tournament-muted {color:var(--muted);font-size:12px;line-height:1.6;}
 .tournament-rules {color:var(--muted);line-height:1.7;font-size:13px;margin:20px 0;}
 .tournament-agreement {border-left:2px solid #ff4f58;padding:8px 12px;font-size:12px;line-height:1.6;color:var(--text);}
-.tournament-register {border:1px solid #ff4f58;background:#e13e49;color:white;font:inherit;font-weight:750;padding:12px 20px;border-radius:5px;cursor:pointer;}
+.tournament-register {border:1px solid #ff4f58;background:#e13e49;color:white;font:inherit;font-weight:750;padding:12px 20px;border-radius:0;cursor:pointer;}
 .tournament-register:hover {background:#f34b56;}
 .tournament-register:disabled {opacity:.55;cursor:default;}
 .tournament-registered {color:#80d3a5;font-weight:650;}
@@ -37,15 +37,15 @@
 .tournament-you-row {background:#292126;}
 .tournament-winners {border-color:#665236;}
 .tournament-winner-list {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;}
-.tournament-winner {display:flex;flex-direction:column;gap:10px;padding:16px 12px;background:var(--panel-2);border-radius:5px;overflow-wrap:anywhere;}
+.tournament-winner {display:flex;flex-direction:column;gap:10px;padding:16px 12px;background:var(--panel-2);border-radius:0;overflow-wrap:anywhere;}
 .tournament-winner-name {font-size:18px;}
 .tournament-winner-prize {color:#ffcb7d;font-size:17px;font-weight:750;}
-.tournament-button {background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:8px 13px;border-radius:4px;cursor:pointer;font:inherit;}
+.tournament-button {background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:8px 13px;border-radius:0;cursor:pointer;font:inherit;}
 .tournament-button:disabled {opacity:.5;cursor:default;}
-.tournament-badge {display:inline-block;border:1px solid #665236;color:#ffcb7d;padding:6px 10px;border-radius:4px;margin:0 8px 12px 0;font-size:12px;}
+.tournament-badge {display:inline-block;border:1px solid #665236;color:#ffcb7d;padding:6px 10px;border-radius:0;margin:0 8px 12px 0;font-size:12px;}
 .tournament-support-form {display:grid;grid-template-columns:1fr 2fr;gap:12px;}
 .tournament-support-form textarea {grid-column:1/-1;}
-.tournament-support-form input,.tournament-support-form textarea,.tournament-support-form select,.tournament-share {background:var(--ground);color:var(--text);border:1px solid var(--line);border-radius:4px;padding:10px;font:inherit;}
+.tournament-support-form input,.tournament-support-form textarea,.tournament-support-form select,.tournament-share {background:var(--ground);color:var(--text);border:1px solid var(--line);border-radius:0;padding:10px;font:inherit;}
 .tournament-share {width:100%;user-select:text;}
 .tournament-ledger-row,.tournament-ticket {padding:12px 0;border-bottom:1px solid var(--line-2);font-size:12px;line-height:1.6;white-space:pre-wrap;}
 @media(max-width:900px){.tournament{padding:20px}.tournament h1{font-size:28px}.tournament-digits{font-size:30px}.tournament-clock{min-width:210px}.tournament-grid{grid-template-columns:minmax(0,1.4fr) minmax(210px,1fr)}}
