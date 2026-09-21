@@ -9,6 +9,10 @@ for i, expected in ipairs(p.types) do
   local actual = redis.call('TYPE', KEYS[i]).ok
   if actual ~= 'none' and actual ~= expected then return redis.error_reply('result key type mismatch') end
 end
+local live = redis.call('GET', KEYS[p.live])
+if live and cjson.decode(live).void_pending and cjson.decode(p.receipt_json).voided ~= true then
+  return redis.error_reply('saved void decision takes precedence')
+end
 if p.authority then
   local raw=redis.call('GET',KEYS[p.authority])
   if raw then

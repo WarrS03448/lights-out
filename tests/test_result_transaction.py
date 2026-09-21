@@ -25,7 +25,7 @@ def transaction():
             'rank_checks': [{'index': 7, 'expected': 0}],
             'receipt_json': json.dumps(receipt)}
     redis = fakeredis.FakeRedis(decode_responses=True)
-    redis.set('live', 'in progress'); redis.sadd('index', 'm')
+    redis.set('live', '{"state":"live"}'); redis.sadd('index', 'm')
     redis.set('rating:a', '{"rating":1500}')
     redis.rpush('history:a', '{"id":"m","won":null}', 'malformed historical row', '{"id":"older"}')
     return redis, lambda p=plan: redis.eval(script, len(keys), *keys, json.dumps(p)), plan
@@ -51,7 +51,7 @@ def test_wrong_storage_type_fails_before_any_result_write(transaction):
     assert redis.get('receipt') is None and redis.get('full') is None
     assert redis.hget('careers', 'a') is None
     assert redis.get('rating:a') == '{"rating":1500}'
-    assert redis.get('live') == 'in progress'
+    assert redis.get('live') == '{"state":"live"}'
 
 
 def test_delayed_career_write_cannot_erase_committed_totals():

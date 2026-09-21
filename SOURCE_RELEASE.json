@@ -1,6 +1,6 @@
 {
-  "release": "2.3.89",
-  "date": "2026-09-18",
+  "release": "2.5.0",
+  "date": "2026-09-21",
   "scope": "Original client, server, gamemode generators, editor helper, packaging code and tests",
   "source_export_changes": [
     "Add MIT license, upstream notices, public documentation and test workflow",
@@ -15,7 +15,8 @@
     "Include single-load host startup, one joiner reconnect action, and verified timestamped release signing for 2.3.87",
     "Include email accounts, privacy disclosures, verified game identity, host migration and reconnect grace for 2.3.88; omit private test deployment tooling and settings",
     "Add verified Settings account linking and highlighted website account links in 2.3.89",
-    "Integrate verified account identity and profile counts into Players, Overview and Analytics, with exact profile drilldowns and no account credentials in console data"
+    "Integrate verified account identity and profile counts into Players, Overview and Analytics, with exact profile drilldowns and no account credentials in console data",
+    "Include seven distinct participant votes to void matches, authenticated durable voting, Bodycam cleanup and the MATCH VOIDED result screen in 2.5.0"
   ],
   "gamemode_packs": [
     {

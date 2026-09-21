@@ -75,7 +75,7 @@
 .hist-row.res-win       { border-left-color: var(--green); }
 .hist-row.res-loss      { border-left-color: var(--accent); }
 .hist-row.res-fault     { border-left-color: var(--accent); }
-.hist-row.res-cancelled { border-left-color: var(--gold); }
+.hist-row.res-cancelled, .hist-row.res-voided { border-left-color: var(--gold); }
 .hist-row.res-played    { border-left-color: var(--line); }
 
 /* result cell (leading) */
@@ -97,7 +97,7 @@
 .res-win .hist-res-word       { color: var(--green); }
 .res-loss .hist-res-word,
 .res-fault .hist-res-word     { color: var(--accent); }
-.res-cancelled .hist-res-word { color: var(--gold); }
+.res-cancelled .hist-res-word, .res-voided .hist-res-word { color: var(--gold); }
 .res-played .hist-res-word    { color: var(--text); }
 .hist-res-reason { font-size: 11px; color: var(--muted); }
 

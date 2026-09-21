@@ -512,6 +512,12 @@ class LiveClient:
         punishes whoever has not when the window runs out."""
         return self._post("/api/match/connected")
 
+    def void_vote(self, match_id, yes=None):
+        body = {"match_id": str(match_id)}
+        if yes is not None:
+            body["yes"] = yes
+        return self._post("/api/match/void-vote", body)
+
     def ack_combat_warning(self, match_id, warning_id):
         """Confirm a specific warning only after the UI says it actually rendered it."""
         return self._post("/api/match/combat-warning", {

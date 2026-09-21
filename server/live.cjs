@@ -423,7 +423,7 @@ const NEEDS_AUTH = ['/api/match/combat-warning', '/api/live', '/api/queue/join',
                     '/api/match/accept', '/api/match/leave',
                     '/api/match/coin', '/api/match/choose', '/api/match/side', '/api/match/ban',
                     '/api/match/connecting', '/api/match/connected',
-                    '/api/match/chat',
+                    '/api/match/chat', '/api/match/void-vote',
                     '/api/report',
                     '/api/bug',
                     '/api/leaderboard',
@@ -2135,6 +2135,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         [settlementKey(match.id), liveMatchKey(match.id), liveIndexKey(), authorityKey(match.id)], match.id, json, LIVE_STATE_TTL_SECONDS);
       if (receipt && receipt.pendingMatch) {
         for (const key of ['timer', 'collectTimer', 'stage_timer', 'ban_timer']) if (match[key]) clearTimeout(match[key]);
+        if (match.void_pending && !receipt.pendingMatch.void_pending) {
+          delete match.void_pending;
+          if (match.final_snapshot === JSON.stringify({ voided: true })) delete match.final_snapshot;
+        }
         Object.assign(match, reviveMatch(receipt.pendingMatch));
         persisted.set(match.id, JSON.stringify(receipt.pendingMatch));
         if (!match.settling) rearm(match);
@@ -2159,6 +2163,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (!store) return Promise.resolve();
     const writes = [];
     for (const match of matches.values()) {
+      if (match.void_pending) {
+        writes.push(matchOperation(match.id, () => finishVoidVote(match)));
+        continue;
+      }
       if (match.settling || match.final_snapshot) continue;
       writes.push(persistLive(match));
       if (!match.start_ready_verified && match.collecting && match.collecting.deadline <= Date.now()) {
@@ -3214,6 +3222,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   function livePayload(match, recipient) {
     return {
       type: 'match_live', match_id: match.id, map: match.map, host: match.host, host_game_steam_id: identity.gameFor(match, match.host),
+      vote: voidVotePayload(match, recipient),
       network: match.network || null,
       live_seconds: Math.max(0, Math.round((match.deadline - Date.now()) / 1000)),
       players: match.players.map((p) => ({ player_id: p.player_id, game_steam_id: identity.gameFor(match, p.player_id), persona: p.persona, avatar: p.avatar || '' })),
@@ -5403,10 +5412,116 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     return pending;
   }
 
+  // Ballots belong to authenticated, frozen game identities, never to a client-supplied count.
+  // Seven is absolute, including in a private/test match with fewer than ten humans.
+  function voidVotePayload(match, recipient) {
+    if (!(match.void_votes instanceof Map)) return null;
+    const voters = new Set(), counts = { yes: 0, no: 0 };
+    for (const [id, yes] of match.void_votes) {
+      const game = identity.gameFor(match, id);
+      if (!game || voters.has(game) || typeof yes !== 'boolean') continue;
+      voters.add(game); counts[yes ? 'yes' : 'no']++;
+    }
+    return { caller: match.void_caller || '', ...counts, needed: 7,
+      voted: match.void_votes.has(recipient), pending: Boolean(match.void_pending) };
+  }
+
+  function broadcastVoidVote(match) {
+    for (const p of match.players) sendTo(p.player_id,
+      { type: 'match_void_vote', match_id: match.id, vote: voidVotePayload(match, p.player_id) });
+  }
+
+  function voteToVoid(account, body) {
+    const id = String(body.match_id || ''), player = account.player_id;
+    return matchOperation(id, async () => {
+      const match = matches.get(id);
+      if (match) {
+        try { await refreshAuthority(match); }
+        catch { return { ok: false, unavailable: true, error: 'Match state is unavailable. Please retry.' }; }
+      }
+      if (!match || inMatch.get(player) !== id || match.state !== 'live' ||
+          !match.players.some(p => p.player_id === player) ||
+          identity.gameFor(match, player) !== account.game_steam_id ||
+          !identity.validBindings(match) || (Object.hasOwn(body, 'yes') && typeof body.yes !== 'boolean'))
+        return { ok: false, error: 'Only players in this live match can vote.' };
+      if (match.void_pending) return finishVoidVote(match);
+      if (match.collecting || match.settling || match.final_snapshot || match.finished)
+        return { ok: false, error: 'The match is already finishing.' };
+      if (!(match.void_votes instanceof Map)) {
+        match.void_votes = new Map();
+        match.void_caller = match.players.find(p => p.player_id === player).persona || '';
+      }
+      if (Object.hasOwn(body, 'yes') && !match.void_votes.has(player)) match.void_votes.set(player, body.yes);
+      if (voidVotePayload(match, player).yes >= 7) {
+        match.void_pending = Date.now();
+        match.final_snapshot = JSON.stringify({ voided: true });
+        clearTimeout(match.timer); clearTimeout(match.collectTimer);
+        match.timer = match.collectTimer = null;
+        return finishVoidVote(match);
+      }
+      try {
+        await persistLive(match);
+        broadcastVoidVote(match);
+        return { ok: true, match_id: id, vote: voidVotePayload(match, player) };
+      } catch { return { ok: false, unavailable: true, error: 'Your vote could not be saved. Please retry.' }; }
+    });
+  }
+
+  async function finishVoidVote(match) {
+    if (matches.get(match.id) !== match || !match.void_pending || voidVotePayload(match, '').yes < 7)
+      return { ok: false, error: 'Seven player votes are required.' };
+    try {
+      // Save the decision before any completion event. A restart retries this exact void,
+      // and final score reports cannot turn it into a rated result while storage is down.
+      await persistLive(match);
+      if (matches.get(match.id) !== match) {
+        const accepted = await readReceipt(match.id);
+        return { ok: true, voided: accepted?.voided === true, match_id: match.id };
+      }
+      if (!match.void_pending || match.collecting || (voidVotePayload(match, '')?.yes || 0) < 7)
+        return { ok: false, error: 'The match is already finishing.' };
+      const ids = everyone(match).map(p => p.player_id), now = Date.now();
+      const record = { ended: match.void_pending, outcome: 'voided', reason: 'vote', map: match.map,
+        host: match.host, sides: match.sides || {} };
+      const full = { ...fullRecord(match, record), voided: true, void_reason: 'vote', won_team: null,
+        score: null, data_collected: true };
+      const receipt = { version: settlementLib.VERSION, matchId: match.id, match_id: match.id,
+        host: match.host, host_epoch: match.host_epoch || 0, at: now, collected_at: now, close_after: now + 5000,
+        report_digest: /^[a-f0-9]{64}$/.test(match.reportToken || '')
+          ? crypto.createHash('sha256').update(match.reportToken).digest('hex') : null,
+        data_collected: true, voided: true, participants: ids, full, publicMatch: full,
+        analytics_context: analyticsContext(match), inputs: { teams: match.teams, mm: match.mm },
+        board: scoreboardOf(match), rows: [], ratings: {}, history: {}, events: {} };
+      const keys = [settlementKey(match.id)], types = ['string'];
+      const add = (key, type) => { keys.push(key); types.push(type); return keys.length; };
+      const plan = { id: match.id, receipt, types, ttl: MATCH_TTL_SECONDS, history_ttl: HISTORY_TTL_SECONDS,
+        keep: HISTORY_KEEP, writes: [], histories: [], board: [], hashes: [], rank_checks: [],
+        result_index: add(resultKey(match.id), 'string'), live: add(liveMatchKey(match.id), 'string'),
+        live_index: add(liveIndexKey(), 'set'), analytics_outbox: add(`${prefix || 'hub:'}analytics:outbox`, 'set'),
+        authority: add(authorityKey(match.id), 'string'), host: match.host, host_epoch: match.host_epoch || 0 };
+      plan.writes.push({ index: add(matchKey(match.id), 'string'), value: JSON.stringify(full), ttl: MATCH_TTL_SECONDS });
+      for (const sid of ids) {
+        const row = { ...historyRow(match, record, sid), outcome: 'voided', reason: 'vote',
+          voided: true, won: null, score: null, delta: 0, rr_delta: 0 };
+        receipt.history[sid] = row;
+        plan.histories.push({ index: add(historyKey(sid), 'list'), value: JSON.stringify(row) });
+        receipt.events[sid] = { type: 'match_result', match_id: match.id, voided: true, void_reason: 'vote',
+          won: null, score: null, delta: 0, rr_delta: 0, map: match.map, scoreboard: receipt.board,
+          data_collected: true, close_allowed: true, close_after: receipt.close_after };
+      }
+      const saved = await require('./result-commit.cjs').commit(store, keys, plan);
+      acceptCommitted(match, saved);
+      return { ok: true, match_id: match.id, voided: saved.voided === true };
+    } catch {
+      broadcastVoidVote(match);
+      return { ok: false, unavailable: true, error: 'The void decision is being saved. Please retry.' };
+    }
+  }
+
   async function checkHostTimeouts() {
     if(!store)return;
     for(const m of matches.values()) {
-      if(m.state!=='live'||!m.migration_capabilities||Date.now()-(hostChecks.get(m.id)||0)<10000)continue;
+      if(m.state!=='live'||m.void_pending||!m.migration_capabilities||Date.now()-(hostChecks.get(m.id)||0)<10000)continue;
       hostChecks.set(m.id,Date.now());
       await matchOperation(m.id,async()=>{
         await refreshAuthority(m);
@@ -6742,7 +6857,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       match.finished = { at: receipt.collected_at, winner: receipt.full.won_team, score: receipt.full.score };
       match.state = 'over';
       matches.delete(match.id); persisted.delete(match.id);
-      for (const id of receipt.participants) if (inMatch.get(id) === match.id) inMatch.delete(id);
+      for (const id of receipt.participants) {
+        if (!inMatch.has(id) || inMatch.get(id) === match.id) frozenCareers.delete(id);
+        if (inMatch.get(id) === match.id) inMatch.delete(id);
+      }
       match.credited = true;
       for (const id of Object.keys(receipt.events)) {
         sendTo(id, completionEvent(receipt, id));
@@ -8473,6 +8591,11 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       return true;
     }
     if (pathname === '/api/match/accept' && method === 'POST') { handleAccept(res, account); return true; }
+    if (pathname === '/api/match/void-vote' && method === 'POST') {
+      const result = await voteToVoid(account, await readJsonBody(req));
+      sendJson(res, result.ok ? 200 : result.unavailable ? 503 : 409, result);
+      return true;
+    }
     if (pathname === '/api/match/leave' && method === 'POST') { await handleMatchLeave(res, account); return true; }
     if (pathname === '/api/report' && method === 'POST') { await handleReport(req, res, account); return true; }
     if (pathname === '/api/bug' && method === 'POST') { await handleBugReport(req, res, account); return true; }

@@ -451,6 +451,8 @@ def profile_stats(rows):
     }
     maps = {}
     for row in rows:
+        if row.get("voided") or row.get("outcome") == "voided":
+            continue  # Recorded in history, without changing the played/rated record.
         cancelled = (row.get("outcome") or "") == "cancelled"
         blamed = bool(row.get("blamed"))
         won = row.get("won")
@@ -2428,7 +2430,7 @@ class MockSession(Session):
         self._changed()
 
     def start_vote(self):
-        if getattr(self, "live", False) or self.vote:
+        if getattr(self, "live", False) or self.phase != "live" or self.vote:
             return
         self.vote = {"caller": (self.me or {}).get("name", "?"), "yes": 0, "no": 0, "voted": False}
         self._changed()
@@ -2439,21 +2441,6 @@ class MockSession(Session):
         self.vote["voted"] = True
         self.vote["yes" if yes else "no"] += 1
         self._changed()
-        self._later(600, self._others_vote)
-
-    def _others_vote(self):
-        if getattr(self, "live", False) or not self.vote or self.vote["yes"] + self.vote["no"] >= LOBBY_SIZE:
-            return
-        self.vote[random.choice(["yes", "yes", "yes", "no"])] += 1
-        if self.vote["yes"] >= VOTE_NEEDED:
-            self.finish(voided=True)
-            return
-        if self.vote["yes"] + self.vote["no"] >= LOBBY_SIZE:
-            self.vote = None            # the vote failed; the match carries on
-            self._changed()
-            return
-        self._changed()
-        self._later(600, self._others_vote)
 
     def finish(self, voided: bool = False):
         """Preview only: a real match ends when our GM_Bodybomb reports the scoreboard."""
@@ -3612,6 +3599,43 @@ class LiveSession(MockSession):
             return
         self._action(lambda client=self.client: client.ban_map(map_name))
 
+    def start_vote(self):
+        if self.phase != "live" or not self.client or not self.match_id or self.vote:
+            return
+        mid = self.match_id
+        self._action(lambda client=self.client: client.void_vote(mid),
+                     lambda status, body: self._void_vote_result(mid, status, body))
+
+    def cast_vote(self, yes: bool):
+        if (self.phase != "live" or not self.client or not self.match_id or not self.vote
+                or self.vote.get("voted") or self.vote.get("pending") or not isinstance(yes, bool)):
+            return
+        mid = self.match_id
+        self._action(lambda client=self.client: client.void_vote(mid, yes),
+                     lambda status, body: self._void_vote_result(mid, status, body))
+
+    def _apply_void_vote(self, vote):
+        if not isinstance(vote, dict):
+            self.vote = None
+            return
+        current = self.vote or {}
+        # A POST response may arrive after a newer SSE tally. Never undo votes on screen.
+        if (int(vote.get("yes") or 0) + int(vote.get("no") or 0)
+                < int(current.get("yes") or 0) + int(current.get("no") or 0)):
+            return
+        self.vote = dict(vote)
+
+    def _void_vote_result(self, mid, status, body):
+        if self.phase != "live" or self.match_id != mid:
+            return
+        if status == 200:
+            self.error = ""
+            if "vote" in body:
+                self._apply_void_vote(body["vote"])
+        else:
+            self.error = t("comp_vote_error")
+        self._changed()
+
     # ---------------------------------------------------------------- events
     def on_live_event(self, event):
         event = player_identity.normalize(event)
@@ -3839,12 +3863,19 @@ class LiveSession(MockSession):
                 return
             self.reconnect_waiting = event.get("waiting") or []
             self._changed()
+        elif kind == "match_void_vote":
+            if self.phase != "live" or event.get("match_id") != self.match_id:
+                return
+            self._apply_void_vote(event.get("vote"))
+            self._changed()
+            return
         elif kind == "match_live":
             # the server archives a match the moment it goes live, so what we hold is stale
             self.history_stale = True
             self._match_replay_seen = True
             if event.get("match_id"):
                 self.match_id = str(event["match_id"])
+            self._apply_void_vote(event.get("vote"))
             self.reconnect_waiting = event.get("reconnect_waiting") or []
             self._update_match_authority(event)
             self._recover_running_game()
@@ -4068,6 +4099,7 @@ class LiveSession(MockSession):
         payload is kept on the session so the scoreboard screen can be built against it without
         another round trip."""
         self.history_stale = True
+        self.vote = None
         self.result_payload = dict(event) if isinstance(event, dict) else {}
         # `you` is the documented shape (docs/match-result.md hop 2). A service that sends the
         # rank FLAT instead is read the same way rather than dropped on the floor: the fields are
@@ -6331,13 +6363,10 @@ class CompetitivePanel:
                  bg=WHITE, fg=GREY).pack()
         tk.Label(inner, text=t("comp_join_hint", name=host_name), bg=WHITE, fg=GREY,
                  wraplength=520, justify="center").pack(pady=(4, 14))
-        if s.mock and s.vote:
+        if s.vote:
             self._draw_vote(inner)
-        elif s.mock:
-            link = tk.Label(inner, text=t("comp_report"), bg=WHITE, fg=ACCENT,
-                            cursor="hand2", font=self.f_small)
-            link.pack(pady=(16, 0))
-            link.bind("<Button-1>", lambda _e: s.start_vote())
+        else:
+            self._button(inner, t("comp_report"), s.start_vote).pack(pady=(16, 0))
 
         # preview only: a real match ends when the gamemode reports its scoreboard
         if getattr(s, "mock", False):
@@ -6353,7 +6382,9 @@ class CompetitivePanel:
                  justify="center").pack(padx=10)
         tk.Label(card, text=t("comp_vote_count", n=s.vote["yes"], needed=VOTE_NEEDED),
                  bg=PANEL, fg=BLACK).pack(pady=(6, 4))
-        if not s.vote["voted"]:
+        if s.vote.get("pending"):
+            tk.Label(card, text=t("comp_vote_pending"), bg=PANEL, fg=GREY).pack(pady=(0, 10))
+        elif not s.vote["voted"]:
             btns = tk.Frame(card, bg=PANEL)
             btns.pack(pady=(0, 10))
             self._button(btns, t("comp_vote_yes"), lambda: s.cast_vote(True), bg=PANEL).pack(side="left", padx=4)
@@ -6434,6 +6465,8 @@ class CompetitivePanel:
 
     def _history_outcome(self, row):
         """(headline, colour) for one match, from the player's own point of view."""
+        if row.get("voided") or row.get("outcome") == "voided":
+            return (t("comp_result_void"), AMBER)
         if (row.get("outcome") or "") == "cancelled":
             blamed = bool(row.get("blamed"))
             reason = row.get("reason") or ""
@@ -6620,7 +6653,7 @@ class CompetitivePanel:
 
         # The score and the Elo change do not exist yet: nothing reports a scoreboard (memory
         # section 3). Say so once, at the top, rather than leaving every row's dash unexplained.
-        if any(r.get("won") is None and not r.get("preview") for r in rows):
+        if any(r.get("won") is None and not r.get("preview") and r.get("outcome") != "voided" for r in rows):
             tk.Label(self._hist_content, text=t("comp_history_pending_note"), bg=WHITE, fg=AMBER,
                      font=self.f_small, anchor="w", wraplength=760,
                      justify="left").pack(fill="x", pady=(0, 8))

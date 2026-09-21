@@ -1383,10 +1383,10 @@
       var lv = comp.live || {};
       var wrap = el("div", "live-pane");
       wrap.appendChild(teamsBlock(lv.teams, true));
-      if (lv.can_finish && lv.vote) {
+      if (lv.can_vote && lv.vote) {
         wrap.appendChild(voteCard(lv.vote));
-      } else if (lv.can_finish) {
-        wrap.appendChild(ui.btn("link-report", t("comp_report"), function () { call("start_vote"); }, { tag: "button" }));
+      } else if (lv.can_vote) {
+        wrap.appendChild(ui.btn("btn-solid ghost void-vote-button", t("comp_report"), function () { call("start_vote"); }, { tag: "button" }));
       }
       return wrap;
     }
@@ -1396,7 +1396,9 @@
       card.appendChild(el("div", "section-title", t("comp_vote_title")));
       card.appendChild(el("div", "vote-body", t("comp_vote_body")));
       card.appendChild(el("div", "vote-count", t("comp_vote_count", { n: v.yes || 0, needed: v.needed || 7 })));
-      if (!v.voted) {
+      if (v.pending) {
+        card.appendChild(el("div", "vote-body", t("comp_vote_pending")));
+      } else if (!v.voted) {
         card.appendChild(actionRow([
           ui.btn("btn-solid", t("comp_vote_yes"), function () { call("cast_vote", true); }, { tag: "button" }),
           ui.btn("btn-solid ghost", t("comp_vote_no"), function () { call("cast_vote", false); }, { tag: "button" })

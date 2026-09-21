@@ -42,6 +42,8 @@ local receipt = redis.call('GET', KEYS[1])
 if receipt then return {'replayed', receipt} end
 if not validType(KEYS[2], 'zset') or not validType(KEYS[3], 'string') or not validType(KEYS[4], 'set') then return {'invalid-type'} end
 local rows = cjson.decode(ARGV[3])
+local live = redis.call('GET', KEYS[3])
+if live and cjson.decode(live).void_pending then return {'void-decision'} end
 local queueIndex = #rows + 5
 local authorityKey=KEYS[queueIndex+1]
 if authorityKey then
@@ -99,6 +101,7 @@ end
 if previous then
   local saved = cjson.decode(previous)
   local incoming = cjson.decode(ARGV[2])
+  if saved.void_pending then return {'pending', previous} end
   if saved.collecting and (not incoming.collecting or
       saved.collecting.winner ~= incoming.collecting.winner or
       saved.collecting.limit ~= incoming.collecting.limit or

@@ -1745,14 +1745,14 @@ def test_competitive_mock_session_flow():
     assert s.phase == "live"
     assert s.host["ping"] == min(p["ping"] for p in s.players)
 
-    # 7 of 10 voids the match and nobody moves
+    # Preview votes count only the caller; showing a void result is an explicit preview action.
     s.start_vote()
     s.cast_vote(True)
     assert s.vote["voted"] and s.vote["yes"] == 1
     s.cast_vote(True)
     assert s.vote["yes"] == 1, "a player only votes once"
-    s.vote["yes"] = C.VOTE_NEEDED
-    s._others_vote()
+    assert s.phase == "live"
+    s.finish(voided=True)
     assert s.phase == "result" and s.result["voided"] and s.result["delta"] == 0
 
     s.leave_result()

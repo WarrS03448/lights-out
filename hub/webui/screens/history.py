@@ -424,6 +424,7 @@ def strings_for(lang: str) -> dict:
     merged.update(_TRANSLATIONS.get(lang, {}))
     merged.update(player_damage_strings(lang))
     merged.update(round_strings(lang))
+    merged["res_voided"] = i18n.STRINGS.get(lang, i18n.STRINGS["en"])["comp_result_void"]
     return merged
 
 
@@ -432,6 +433,8 @@ def _result(row: dict) -> str:
     """The row's display category, mirroring competitive.profile_stats' FORM_* buckets exactly so
     the badge, the colour and the arithmetic never disagree. Honest with nulls: a played match whose
     scoreboard has not been reported yet is "played", not a fabricated win or loss."""
+    if row.get("voided") or row.get("outcome") == "voided":
+        return "voided"
     cancelled = (row.get("outcome") or "") == "cancelled"
     if cancelled:
         return "fault" if row.get("blamed") else "cancelled"

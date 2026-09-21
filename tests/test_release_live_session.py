@@ -37,12 +37,15 @@ def test_preview_finish_cannot_fabricate_a_live_result(through_bridge, monkeypat
 def test_live_votes_do_not_invent_other_players_decisions():
     panel, session = _panel()
     session.phase = "live"
+    session.match_id = "0123456789abcdef"
+    sent = []
+    session.client.void_vote = lambda mid, yes=None: (sent.append((mid, yes)) or (200, {"ok": True}))
     Api(panel).start_vote()
     assert session.vote is None
     session.vote = {"caller": "Player", "yes": 0, "no": 0, "voted": False}
     Api(panel).cast_vote(True)
-    session._others_vote()
     assert session.vote == {"caller": "Player", "yes": 0, "no": 0, "voted": False}
+    assert sent == [(session.match_id, None), (session.match_id, True)]
 
 
 def test_live_roster_uses_only_reported_rank_and_ping():

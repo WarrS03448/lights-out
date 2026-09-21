@@ -389,12 +389,14 @@ def live_snapshot(session) -> dict:
     v = None
     if vote:
         v = {"caller": vote.get("caller") or "", "yes": int(vote.get("yes") or 0),
-             "no": int(vote.get("no") or 0), "needed": VOTE_NEEDED, "voted": bool(vote.get("voted"))}
+             "no": int(vote.get("no") or 0), "needed": VOTE_NEEDED, "voted": bool(vote.get("voted")),
+             "pending": bool(vote.get("pending"))}
     return {
         "map": getattr(session, "map", None),
         "reconnect_waiting": [dict(row) for row in getattr(session, "reconnect_waiting", [])],
         "host": {"name": host.get("name") or "", "ping": host.get("ping"), "estimated": bool(host.get("ping_estimated"))},
         "vote": v,
+        "can_vote": getattr(session, "phase", "") == "live",
         # host-gated join (additive), same fields as the connect slice: in `live` everyone has
         # connected so host_ready is already true, but the JS still reads is_host to decide whether
         # to show the host's Relaunch or the joiner's Relaunch + Join.

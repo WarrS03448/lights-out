@@ -52,8 +52,16 @@ def setup_worker(monkeypatch, receipt_after=0, identity_error=False):
 
 
 @pytest.mark.parametrize('host', [True, False])
-def test_every_player_waits_for_saved_receipt_then_graceful_then_verified_force(monkeypatch, host):
+@pytest.mark.parametrize('voided', [True, False])
+def test_every_player_waits_for_saved_receipt_then_graceful_then_verified_force(monkeypatch, host, voided):
     job_id, job, calls, clock, _ = setup_worker(monkeypatch, receipt_after=3)
+    original_receipt = cleanup._receipt
+    def receipt_with_result(job):
+        receipt = original_receipt(job)
+        if receipt:
+            receipt['result'].update(voided=voided, void_reason='vote' if voided else '')
+        return receipt
+    monkeypatch.setattr(cleanup, '_receipt', receipt_with_result)
     job['host'] = host; cleanup._write(cleanup._job_path(job_id), job)
     assert cleanup.run_worker(job_id) == 0
     assert [c[0] for c in calls if c[0] != 'release'] == ['graceful', 'force']
@@ -61,6 +69,7 @@ def test_every_player_waits_for_saved_receipt_then_graceful_then_verified_force(
     status = cleanup.read_status(job_id)
     assert status['state'] == 'done' and status['reason'] == 'verified_exit'
     assert status['result']['match_id'] == job['match_id']
+    assert status['result']['voided'] is voided
 
 
 def test_process_identity_query_failure_retries_before_any_close(monkeypatch):

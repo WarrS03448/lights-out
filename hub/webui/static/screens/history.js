@@ -557,7 +557,7 @@
     // -- helpers --------------------------------------------------------------
     function filterRows(rows) {
       if (activeFilter === "played") {
-        return rows.filter(function (r) { return r.outcome !== "cancelled"; });
+        return rows.filter(function (r) { return r.outcome !== "cancelled" && r.outcome !== "voided"; });
       }
       if (activeFilter === "cancelled") {
         return rows.filter(function (r) { return r.outcome === "cancelled"; });
@@ -568,14 +568,14 @@
     function anyPending(rows) {
       for (var i = 0; i < rows.length; i++) {
         var r = rows[i];
-        if (r.outcome !== "cancelled" && (r.won === null || r.won === undefined)) { return true; }
+        if (r.outcome !== "cancelled" && r.outcome !== "voided" && (r.won === null || r.won === undefined)) { return true; }
       }
       return false;
     }
 
     function resultWord(r) {
       return hs({ win: "res_win", loss: "res_loss", played: "res_played",
-                  cancelled: "res_cancelled", fault: "res_fault" }[r.result] || "res_played");
+                  cancelled: "res_cancelled", voided: "res_voided", fault: "res_fault" }[r.result] || "res_played");
     }
 
     function reasonWord(r) {

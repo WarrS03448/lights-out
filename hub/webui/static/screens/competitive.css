@@ -353,7 +353,7 @@ button.veto-map:focus-visible { outline: 2px solid var(--accent); outline-offset
 .vote-count { font-family: var(--font-display); font-weight: 700; font-size: 16px; }
 .btn-solid.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
 .btn-solid.ghost:hover { border-color: var(--accent); background: transparent; }
-.link-report { align-self: flex-start; background: none; border: none; color: var(--accent); font-size: 12px; cursor: pointer; text-decoration: underline; touch-action: manipulation; }
+.void-vote-button { align-self: stretch; white-space: normal; height: auto; min-height: 44px; line-height: 1.5; text-align: center; }
 
 /* result */
 .result-action { gap: 10px; }
@@ -372,7 +372,7 @@ button.veto-map:focus-visible { outline: 2px solid var(--accent); outline-offset
 .result-close.warn { color: #ffd79a; }
 
 /* keyboard focus for the new interactive elements (the shared ui-* handle their own) */
-.btn-choice:focus-visible, button.veto-map:focus-visible, .link-report:focus-visible,
+.btn-choice:focus-visible, button.veto-map:focus-visible, .void-vote-button:focus-visible,
 .chat-row input:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 button.veto-map:focus-visible { outline-color: var(--accent); }
 

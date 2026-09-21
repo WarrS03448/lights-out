@@ -12,6 +12,8 @@ for line in sys.stdin:
             result = 'PONG'
         elif request['command'][0] == 'SET' and result is True:
             result = 'OK'
+        elif isinstance(result, set):
+            result = sorted(result)
         print(json.dumps({'id': request['id'], 'result': result}), flush=True)
     except Exception as error:
         print(json.dumps({'id': request.get('id'), 'error': str(error)}), flush=True)

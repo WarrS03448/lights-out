@@ -57,7 +57,8 @@ function projectReceipt(r) {
       rating:row?{before,after,rr:{...numeric(row.rr),factors:numeric(row.rr?.factors)},
         valuation:{...numeric(row.valuation),breakdown:{...numeric(row.valuation?.breakdown),coverage:numeric(row.valuation?.breakdown?.coverage)}}}:null};
   });
-  const score=evidence(r.score||full.score||{}), completed=rows.length>0||r.data_collected===true;
+  const voided=r.voided===true||full.voided===true||full.outcome==='voided';
+  const score=voided?null:evidence(r.score||full.score||{}), completed=!voided&&(rows.length>0||r.data_collected===true);
   const version=text(r.analytics_context?.hub||r.analytics_context?.deployment||'unknown');
   const rules=r.analytics_context?.rules || r.rules || {};
   // Context is written by the server from resolved constants, never client environment data.
@@ -67,7 +68,7 @@ function projectReceipt(r) {
     deployment:text(r.analytics_context?.deployment),scoring_version:text(r.version),rules_id:hash(config),rules:config,
     resolved_rules:Boolean(r.analytics_context?.rules),match_size:ids.length||number(full.size)||0,
     region:text(mm.region||r.analytics_context?.region)||'unknown',host:text(full.host||r.host,36),host_game_steam_id:text(full.host_game_steam_id,17),
-    outcome:completed?(r.draw?'draw':'completed'):(text(full.outcome)||'unfinished'),reason:text(full.reason),
+    outcome:voided?'voided':completed?(r.draw?'draw':'completed'):(text(full.outcome)||'unfinished'),reason:text(full.reason),
     winner:Number(r.winner||full.won_team)||null,score,completed,draw:r.draw===true,
     duration_seconds:number(full.created)!==null?Math.max(0,(at-full.created)/1000):null,
     quality:number(mm.quality),formation:evidence(mm),teams:evidence(teams),sides:evidence(full.sides||{}),bans:(full.bans||[]).map(b=>({team:b.team,map:text(b.map)})),
@@ -85,7 +86,7 @@ function projectReceipt(r) {
 function cohort(m){return pick(m,['map','mode','version','rules_id','match_size','region']);}
 function contribution(m){
   const score=Object.values(m.score||{}).filter(v=>typeof v==='number');
-  const n={matches:1,completed:m.completed?1:0,draws:m.draw?1:0,player_matches:m.players.length,
+  const n={matches:1,completed:m.completed?1:0,voided:m.outcome==='voided'?1:0,draws:m.draw?1:0,player_matches:m.players.length,
     reported:m.coverage.reported,damage_complete:m.coverage.damage,rated:m.coverage.ratings,
     rounds:score.reduce((a,b)=>a+b,0),duration_sum:m.completed?(m.duration_seconds||0):0,duration_count:m.completed&&m.duration_seconds!==null?1:0,
     quality_sum:m.quality||0,quality_count:m.quality===null?0:1,rr_sum:0,mmr_sum:0,rr_count:0,mmr_count:0,
@@ -94,7 +95,7 @@ function contribution(m){
     host_wins:0,host_matches:0,calibration_sum:0,calibration_count:0,
     wait_sum:m.formation.waited||0,wait_count:typeof m.formation.waited==='number'?1:0,
     spread_sum:m.formation.spread||0,spread_count:typeof m.formation.spread==='number'?1:0,
-    cancelled:m.completed?0:1,rd_sum:0,rd_count:0};
+    cancelled:m.completed||m.outcome==='voided'?0:1,rd_sum:0,rd_count:0};
   if(m.predicted_win!==null&&m.winner){n.calibration_sum=(m.predicted_win-(m.winner===1?1:0))**2;n.calibration_count=1;}
   for(const p of m.players){
     if(number(p.before.rd)!==null){n.rd_sum+=p.before.rd;n.rd_count++;}
