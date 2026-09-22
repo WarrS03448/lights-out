@@ -27,7 +27,7 @@ function config(env = process.env) {
     function rewrite(value) {
       if (typeof value === 'string' && /^https?:\/\//.test(value)) {
         const url = new URL(value);
-        if (['lightsout.up.railway.app',new URL(origin).host].includes(url.host)) {
+        if (['lightsout.up.railway.app','play.lightsoutranked.com','lightsoutranked.com','www.lightsoutranked.com',new URL(origin).host].includes(url.host)) {
           const path = url.pathname.replace(/^\/private\/[a-f0-9]+/, '');
           return origin + prefix + path;
         }

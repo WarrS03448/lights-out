@@ -155,7 +155,7 @@ FILTER_TEST_VALUE = "Rome"
 # been compared. If they differ, this literal changes format and nothing else about the design does.
 JOIN_KEY = "PlayerSteamId"
 HOST_ID = "0"                    # a placeholder the hub overwrites; never matches a real lobby
-PROBE_JOIN_URL = "https://lightsout.up.railway.app/api/probe/join"
+PROBE_JOIN_URL = "https://play.lightsoutranked.com/api/probe/join"
 
 # The delay now lives on the SERVER (server.cjs PROBE_SLOW_SECONDS), reachable at
 # PROBE_SLOW_URL, so it can be retuned with a redeploy rather than a pak rebuild.
@@ -174,17 +174,17 @@ TYPES = "/Script/Bodycam.BodycamOnlineTypesLibrary"
 SEARCH_RESULT = "/Script/Bodycam.BodycamLobbySearchResult"
 ASYNC_BASE = "/Script/Engine.BlueprintAsyncActionBase"
 
-PROBE_URL = "https://lightsout.up.railway.app/api/probe"
+PROBE_URL = "https://play.lightsoutranked.com/api/probe"
 # A route that certainly does NOT exist, so the service answers 404. See bit_probe() below.
-PROBE_404 = "https://lightsout.up.railway.app/api/probe/no-such-route"
+PROBE_404 = "https://play.lightsoutranked.com/api/probe/no-such-route"
 # Answers 200, but only after the server has sat on it (server.cjs PROBE_SLOW_SECONDS). This is
 # the delay mechanism, because K2_SetTimer does not fire on the lobby GameMode - see late_probe().
-PROBE_SLOW_URL = "https://lightsout.up.railway.app/api/probe/slow"
+PROBE_SLOW_URL = "https://play.lightsoutranked.com/api/probe/slow"
 # The same 4 s hold, but NEVER gated. /api/probe/slow became the host's travel permit on 2026-09-15
 # (server/live.cjs grantHostPermit): it answers only the host of a connecting match and drops
 # everyone else, which is what stops a normal launch auto-hosting. Any OTHER arm that needs a clock
 # must therefore use this route instead, or it would go silent exactly when the host is not playing.
-PROBE_WAIT_URL = "https://lightsout.up.railway.app/api/probe/wait"
+PROBE_WAIT_URL = "https://play.lightsoutranked.com/api/probe/wait"
 BUILD_TAG = "chlobby-31"        # bumped per build, so the probe log says WHICH pak is running
 
 

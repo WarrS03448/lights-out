@@ -1,0 +1,58 @@
+{
+  "source_host": "lightsout.up.railway.app",
+  "target_host": "play.lightsoutranked.com",
+  "assets": [
+    {
+      "asset": "Bodycam/Content/GM/Gamemode/GM_CHJoin.uexp",
+      "endpoints": 1,
+      "bytes": 6982,
+      "source_sha256": "11446f353699c79c22e426cc3b6f2b990aff00a2eacdea61acc4c7bdaae08b4d",
+      "target_sha256": "2c19e392e073d141c29b483d17a3b38dd6875d2272f6837624531f363ba87c41"
+    },
+    {
+      "asset": "Bodycam/Content/GM/Gamemode/GM_CHLobby.uexp",
+      "endpoints": 3,
+      "bytes": 10777,
+      "source_sha256": "3b23e760f86e34a4150e09df6cf2fde4d7f8edc41c16a1a0fbd7f3c9d350609e",
+      "target_sha256": "6d053132a7b6bd29c14046f9de9001e52f3925df1c81a189a18e01026347937d"
+    },
+    {
+      "asset": "cooked/Bodycam/Content/GM/Gamemode/BB5/BP_BB5MigrationRequest.uexp",
+      "endpoints": 1,
+      "bytes": 4617,
+      "source_sha256": "bda6f41460c8abf242d764dfefdee144fb633c8fbb56c21e771cd282f95845cd",
+      "target_sha256": "5de38873f3e660f9c594badd04b31f13239f515e6ca80e41437571e7628b0edc"
+    },
+    {
+      "asset": "cooked/Bodycam/Content/GM/Gamemode/BB5/BP_BB5StartRequest.uexp",
+      "endpoints": 1,
+      "bytes": 7244,
+      "source_sha256": "96b5c74c85ed097a34439a76d7f0516b52230de9d4966f842fe26564df6e41bb",
+      "target_sha256": "2621b36c7485c6ab97b9efeacfa1e73b65055ce3584ab2deafc3bd87ef6b411e"
+    },
+    {
+      "asset": "cooked/Bodycam/Content/GM/Gamemode/BB5/BP_BB5TeamRequest.uexp",
+      "endpoints": 9,
+      "bytes": 21654,
+      "source_sha256": "4e5c744f94fa9906484b5d1b3262cd47a4455555214bac14362f3218dbfcec63",
+      "target_sha256": "4cf2cf7aa3ddef9c3a776475a2d2dfe5a57e4e7ce8d0ef65eff48f36be8c8b40"
+    },
+    {
+      "asset": "cooked/Bodycam/Content/GM/Gamemode/BB5/BP_CHCombatRequest.uexp",
+      "endpoints": 1,
+      "bytes": 2818,
+      "source_sha256": "8dd693607980253addf3026eebf2d25c71864f99a16b32c5f86a8f58c0689811",
+      "target_sha256": "8c422636b3958d02b1ba04883f487639bff3794d74fa2af79d313b678054dee9"
+    },
+    {
+      "asset": "cooked/Bodycam/Content/GM/Gamemode/GM_BB5.uexp",
+      "endpoints": 16,
+      "bytes": 93022,
+      "source_sha256": "43931c5fc9174a5c8c5b10c57c0969d6cf9c097362bbace35ab105379d6aa26f",
+      "target_sha256": "7d5decab13b4d703cc4d7981a381c77df8458b0fac06b9f7a62abba3f2afc4a4"
+    }
+  ],
+  "source_pack_sha256": "7891a9b49edcda712e8a03bf09dd0213ca94afe3cd5afb961c5bf85f91e9ba0f",
+  "target_pack_sha256": "3c1aca5d2d8a02471f547dde8ca98e078fd0b7b5292e54c24ac88e2e9587e3cf",
+  "method": "Equal-width inline string substitution; disassembly and byte reversibility verified. No recook."
+}

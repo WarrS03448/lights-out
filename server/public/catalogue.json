@@ -1,11 +1,11 @@
 {
   "catalogue_version": 1,
   "hub": {
-    "version": "2.6.3",
-    "download_url": "https://lightsout.up.railway.app/hub/LightsOut-Setup-2.6.3.exe",
-    "page_url": "https://lightsout.up.railway.app/",
-    "sha256": "27f2e517b97ef7e21053f2412265a56e9537916c9985c95d730a2940bf13b302",
-    "size": 24082464,
+    "version": "2.6.4",
+    "download_url": "https://play.lightsoutranked.com/hub/LightsOut-Setup-2.6.4.exe",
+    "page_url": "https://lightsoutranked.com/",
+    "sha256": "7dfb1a900b0e9583173c52048da2fa1f26e7ff142bf2d27b3d655ace9973da52",
+    "size": 24079440,
     "kind": "inno-setup"
   },
   "gamemodes": [
@@ -23,7 +23,7 @@
       },
       "version": "1.0.4",
       "description": "Return the enemy flag to base to win. [2.5X DRONE COOLDOWN]",
-      "pack_url": "https://lightsout.up.railway.app/packs/CTF-1.0.4.zip",
+      "pack_url": "https://play.lightsoutranked.com/packs/CTF-1.0.4.zip",
       "sha256": "e0ef3843e4daa9ea9d4e4f092bfdd3b4ec937173692e2c5dece1343c12fd6f60",
       "size": 32874,
       "localized": true,
@@ -55,11 +55,11 @@
         "ru": "Bodybomb 5 на 5",
         "zh": "Bodybomb 5v5"
       },
-      "version": "1.0.28",
+      "version": "1.0.29",
       "description": "Competitive Bodybomb. 5v5, first to 7 round wins, sides and spawn bases swap after round 6. A 6–6 tie goes to a deciding round. The bomb starts on the ground at the attacker spawn. [4X DRONE COOLDOWN] [NO SPECTATOR DRONES]",
-      "pack_url": "https://lightsout.up.railway.app/packs/BB5-1.0.28.zip",
-      "sha256": "7891a9b49edcda712e8a03bf09dd0213ca94afe3cd5afb961c5bf85f91e9ba0f",
-      "size": 73328,
+      "pack_url": "https://play.lightsoutranked.com/packs/BB5-1.0.29.zip",
+      "sha256": "3c1aca5d2d8a02471f547dde8ca98e078fd0b7b5292e54c24ac88e2e9587e3cf",
+      "size": 73321,
       "localized": true,
       "rulesets": {
         "en": "Bodybomb 5v5\n\n• Two teams of 5: attackers plant the bomb at a bomb site, defenders stop them or defuse it.\n• One life per round – no respawns. Dead players go straight to spectating their team (no spectator drone).\n• The bomb starts on the ground in the attacker spawn; any attacker can pick it up.\n• First team to 7 round wins takes the match (13 rounds maximum). Sides and spawn bases swap after round 6; a 6–6 tie goes to a deciding round.\n• Rounds last 3 minutes; friendly fire is on, as in Bodybomb.\n• Drones are allowed; their cooldown is 4× the normal duration.\n• No bots.",

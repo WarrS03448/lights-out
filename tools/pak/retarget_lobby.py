@@ -106,8 +106,8 @@ SEED_REPORT_TOKEN = "chreport-7f3a91"
 
 # chlobby35 waits for native hosting, then commits one authenticated match load.
 SEED_PAK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
-                        "paks", "CommunityLobby_chlobby36_P.pak")
-SEED_SHA256 = "29dd3119ddbe87808dec8af33b2e0b1d4c1e4032184c8333d9c0f94282ec3b82"
+                        "paks", "CommunityLobby_chlobby38_P.pak")
+SEED_SHA256 = "bfc5ed1ccf1481bc182c667b722ccb2fd3ae77a8ab1f2e86a5ab5879f2459dc8"
 
 LEVEL_ROOT = _C + "GM_Maps/Community/"
 

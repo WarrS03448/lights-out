@@ -15,7 +15,7 @@ import os
 
 # ---------------------------------------------------------------- identity
 APP_NAME = "Lights Out"
-HUB_VERSION = "2.6.3"                       # display version: shown in the UI, the installer name, AppVersion
+HUB_VERSION = "2.6.4"                       # display version: shown in the UI, the installer name, AppVersion
 # Version-info resource fields (hub.spec). Plain strings; the exe's file version is HUB_VERSION.
 COMPANY_NAME = "Lights Out (unofficial)"
 PRODUCT_NAME = APP_NAME
@@ -62,7 +62,7 @@ HUB_FILE_VERSION = ".".join(str(n) for n in version_tuple())
 PUBLISHER = "Samuel Warren"
 
 # ---------------------------------------------------------------- endpoints / file names
-DEFAULT_CATALOGUE_URL = "https://lightsout.up.railway.app/catalogue.json"
+DEFAULT_CATALOGUE_URL = "https://play.lightsoutranked.com/catalogue.json"
 # The API the Competitive tab talks to (sign-in today; the match backend next). Derived from
 # the catalogue URL on purpose, so the hub's copy of the domain lives in ONE place.
 #

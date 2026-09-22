@@ -69,9 +69,10 @@ LOBBY_PAK_NAME = "CommunityLobby_P.pak"
 # chlobby36 starts native hosting once, waits for its listen range, then commits
 # one authenticated match travel. The stage survives map loads in the GameInstance.
 # chlobby37/chjoin3 retain a private participant migration capability and five-minute reconnect timeout.
-SEED_SHA256 = "b8f015804f78609f3cb431d6210dffa3025857963e9b02f1bb9f829e5f452144"
-SEED_BASENAME = "CommunityLobby_chlobby37_P.pak"
-JOIN_SEED_BASENAME = "CommunityJoin_chjoin3_P.pak"
+# chlobby38/chjoin4 change only equal-width endpoint literals; force cached seed replacement.
+SEED_SHA256 = "bfc5ed1ccf1481bc182c667b722ccb2fd3ae77a8ab1f2e86a5ab5879f2459dc8"
+SEED_BASENAME = "CommunityLobby_chlobby38_P.pak"
+JOIN_SEED_BASENAME = "CommunityJoin_chjoin4_P.pak"
 
 # WHICH COOKED CLASS EACH ROLE PACKS. build_lobby_override.py takes these straight through as
 # --class-pkg / --class, which is how one tool builds both paks from one cooked tree.

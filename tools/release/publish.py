@@ -17,6 +17,9 @@ published to the actual hub that's downloadable and we also use that hub for tes
     publish.py verify        the live catalogue must equal server/public/catalogue.json, every pack_url and the
                              hub download_url must answer with the right size, /api/health must be OK.
     publish.py status        local vs live versions.
+    publish.py proxy-endpoints --version X.Y.Z
+        one-time, disassembly-verified migration of the shipped BB5/lobby URL constants.
+        Produces local release artifacts only; build the signed hub and deploy afterward.
     --push                   accepted and ignored. `deploy` IS the push now; --push used to `git add -A`,
                              which would sweep another session's in-flight work into a release commit.
 
@@ -35,6 +38,9 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit, urlunsplit
+from pathlib import Path
+import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
@@ -43,6 +49,10 @@ PUBLIC = os.path.join(SERVER, "public")
 CATALOGUE = os.path.join(PUBLIC, "catalogue.json")
 VERSION_PY = os.path.join(ROOT, "hub", "version.py")
 WIN = os.name == "nt"
+PUBLIC_ORIGIN = 'https://play.lightsoutranked.com'
+WEBSITE_ORIGIN = 'https://lightsoutranked.com'
+OWNED_ORIGINS = {PUBLIC_ORIGIN, WEBSITE_ORIGIN, 'https://www.lightsoutranked.com',
+                 'https://lightsout.up.railway.app'}
 
 
 # ---------------------------------------------------------------- small helpers
@@ -74,19 +84,29 @@ def load_catalogue():
 
 
 def save_catalogue(c):
+    def owned_url(value, target):
+        if not isinstance(value, str):
+            return value
+        parts = urlsplit(value)
+        if parts.scheme + '://' + parts.netloc in OWNED_ORIGINS:
+            return target + urlunsplit(('', '', parts.path, parts.query, parts.fragment))
+        return value
+    hub = c.get('hub', {})
+    if 'download_url' in hub:
+        hub['download_url'] = owned_url(hub['download_url'], PUBLIC_ORIGIN)
+    if 'page_url' in hub:
+        hub['page_url'] = owned_url(hub['page_url'], WEBSITE_ORIGIN)
+    for mode in c.get('gamemodes', []):
+        if 'pack_url' in mode:
+            mode['pack_url'] = owned_url(mode['pack_url'], PUBLIC_ORIGIN)
     with open(CATALOGUE, "w", encoding="utf-8") as f:
         json.dump(c, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
 
 def origin():
-    """https://host of the live site, taken from the catalogue's own URLs (set once by `railway domain`)."""
-    c = load_catalogue()
-    for u in (c.get("hub", {}).get("page_url"), c.get("hub", {}).get("download_url")):
-        m = re.match(r"^(https?://[^/]+)", str(u or ""))
-        if m and "REPLACE-ME" not in m.group(1):
-            return m.group(1)
-    die("the catalogue has no real site URL yet (hub.page_url / download_url still say REPLACE-ME)")
+    """Stable owned connection origin, independent of old published download URLs."""
+    return PUBLIC_ORIGIN
 
 
 def bump_version(v, how):
@@ -299,6 +319,92 @@ def publish_hub(args):
 
 
 # ---------------------------------------------------------------- packs
+def publish_proxy_endpoints(args):
+    """Migrate the verified shipped cook, never a stale mirror or game-owned asset."""
+    from endpoint_assets import retarget_tree, zip_tree, verify_proof
+    old_host = 'lightsout.up.railway.app'
+    new_host = urlsplit(PUBLIC_ORIGIN).hostname
+    c = load_catalogue()
+    entry = next(g for g in c['gamemodes'] if g['id'] == 'BB5')
+    source = Path(PUBLIC) / 'packs/BB5-1.0.28.zip'
+    baseline_sha = '7891a9b49edcda712e8a03bf09dd0213ca94afe3cd5afb961c5bf85f91e9ba0f'
+    if entry['version'] != '1.0.28' or entry['sha256'] != baseline_sha or not source.is_file() or sha256_of(source) != baseline_sha:
+        raise ValueError('Proxy migration requires the reviewed BB5 1.0.28 baseline')
+    version = check_version(args.version)
+    if not version_newer(version, entry['version']):
+        raise ValueError('Proxy pack version must be newer than the baseline')
+    seed = Path(ROOT) / 'hub/lobbyseed'
+    seed_hashes = {'GM_CHJoin.uexp': '11446f353699c79c22e426cc3b6f2b990aff00a2eacdea61acc4c7bdaae08b4d',
+                   'GM_CHLobby.uexp': '3b23e760f86e34a4150e09df6cf2fde4d7f8edc41c16a1a0fbd7f3c9d350609e'}
+    for name, digest in seed_hashes.items():
+        matches = list(seed.rglob(name))
+        if len(matches) != 1 or sha256_of(matches[0]) != digest:
+            raise ValueError('Proxy migration requires the reviewed lobby baseline: ' + name)
+    mpath = find_manifest('BB5')
+    with tempfile.TemporaryDirectory(prefix='lightsout-proxy-') as temporary:
+        stage = Path(temporary)
+        shutil.copytree(seed, stage / 'seed')
+        pack = stage / 'pack'
+        pack.mkdir()
+        with zipfile.ZipFile(source) as archive:
+            for info in archive.infolist():
+                target = (pack / info.filename).resolve()
+                if not target.is_relative_to(pack.resolve()) or '\\' in info.filename or ':' in info.filename:
+                    raise ValueError('Unsafe path in baseline archive')
+                if not info.is_dir():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(archive.read(info))
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'pak'))
+        from build_gamemode import Builder
+        Builder.check_cook_verdict(str(pack / 'cooked'))
+        Builder.check_cook_verdict(str(stage / 'seed'))
+        proof = []
+        retarget_tree(stage / 'seed', old_host, new_host, proof)
+        retarget_tree(pack, old_host, new_host, proof)
+        verify_proof(proof, migration=True)
+        manifest_path = pack / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        manifest['version'] = version
+        manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+        output = stage / ('BB5-' + version + '.zip')
+        zip_tree(pack, output)
+        entry.update(version=version, pack_url=PUBLIC_ORIGIN + '/packs/' + output.name,
+                     sha256=sha256_of(output), size=output.stat().st_size)
+        evidence = {'source_host': old_host, 'target_host': new_host, 'assets': proof,
+                    'source_pack_sha256': baseline_sha, 'target_pack_sha256': entry['sha256'],
+                    'method': 'Equal-width inline string substitution; disassembly and byte reversibility verified. No recook.'}
+        proof_path = Path(ROOT) / 'docs/releases/2026-09-22-proxy-endpoints.json'
+        touched = [next(seed.rglob(name)) for name in seed_hashes]
+        touched += [Path(mpath), source.parent / output.name, proof_path, Path(CATALOGUE), source]
+        root = Path(ROOT).resolve()
+        if any(not path.resolve().is_relative_to(root) for path in touched):
+            raise ValueError('Migration output is outside the release workspace')
+        backup = {path: path.read_bytes() if path.exists() else None for path in touched}
+        try:
+            # All semantic checks succeeded before any project source or release artifact is changed.
+            for name in seed_hashes:
+                changed = next((stage / 'seed').rglob(name))
+                shutil.copy2(changed, seed / changed.relative_to(stage / 'seed'))
+            source_manifest = json.loads(Path(mpath).read_text(encoding='utf-8'))
+            source_manifest['version'] = version
+            Path(mpath).write_text(json.dumps(source_manifest, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+            shutil.copy2(output, source.parent / output.name)
+            proof_path.parent.mkdir(parents=True, exist_ok=True)
+            proof_path.write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
+            save_catalogue(c)
+            source.unlink()
+        except BaseException:
+            for path, data in backup.items():
+                if data is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    path.write_bytes(data)
+            raise
+
+    say(f'Migrated 32 endpoint constants in 7 authored assets; BB5 {version}, {entry["size"]} bytes')
+    return version
+
+
 def find_manifest(mode_id):
     gm = os.path.join(ROOT, "gamemodes")
     for d in sorted(os.listdir(gm)):
@@ -376,7 +482,7 @@ RELEASE_PATHS = ("hub/version.py", "server/public/catalogue.json", "server/publi
                  "server/public/packs")
 
 
-def deploy(message=None):
+def deploy(message=None, target_branch=None):
     """Ship server/ by PUSHING TO GITHUB, then let verify() wait for the live catalogue to change.
 
     This used to be `railway up` and that path is dead. The `community-hub` service was reconnected
@@ -405,7 +511,7 @@ def deploy(message=None):
     holding /api/probe/slow open) and it drops every in-progress match, because match state is in
     memory. Both are reasons to release deliberately, not to retry blindly.
     """
-    if not shutil.which("git") or not os.path.isdir(os.path.join(ROOT, ".git")):
+    if not shutil.which("git") or not os.path.exists(os.path.join(ROOT, ".git")):
         die("deploying means pushing to GitHub, and this is not a git checkout with git on PATH")
 
     def git_out(*args):
@@ -418,6 +524,10 @@ def deploy(message=None):
         r = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True,
                            encoding="utf-8", errors="replace")
         return r.stdout or ""
+
+    if target_branch is not None:
+        if run(['git', 'check-ref-format', '--branch', target_branch], cwd=ROOT, check=False) != 0:
+            die('Invalid deployment branch')
 
     # Anything modified under server/ that is not a release artefact would never reach Railway.
     artefacts = tuple(p for p in RELEASE_PATHS if p.startswith("server/"))
@@ -442,10 +552,11 @@ def deploy(message=None):
         say("  nothing new to commit — pushing whatever is already ahead of origin")
 
     branch = git_out("rev-parse", "--abbrev-ref", "HEAD").strip() or "HEAD"
-    if run(["git", "push", "origin", branch], cwd=ROOT, check=False) != 0:
+    destination = "HEAD:refs/heads/" + target_branch if target_branch else branch
+    if run(["git", "push", "origin", destination], cwd=ROOT, check=False) != 0:
         die("git push failed — Railway only ships what reaches the branch, so nothing was deployed. "
             "Fix the push (pull/rebase if origin moved) and run `publish.py deploy` again")
-    say(f"  pushed {branch} — Railway builds from the repo; verify() waits for the live catalogue")
+    say(f"  pushed {destination} — Railway builds from the repo; verify() waits for the live catalogue")
 
 
 def as_published(catalogue):
@@ -578,7 +689,9 @@ def main(argv=None):
     h.add_argument("--same-version", action="store_true"); h.add_argument("--no-deploy", action="store_true"); h.add_argument("--push", action="store_true")
     p = sub.add_parser("pack"); p.add_argument("id"); p.add_argument("--bump", choices=["patch", "minor", "major"]); p.add_argument("--version")
     p.add_argument("--cooked"); p.add_argument("--no-deploy", action="store_true"); p.add_argument("--push", action="store_true")
-    sub.add_parser("deploy"); sub.add_parser("verify"); sub.add_parser("status")
+    migration = sub.add_parser('proxy-endpoints'); migration.add_argument('--version', required=True)
+    d = sub.add_parser("deploy"); d.add_argument("--branch", help="Explicit remote deployment branch (no force push)")
+    sub.add_parser("verify"); sub.add_parser("status")
     args = ap.parse_args(argv)
     if args.cmd == "hub":
         v = publish_hub(args)
@@ -592,8 +705,10 @@ def main(argv=None):
             deploy(f"Release {args.id} {v}"); verify()
         if args.push:
             git_push(f"publish {args.id} {v}")
+    elif args.cmd == 'proxy-endpoints':
+        publish_proxy_endpoints(args)
     elif args.cmd == "deploy":
-        deploy(); verify()
+        deploy(target_branch=args.branch); verify()
     elif args.cmd == "verify":
         verify()
     elif args.cmd == "status":

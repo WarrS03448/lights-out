@@ -62,3 +62,22 @@ test('website aliases redirect to the configured account origin before credentia
     assert.equal(response.headers.get('cache-control'),'no-store');
   } finally {delete process.env.HUB_ACCOUNT_ORIGIN;}
 });
+
+test('canonical account page behind Bunny does not redirect to itself; aliases still redirect',async()=>{
+  process.env.HUB_ACCOUNT_ORIGIN='https://lightsoutranked.com';
+  try {
+    for (const route of ['/account','/account.html']) {
+      const response=await fetch(base+route,{redirect:'manual',headers:{
+        host:'lightsout.up.railway.app','x-lightsout-request-host':'lightsoutranked.com'}});
+      assert.equal(response.status,200);
+      assert.equal(response.headers.get('cache-control'),'no-store');
+      assert.match(await response.text(),/id="email-form"/);
+    }
+    for (const forwarded of ['www.lightsoutranked.com','play.lightsoutranked.com','attacker.example','lightsoutranked.com, attacker.example']) {
+      const response=await fetch(base+'/account',{redirect:'manual',headers:{
+        host:'lightsout.up.railway.app','x-lightsout-request-host':forwarded}});
+      assert.equal(response.status,302);
+      assert.equal(response.headers.get('location'),'https://lightsoutranked.com/account');
+    }
+  } finally {delete process.env.HUB_ACCOUNT_ORIGIN;}
+});

@@ -48,7 +48,7 @@ AppId={{2d78e401-2c1f-483f-9b67-51407892cac7}
 AppName={#AppName}
 AppVersion={#HubVersion}
 AppPublisher=Lights Out (unofficial)
-AppPublisherURL=https://lightsout.up.railway.app/
+AppPublisherURL=https://lightsoutranked.com/
 ; There is no {userdownloads} constant (6.7.3 rejects it: "Unknown constant"), so the Downloads
 ; folder is resolved by GetDownloadsDir in [Code] below - it honours a relocated Downloads.
 DefaultDirName={code:GetDownloadsDir}\LightsOut

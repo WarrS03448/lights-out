@@ -57,6 +57,7 @@
  * blank page that might be a bug and not a login loop.
  */
 const crypto = require('crypto');
+const { createOriginResolver } = require('./public-origin.cjs');
 // The directory's column table, read rather than copied: the console renders these columns and
 // validates a saved preset against them, and a second copy of the list is a list that drifts.
 const { PLAYER_COLUMNS } = require('./live.cjs');
@@ -136,12 +137,6 @@ function cleanPrefs(raw) {
     for(const p of presets)if((p.id===active||p.id==='moderation')&&!p.columns.includes('cheater_score'))p.columns.splice(Math.min(3,p.columns.length),0,'cheater_score');
   }
   return { presets, active, cheater_score_column_v1:true };
-}
-
-function baseUrlOf(req) {
-  const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
-  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
-  return `${proto}://${host}`;
 }
 
 function cookiesOf(req) {
@@ -720,6 +715,7 @@ const PLAYERS_JS = `
 `;
 
 function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics, tournament }) {
+  const baseUrlOf = createOriginResolver();
   const key = (token) => `${prefix}adminsession:${token}`;
   const store = {
     async get(k) {

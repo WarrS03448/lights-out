@@ -10,6 +10,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { createOriginResolver } = require('./public-origin.cjs');
 const authModule = require('./auth.cjs');
 const adminModule = require('./admin.cjs');
 const liveModule = require('./live.cjs');
@@ -1681,8 +1682,11 @@ async function router(req, res) {
     // Redirect website aliases before a user enters any credentials.
     try {
       const canonical = new URL(process.env.HUB_ACCOUNT_ORIGIN);
+      // Bunny supplies its parsed original request hostname for page canonicalization only.
+      // Authentication callbacks use the validated configured origin independently.
+      const canonicalProxyRequest = req.headers['x-lightsout-request-host'] === canonical.host;
       if (canonical.protocol === 'https:' && canonical.origin === process.env.HUB_ACCOUNT_ORIGIN &&
-          String(req.headers.host || '').toLowerCase() !== canonical.host.toLowerCase()) {
+          !canonicalProxyRequest && String(req.headers.host || '').toLowerCase() !== canonical.host.toLowerCase()) {
         res.writeHead(302, {location:canonical.origin + '/account', 'cache-control':'no-store', 'referrer-policy':'no-referrer'});
         return res.end();
       }
@@ -1858,6 +1862,7 @@ function requestListener(req, res) {
 // ---------------------------------------------------------------------------
 
 function createServer(options = {}) {
+  createOriginResolver(); // Validate callback configuration before listening.
   // Isolated HTTP contract tests inject a minimal live service. Production calls createServer()
   // without options; keeping the seam here exercises the real router/body/auth code over TCP.
   if (options.liveService) liveRouter = options.liveService;

@@ -27,6 +27,7 @@
 const crypto = require('crypto');
 const accountsModule = require('./accounts.cjs');
 const ownership = require('./account-ownership.cjs');
+const { createOriginResolver } = require('./public-origin.cjs');
 
 const STEAM_OPENID = 'https://steamcommunity.com/openid/login';
 const CLAIMED_ID_RE = /^https?:\/\/steamcommunity\.com\/openid\/id\/(\d{17})$/;
@@ -80,12 +81,6 @@ function randomCode() {
   return out;
 }
 
-function baseUrlOf(req) {
-  const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
-  const host = (req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
-  return `${proto}://${host}`;
-}
-
 /**
  * Ask Steam whether the assertion it just sent us is genuine. This is the step that makes
  * the whole thing safe; skipping it would let anyone forge a sign-in.
@@ -131,6 +126,7 @@ async function fetchProfile(steamId) {
 function create({ upstashCmd, prefix = 'hub:', accountPrefix=prefix, accountStore=upstashCmd,
                   allowSteamId=()=>true, privateGameplay=false, sendJson, badRequest, verify, accounts, ownershipTransaction,
                   recordSteamSignIn=async()=>{}, onAccountsChanged=()=>{} }) {
+  const baseUrlOf = createOriginResolver();
   const store = makeStore(upstashCmd, prefix + 'auth:');
   const accountService = accountsModule.create({upstashCmd:accountStore,prefix:accountPrefix,authPrefix:prefix,sendJson,
     steamIdentity,ownershipTransaction,onAccountsChanged,options:accounts,revokeSteam:token=>store.del(`token:${token}`)});

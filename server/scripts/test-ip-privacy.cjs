@@ -34,7 +34,7 @@ test('diagnostic storage excludes network identifiers and unstructured request b
   const base = `http://127.0.0.1:${server.address().port}`;
   const headers = {'content-type':'application/json', 'x-forwarded-for':'203.0.113.10',
     'x-real-ip':'2001:db8::1', forwarded:'for=203.0.113.10',
-    'cf-connecting-ip':'203.0.113.10', 'user-agent':'client at 203.0.113.10'};
+    'cf-connecting-ip':'203.0.113.10', 'cdn-real-ip':'203.0.113.10', 'x-client-ip':'2001:db8::1', 'user-agent':'client at 203.0.113.10'};
   const response = await fetch(base + '/api/probe?ip=203.0.113.10', {method:'POST', headers,
     body:JSON.stringify({event_name:'ch_lobby_alive', user_id:host, ip:'203.0.113.10',
       client_ip:'2001:db8::1', extra:{remoteAddress:'203.0.113.10'}})});
@@ -70,7 +70,7 @@ test('host travel uses its match credential without reading any network address'
   const server = createServer({liveService:service, analyticsService:{emit(){}}});
   server.prependListener('request', req => {
     Object.defineProperty(req.socket, 'remoteAddress', {get(){throw Error('IP address was read');}, configurable:true});
-    for (const name of ['x-forwarded-for','x-real-ip','cf-connecting-ip','forwarded'])
+    for (const name of ['x-forwarded-for','x-real-ip','cf-connecting-ip','forwarded','cdn-real-ip','x-client-ip'])
       Object.defineProperty(req.headers, name, {get(){throw Error('IP header was read');}, configurable:true});
   });
   await new Promise(r=>server.listen(0,'127.0.0.1',r));

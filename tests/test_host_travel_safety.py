@@ -58,7 +58,7 @@ def test_shipped_host_bytecode_cannot_launch_search_or_join():
                         r"[^\n]*NameConst 'chreport-7f3a91'", calls)[1]
     converted = re.search(r"Let \(([^\n]+)\)\n[^\n]*\n[^\n]*CallMath Conv_NameToString[^\n]*\n"
                           r"[^\n]*\$Local " + re.escape(literal), calls)[1]
-    assert re.search(r"String 'https://lightsout.up.railway.app/api/probe/slow'\n"
+    assert re.search(r"String 'https://play.lightsoutranked.com/api/probe/slow'\n"
                      r"[^\n]*\$Local " + re.escape(converted), calls)
     assert calls.count("CallMath OpenLevel@") == 1
     assert calls.count("String 'LobbyHost'") == 2
