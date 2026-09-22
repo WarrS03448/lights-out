@@ -21,6 +21,7 @@ import urllib.parse
 import urllib.request
 
 from .version import API_BASE
+from . import transport
 
 TIMEOUT_SECONDS = 20          # per request
 POLL_EVERY_SECONDS = 2.0
@@ -35,6 +36,10 @@ class AuthError(Exception):
         self.status = status
 
 
+class AuthUnavailable(AuthError):
+    """Temporary transport/service failure; a saved credential is not rejected."""
+
+
 def _request(path, method="GET", token=None, timeout=TIMEOUT_SECONDS, data=None):
     url = API_BASE.rstrip("/") + path
     encoded = json.dumps(data).encode("utf-8") if data is not None else None
@@ -45,10 +50,10 @@ def _request(path, method="GET", token=None, timeout=TIMEOUT_SECONDS, data=None)
     if token:
         req.add_header("authorization", "Bearer " + token)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
+        with transport.urlopen(req, timeout=timeout) as response:
             raw = response.read(32769)
             if len(raw) > 32768:
-                raise AuthError("Sign-in response was too large.")
+                raise AuthUnavailable("Sign-in response was too large.")
             raw = raw.decode("utf-8", "replace")
             return response.status, json.loads(raw) if raw else {}
     except urllib.error.HTTPError as e:                # 401 and friends carry a JSON body
@@ -57,9 +62,9 @@ def _request(path, method="GET", token=None, timeout=TIMEOUT_SECONDS, data=None)
         except Exception:                              # noqa: BLE001
             return e.code, {}
     except urllib.error.URLError as e:
-        raise AuthError("Sign-in is temporarily unavailable.") from None
+        raise AuthUnavailable("Sign-in is temporarily unavailable.") from None
     except (ValueError, OSError) as e:                 # bad JSON, socket trouble
-        raise AuthError("Sign-in is temporarily unavailable.") from None
+        raise AuthUnavailable("Sign-in is temporarily unavailable.") from None
 
 
 def account_request(action, data=None, token=None):
@@ -115,18 +120,18 @@ def me(token):
     """The account behind a saved token, or None when it is no longer good.
 
     Also refreshes the token's lifetime server-side, so an active player never has to
-    sign in again."""
+    sign in again. Temporary network/service failures raise AuthUnavailable so callers
+    can retry without treating an unreachable service as a rejected credential."""
     if not token:
         return None
     # An interrupted/offline logout must never restore its saved credential.
     if revocation_pending(token):
         return None
-    try:
-        status, body = _request("/api/auth/me", token=token)
-    except AuthError:
-        return None                       # offline: the caller decides what to do
-    if status != 200 or not body.get("ok"):
+    status, body = _request("/api/auth/me", token=token)
+    if status in (401, 403):
         return None
+    if status != 200 or not isinstance(body, dict) or not body.get("ok"):
+        raise AuthUnavailable("Sign-in is temporarily unavailable.", status=status)
     return body
 
 

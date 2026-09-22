@@ -26,6 +26,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from . import transport
+
 from .version import API_BASE, HUB_VERSION
 from . import telemetry
 from .player_identity import normalize
@@ -421,7 +423,7 @@ class LiveClient:
         if data is not None:
             req.add_header("content-type", "application/json")
         try:
-            with urllib.request.urlopen(req, timeout=ACTION_TIMEOUT_SECONDS) as response:
+            with transport.urlopen(req, timeout=ACTION_TIMEOUT_SECONDS) as response:
                 raw = response.read().decode("utf-8", "replace")
                 return response.status, normalize(json.loads(raw) if raw else {})
         except urllib.error.HTTPError as e:
@@ -561,7 +563,7 @@ class LiveClient:
         req.add_header("accept", "application/json")
         self._stamp(req)
         try:
-            with urllib.request.urlopen(req, timeout=ACTION_TIMEOUT_SECONDS) as response:
+            with transport.urlopen(req, timeout=ACTION_TIMEOUT_SECONDS) as response:
                 raw = response.read().decode("utf-8", "replace")
                 return response.status, normalize(json.loads(raw) if raw else {})
         except urllib.error.HTTPError as e:
@@ -671,7 +673,7 @@ class LiveClient:
         # The stream carries the version too, and for a party member it is the ONLY request
         # that does - see _stamp.
         self._stamp(req)
-        with urllib.request.urlopen(req, timeout=READ_TIMEOUT_SECONDS) as response:
+        with transport.urlopen(req, timeout=READ_TIMEOUT_SECONDS) as response:
             if response.status != 200:
                 raise RuntimeError("stream refused: HTTP %s" % response.status)
             self.connected = True
@@ -707,7 +709,7 @@ def stats():
     try:
         req = urllib.request.Request(API_BASE.rstrip("/") + "/api/live/stats")
         req.add_header("accept", "application/json")
-        with urllib.request.urlopen(req, timeout=ACTION_TIMEOUT_SECONDS) as response:
+        with transport.urlopen(req, timeout=ACTION_TIMEOUT_SECONDS) as response:
             return json.loads(response.read().decode("utf-8", "replace") or "{}")
     except Exception:              # noqa: BLE001
         return None

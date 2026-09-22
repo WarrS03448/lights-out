@@ -3021,19 +3021,40 @@ class LiveSession(MockSession):
     def restore_account(self, saved):
         if not saved.get("token"):
             return
+        saved = dict(saved)
         self._proof_epoch = getattr(self, "_proof_epoch", 0) + 1
         epoch = self._proof_epoch
-        def work():
-            fresh = auth_mod.me(saved["token"])
+        account_epoch = self._account_epoch
+        delays = (1000, 2000, 5000, 10000, 20000, 30000)
+        def current():
+            return (self._proof_epoch == epoch and self._account_epoch == account_epoch
+                    and not getattr(self.panel, "_closed", False))
+        def start(attempt=0):
+            if current():
+                threading.Thread(target=lambda: work(attempt), daemon=True).start()
+        def work(attempt):
+            if not current():
+                return
+            try:
+                fresh = auth_mod.me(saved["token"])
+            except auth_mod.AuthUnavailable:
+                def retry():
+                    if current():
+                        self._later(delays[min(attempt, len(delays) - 1)],
+                                    lambda: start(attempt + 1))
+                self.panel.post(retry)
+                return
+            except auth_mod.AuthError:
+                return
             def apply():
-                if self._proof_epoch != epoch or not fresh:
+                if not current() or not fresh:
                     return
                 self.adopt_account({**saved, **fresh, "token": saved["token"]})
                 if not str(saved["token"]).startswith("lo_"):
                     self.phase = "idle"
                 self._changed()
             self.panel.post(apply)
-        threading.Thread(target=work, daemon=True).start()
+        start()
 
     def _connect(self):
         if self.client is not None or not self.token:
@@ -5123,6 +5144,7 @@ class CompetitivePanel:
         return job
 
     def destroy(self):
+        self._closed = True
         session = getattr(self, "session", None)
         if session is not None and hasattr(session, "_disconnect"):
             try:

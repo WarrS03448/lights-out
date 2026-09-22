@@ -11,7 +11,7 @@ import urllib.request
 import uuid
 import sys
 from pathlib import Path
-from . import paths
+from . import paths, transport
 from .version import API_BASE, HUB_VERSION
 
 MAX_EVENTS, MAX_BYTES, BATCH_SIZE = 1000, 1024 * 1024, 40
@@ -36,7 +36,7 @@ def _safe_data(fields):
 class _Telemetry:
     def __init__(self, outbox_path=None, open_url=None, background=True, max_events=MAX_EVENTS, max_bytes=MAX_BYTES):
         self._path = Path(outbox_path) if outbox_path is not None else None
-        self._open_url = open_url or urllib.request.urlopen
+        self._open_url = open_url or transport.urlopen
         self._background = background
         self._max_events = max(1, min(int(max_events), MAX_EVENTS))
         self._max_bytes = max(512, min(int(max_bytes), MAX_BYTES))

@@ -32,6 +32,8 @@ import shutil
 import tempfile
 import urllib.error
 import urllib.request
+
+from . import transport
 import zipfile
 
 from . import i18n
@@ -52,7 +54,7 @@ def fetch_catalogue(url, timeout: int = 10) -> dict:
     """
     req = urllib.request.Request(str(url), headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with transport.urlopen(req, timeout=timeout) as resp:
             raw = resp.read()
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"Server returned HTTP {e.code} for {url}") from e
@@ -227,7 +229,7 @@ def _download(url, out_path, expect_sha, expect_size=None, progress=None) -> Non
     """Download `url` to `out_path`, reporting progress(done_bytes, total_bytes)."""
     req = urllib.request.Request(str(url), headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp, open(out_path, "wb") as out:
+        with transport.urlopen(req, timeout=30) as resp, open(out_path, "wb") as out:
             total = expect_size or 0
             try:
                 total = int(resp.headers.get("Content-Length") or total or 0)
