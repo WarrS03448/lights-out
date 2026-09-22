@@ -618,13 +618,14 @@ async function main() {
       }
     });
 
-    await test('GET /hub/download 302s to the zip when published, else the exe', async () => {
+    await test('GET /hub/download keeps the published zip or exe on the reached hostname', async () => {
       const catRes = await fetch(`${base}/catalogue.json`);
       const cat = await catRes.json();
 
       const res = await fetch(`${base}/hub/download`, { redirect: 'manual' });
       assert.equal(res.status, 302);
-      assert.equal(res.headers.get('location'), cat.hub.zip_url || cat.hub.download_url);
+      const target = new URL(cat.hub.zip_url || cat.hub.download_url);
+      assert.equal(res.headers.get('location'), target.pathname + target.search + target.hash);
       // hub/update.py self-updates from download_url and must get a runnable exe, never the zip
       assert.ok(cat.hub.download_url.endsWith('.exe'), 'download_url must stay the .exe');
     });

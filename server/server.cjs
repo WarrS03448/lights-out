@@ -675,8 +675,21 @@ function handleHubDownload(req, res) {
   if (!downloadUrl) {
     return sendJson(res, 500, { error: 'Server error.' });
   }
+  // A visitor may reach the website while the app hostname resolves to an
+  // unreachable CDN edge. Keep our local installer on the origin they reached;
+  // do not infer an absolute destination from proxy or browser Host headers.
+  let downloadLocation = downloadUrl;
+  try {
+    const target = new URL(downloadUrl);
+    const owned = ['https://play.lightsoutranked.com', 'https://lightsoutranked.com',
+      'https://www.lightsoutranked.com', 'https://lightsout.up.railway.app'];
+    if (owned.includes(target.origin) && !target.username && !target.password
+        && target.pathname.startsWith('/hub/')) {
+      downloadLocation = target.pathname + target.search + target.hash;
+    }
+  } catch { /* Existing relative download paths already preserve the origin. */ }
   res.writeHead(302, {
-    location: downloadUrl,
+    location: downloadLocation,
     'cache-control': 'no-store',
     'content-length': 0,
   });
