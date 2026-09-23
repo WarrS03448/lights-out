@@ -1,5 +1,5 @@
 {
-  "release": "2.6.8",
+  "release": "2.6.9",
   "date": "2026-09-23",
   "scope": "Original client, server, gamemode generators, editor helper, packaging code and tests",
   "source_export_changes": [
@@ -17,7 +17,8 @@
     "Add verified Settings account linking and highlighted website account links in 2.3.89",
     "Integrate verified account identity and profile counts into Players, Overview and Analytics, with exact profile drilldowns and no account credentials in console data",
     "Include seven distinct participant votes to void matches, authenticated durable voting, Bodycam cleanup and the MATCH VOIDED result screen in 2.5.0",
-    "Show registered Lights Out users and tournament registrations in the client header, with refresh and reconnect handling, in 2.6.6"
+    "Show registered Lights Out users and tournament registrations in the client header, with refresh and reconnect handling, in 2.6.6",
+    "Harden player/admin Steam login, enforce trusted signed updates, update Pillow, and disclose retention and source/download correspondence in 2.6.9"
   ],
   "gamemode_packs": [
     {
@@ -29,7 +30,7 @@
       "sha256": "3c1aca5d2d8a02471f547dde8ca98e078fd0b7b5292e54c24ac88e2e9587e3cf"
     }
   ],
-  "download_record": "docs/releases/2.6.8.json",
+  "download_record": "https://github.com/WarrS03448/lights-out/releases/download/v2.6.9/release-source.json",
   "build_limits": "docs/release-provenance.md",
   "intentionally_unavailable": [
     "server/fair-play.cjs: hosted evidence review",
@@ -37,6 +38,5 @@
     "server/cheater-restitution.cjs: hosted result-correction operations",
     "Live website leaderboard module, routes and page assets",
     "Private Linux pilot source and packages"
-  ],
-  "working_tree_status": "Unreleased security fixes after the published 2.6.8 snapshot; see docs/security-audit-2026-09-23.md"
+  ]
 }

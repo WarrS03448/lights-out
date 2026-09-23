@@ -7,7 +7,15 @@ from unittest.mock import patch
 
 import pytest
 
-from hub import update
+from hub import update, version
+
+
+def signed_release():
+    release = (Path(__file__).resolve().parents[1] / "server/public/hub" /
+               f"LightsOut-Setup-{version.HUB_VERSION}.exe")
+    if not release.exists():
+        pytest.skip("official signed installer fixture absent from source distribution")
+    return release
 
 
 @pytest.mark.parametrize("kind", [None, "inno-setup", "unknown"])
@@ -25,10 +33,7 @@ def test_untrusted_update_never_launches(kind, tmp_path):
 @pytest.mark.skipif(os.name != "nt", reason="Windows Authenticode")
 def test_real_signed_release_is_accepted_and_tampering_is_rejected(tmp_path):
     from hub.update_trust import verify_signature, locked_update
-    root = Path(__file__).resolve().parents[1]
-    release = root / "server/public/hub/LightsOut-Setup-2.6.8.exe"
-    if not release.exists():
-        pytest.skip("historical release fixture absent")
+    release = signed_release()
     signed_copy = tmp_path / "signed.exe"
     shutil.copyfile(release, signed_copy)
     with locked_update(str(signed_copy)) as path:
@@ -54,9 +59,7 @@ def test_real_signed_release_is_accepted_and_tampering_is_rejected(tmp_path):
 @pytest.mark.skipif(os.name != "nt", reason="Windows Authenticode")
 def test_signed_old_payload_cannot_downgrade_client(tmp_path):
     from hub import update_trust
-    release = Path(__file__).resolve().parents[1] / "server/public/hub/LightsOut-Setup-2.6.8.exe"
-    if not release.exists():
-        pytest.skip("historical release fixture absent")
+    release = signed_release()
     # The catalogue may claim any version; the signed payload must be newer.
     with patch.object(update, "Popen") as launched:
         with pytest.raises(RuntimeError, match="newer"):

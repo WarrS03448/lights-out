@@ -65,7 +65,7 @@ not establish that the underlying game behavior has been resolved.
 ## Download provenance, hosted components and Linux
 
 [Source/download correspondence](docs/release-provenance.md) lists the exact
-v2.6.8 public commit and installer/pack hashes, the hosted-only moderation
+release source commits and installer/pack hashes, the hosted-only moderation
 adapters, the website leaderboard omission, and the private Linux pilot's limits.
 The public service is a reduced source distribution: `fair-play.cjs` and
 `suspicion.cjs` report unavailable, and hosted operations in

@@ -5,6 +5,14 @@ endorsed by Reissad Studio. Its purpose is community play, not cheating.
 
 ## Identify a download
 
+The **2.6.9 security release** includes a machine-readable
+[release-source.json](https://github.com/WarrS03448/lights-out/releases/download/v2.6.9/release-source.json)
+asset with its exact public source commit and installer/pack SHA256 hashes.
+The tag `v2.6.9` identifies that commit. Download and compare the complete file;
+the signed Windows installer is the official client download.
+
+### Historical 2.6.8 correspondence
+
 The public tag **v2.6.8** resolves to commit
 `123d38ad00eb45f393f4fc132bb86cddfe4db768` in
 [WarrS03448/lights-out](https://github.com/WarrS03448/lights-out/tree/123d38ad00eb45f393f4fc132bb86cddfe4db768).
@@ -23,9 +31,8 @@ The installer also carries Samuel Warren's timestamped Authenticode signature.
 Old installer URLs may stop being served when a new release replaces them; the
 source tag and recorded hashes still identify the old release.
 
-The September 23 security changes are **unreleased source changes** until a new
-installer and server deployment are published. The v2.6.8 record identifies the
-existing release and does not claim that it contains those changes.
+The September 23 security changes are included in **2.6.9**. The v2.6.8 record
+identifies the historical release; its installer does not contain those fixes.
 
 ## What this proves
 

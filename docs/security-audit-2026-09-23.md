@@ -1,8 +1,9 @@
 # Verification of the public security audit
 
-Status: fixes implemented and tested locally; **not published or deployed**.
-The currently published Windows release remains 2.6.8. No live exploitation,
-player-account access, production-data mutation or game test was performed.
+These fixes are included in the **2.6.9 security release** and corresponding
+server changes. See [the release and download record](https://github.com/WarrS03448/lights-out/releases/tag/v2.6.9)
+for publication status and exact artifacts. The original verification did not
+perform live exploitation, player-account access or a game test.
 
 ## Findings and fixes
 
@@ -67,7 +68,7 @@ player-account access, production-data mutation or game test was performed.
   redirects and trusted callback configuration.
 - Full implementation client suite: **840 passed, 26 subtests passed**.
 - Full public-source client suite: **839 passed, 2 skipped, 26 subtests passed**.
-  The skips need the historical signed installer, intentionally excluded from the
+  The skips need the official signed installer, intentionally excluded from the
   public repository; those real-binary checks passed in the implementation tree.
 - A concurrent rerun of both client suites hit the existing detached Windows
   cleanup test's six-second final-status deadline (`verifying_exit` rather than
@@ -98,7 +99,7 @@ player-account access, production-data mutation or game test was performed.
 - [Pillow release notes](https://pillow.readthedocs.io/en/stable/releasenotes/)
 - [Microsoft durable signing identity and timestamps](https://learn.microsoft.com/en-us/azure/artifact-signing/concept-certificate-management)
 
-Publication remains a separate step: build a new version through the official
-signed release publisher, deploy server/pages, synchronize the reviewed public
-source, create its immutable source/download record and verify the full live
-downloads. The old 2.6.8 installer must not be presented as containing these fixes.
+Release verification includes the official signed publisher, deployed server/pages,
+the independently maintained public source, an immutable source/download record,
+and complete live download checks. The old 2.6.8 installer does not contain
+these fixes; users must install 2.6.9 or later for the client protections.
