@@ -6,7 +6,19 @@
 
   // Also runnable without a browser for the ordering/filtering checks.
   if (typeof module !== "undefined" && module.exports) { module.exports = selectRows; return; }
-  window.HubUI.registerScreen("leaderboard", { render: render });
+  window.HubUI.registerScreen("leaderboard", { render: render, update: update });
+  function accountOf(state) {
+    var auth = state.auth || {};
+    return auth.signed_in ? String(auth.player_id || auth.steam_id || "signed-in") : "";
+  }
+  function viewKey(state) {
+    return JSON.stringify([accountOf(state), state.lang, (state.leaderboard || {}).mode || "BB5"]);
+  }
+  function update(root, state, ctx) {
+    if (root._leaderboardKey !== viewKey(state) || !root._updateLeaderboard) { return false; }
+    root._updateLeaderboard(state, ctx);
+    return true;
+  }
 
   // Keep the selected scope and controls across core snapshot redraws.
   var activeScope = "global";
@@ -57,14 +69,23 @@
   var fetchedAccount = null;
   var fetched = false;
   var friendsFetched = false;
+  var fetchedMode = null;
 
   function render(root, state, ctx) {
     var ui = ctx.ui, el = ui.el;
-    var account = (state.auth || {}).signed_in ? String((state.auth || {}).steam_id || "signed-in") : "";
+    var account = accountOf(state);
     if (account !== fetchedAccount) {
       fetchedAccount = account; fetched = false; friendsFetched = false;
+      activeScope = "global";
+      controls = { query: "", tier: "", status: "", sort: "", direction: "none" };
+      scrollPosition = { top: 0, left: 0 };
     }
     var lb = state.leaderboard || {};
+    if (fetchedMode !== (lb.mode || "BB5")) {
+      fetchedMode = lb.mode || "BB5"; fetched = false;
+      controls = { query: "", tier: "", status: "", sort: "", direction: "none" };
+      scrollPosition = { top:0, left:0 };
+    }
     // The ladder the server sent with `hello`, which is what turns a row's rank name into the
     // index its badge is keyed by. It rides on the competitive slice because that is the screen
     // that owns it; every slice is in every snapshot, so it is here whichever view is showing.
@@ -95,6 +116,9 @@
     var heading = el("div", "lb-heading");
     heading.appendChild(el("h1", "lb-title", lt("title")));
     head.appendChild(heading);
+    head.appendChild(ui.tabs([{id:"BB5",label:"5v5 Bodybomb"},{id:"BB1",label:"1v1 Bodybomb"}], lb.mode || "BB5", function (mode) {
+      ctx.call("leaderboard_mode", mode);
+    }));
 
     var tabItems = scopes.map(function (id) {
       return { id: id, label: lt(id === "friends" ? "tab_friends" : "tab_global") };
@@ -234,6 +258,39 @@
     wrap.appendChild(footer);
 
     root.appendChild(wrap);
+    root._leaderboardKey = viewKey(state);
+    var dataKey = JSON.stringify([lb, (state.friends || {}).list, ranks]);
+    root._updateLeaderboard = function (next, nextCtx) {
+      var nextLb = next.leaderboard || {}, nextRanks = ((next.comp || {}).ladder || {}).ranks || null;
+      var nextKey = JSON.stringify([nextLb, (next.friends || {}).list, nextRanks]);
+      // Callbacks read the latest snapshot even when only unrelated state changed.
+      state = next; ctx = nextCtx;
+      if (nextKey === dataKey) { return; }
+      dataKey = nextKey; lb = nextLb; ranks = nextRanks; strings = lb.strings || {};
+      sourceRows = (lb.rows || []).slice();
+      if (lb.you && !sourceRows.some(function (p) { return p.is_you ||
+          (p.player_id && p.player_id === lb.you.player_id) || (p.steam_id && p.steam_id === lb.you.steam_id); })) {
+        sourceRows.push(Object.assign({}, lb.you, { is_you: true }));
+      }
+      var names = ((ranks || {}).names || []).slice();
+      if ((ranks || {}).top) { names.push(ranks.top); }
+      sourceRows.forEach(function (p) { if (p.rank_name && names.indexOf(p.rank_name) === -1) { names.push(p.rank_name); } });
+      var patchOptions = function () {
+        if (document.activeElement === tierSelect) { return; }
+        var wanted = [{ value: "", label: lt("all_tiers") }].concat(names.map(function (n) { return { value:n, label:n }; }));
+        if (JSON.stringify(Array.from(tierSelect.options).map(function (o) { return [o.value,o.textContent]; })) !== JSON.stringify(wanted.map(function (o) { return [o.value,o.label]; }))) {
+          tierSelect.replaceChildren.apply(tierSelect, wanted.map(function (o) { var n=el("option","",o.label);n.value=o.value;return n; }));
+          tierSelect.value=controls.tier;
+        }
+      };
+      tierSelect.onblur = patchOptions;
+      patchOptions();
+      var top = viewport.scrollTop, left = viewport.scrollLeft;
+      updateRows();
+      viewport.scrollTop = top; viewport.scrollLeft = left;
+      var go = footer.querySelector("button");
+      if (go) { go.disabled = !lb.available || !sourceRows.some(function (p) { return p.is_you; }); }
+    };
     // Core rebuilds the screen for unrelated live updates; keep the row the player reached.
     viewport.scrollTop = scrollPosition.top;
     viewport.scrollLeft = scrollPosition.left;

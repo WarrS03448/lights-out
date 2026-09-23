@@ -5597,7 +5597,7 @@ def test_live_session_reports_the_installed_pack_version():
     from hub.version import HUB_VERSION
     s, panel = _live_session()
     panel.app = _FakeApp(installed={C.COMPETITIVE_MODE_ID: {"version": "1.0.6"}})
-    assert s._versions() == {"hub": HUB_VERSION, "mode": "1.0.6"}
+    assert s._versions() == {"hub": HUB_VERSION, "mode": "1.0.6", "BB5": "1.0.6", "BB1": ""}
     # updating the pack under a running hub changes the very next request, with no restart
     panel.app.state["installed"][C.COMPETITIVE_MODE_ID]["version"] = "1.0.7"
     assert s._versions()["mode"] == "1.0.7"

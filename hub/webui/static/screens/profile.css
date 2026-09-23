@@ -169,3 +169,4 @@
 @media (max-width: 860px) {
   .profile-ranks-head, .profile-ranks-scroll { padding: var(--sp-5); }
 }
+.ranked-profile-ranks { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }

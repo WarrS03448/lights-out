@@ -42,12 +42,16 @@ function projectReceipt(r) {
   const ids=[...new Set([...Object.values(teams).flat(),...rows.map(p=>p.steamId),...roster.map(identity.playerOf)])].filter(identity.validPlayer);
   const board=Array.isArray(r.board)?r.board:(full.scoreboard||[]);
   const mm=r.inputs?.mm||full.mm||{};
+  const mode=text(r.analytics_context?.mode||r.mode||full.mode)||'BB5';
+  const frozen=r.analytics_context?.balance||{};
+  const initialHost=ids.includes(frozen.initial_host||full.initial_host)?(frozen.initial_host||full.initial_host):null;
+  const startingSides=mode==='BB1'?(frozen.starting_sides||full.starting_sides||{}):(full.sides||{});
   const players=ids.map(sid=>{
     const row=rows.find(p=>p.steamId===sid), person=roster.find(p=>identity.playerOf(p)===sid)||{}, stats=board.find(p=>identity.playerOf(p)===sid)||{};
     const before=numeric(row?.before),after=numeric(row?.after);
     const team=Object.keys(teams).find(k=>(teams[k]||[]).includes(sid))||person.team;
     const c=stats.combat||{};
-    return {player_id:sid,...(identity.gameOf(person)?{steam_id:identity.gameOf(person),game_steam_id:identity.gameOf(person)}:{}),persona:text(person.persona||person.name,64),team:Number(team)||null,starting_side:['attack','defend'].includes(full.sides?.[team])?full.sides[team]:null,
+    return {player_id:sid,...(identity.gameOf(person)?{steam_id:identity.gameOf(person),game_steam_id:identity.gameOf(person)}:{}),persona:text(person.persona||person.name,64),team:Number(team)||null,starting_side:['attack','defend'].includes(startingSides?.[team])?startingSides[team]:null,
       won:typeof row?.won==='boolean'?row.won:null,party_size:Array.isArray(mm.parties)?(mm.parties.find(p=>p.includes(sid))?.length||1):null,
       mmr_delta:number(row?.delta) ?? (number(before.rating)!==null&&number(after.rating)!==null?after.rating-before.rating:null),
       rr_delta:number(row?.rr?.delta),before,after,
@@ -65,10 +69,10 @@ function projectReceipt(r) {
   // Context is written by the server from resolved constants, never client environment data.
   const config=canonical(JSON.parse(JSON.stringify(rules)));
   const out={schema:1,id,at,day:new Date(at).toISOString().slice(0,10),created:number(full.created),
-    map:text(full.map)||'Unknown',mode:text(r.analytics_context?.mode)||'BB5',version,
+    map:text(full.map)||'Unknown',mode,version,
     deployment:text(r.analytics_context?.deployment),scoring_version:text(r.version),rules_id:hash(config),rules:config,
     resolved_rules:Boolean(r.analytics_context?.rules),match_size:ids.length||number(full.size)||0,
-    region:text(mm.region||r.analytics_context?.region)||'unknown',host:text(full.host||r.host,36),host_game_steam_id:text(full.host_game_steam_id,17),
+    region:text(mm.region||r.analytics_context?.region)||'unknown',host:mode==='BB1'?initialHost:text(full.host||r.host,36),host_game_steam_id:text(full.host_game_steam_id,17),
     outcome:voided?'voided':completed?(r.draw?'draw':'completed'):(text(full.outcome)||'unfinished'),reason:text(full.reason),
     winner:Number(r.winner||full.won_team)||null,score,completed,draw:r.draw===true,
     duration_seconds:number(full.created)!==null?Math.max(0,(at-full.created)/1000):null,
@@ -81,7 +85,11 @@ function projectReceipt(r) {
     stats_series:evidence(r.inputs?.stats?.series||{}),
     coverage:{reported:players.filter(p=>p.coverage.reported).length,players:ids.length,damage:players.filter(p=>p.coverage.damage).length,ratings:rows.length},
     predicted_win:number(r.analytics_context?.predicted_win),duration_basis:'Formation to match end'};
-  out.test_match=out.match_size!==10;
+  out.test_match=out.match_size!==(mode==='BB1'?2:10);
+  if(mode==='BB1'){
+    out.repeat_review=[...new Set((r.repeat_review||[]).filter(id=>ids.includes(id)))].slice(0,2);
+    out.balance={initial_host:initialHost,starting_sides:startingSides,host_changed:frozen.host_changed===true};
+  }
   out.fair_play=require('./fair-play.cjs').inspect(out);
   return out;
 }

@@ -56,9 +56,9 @@ const s=fixture.snapshot;s.view='profile';s.update=null;s.gamemode_update=null;
  const cancelled=await page.locator('.hist-row').count();assert(cancelled<total);
  s.history.seq++;await page.evaluate(s=>__hub.onState(s),s);
  assert.equal(await page.getByRole('tab',{name:'Cancelled',exact:true}).getAttribute('aria-selected'),'true');
- await page.getByRole('tab',{name:'All',exact:true}).click();assert.equal(await page.locator('.hist-row').count(),total);
+ await page.locator('.ui-tabs:not(.ranked-history-modes)').getByRole('tab',{name:'All',exact:true}).click();assert.equal(await page.locator('.hist-row').count(),total);
  await page.getByRole('tab',{name:'Played',exact:true}).click();assert((await page.locator('.hist-row').count())<total);
- await page.getByRole('tab',{name:'All',exact:true}).click();
+ await page.locator('.ui-tabs:not(.ranked-history-modes)').getByRole('tab',{name:'All',exact:true}).click();
  await page.getByRole('button',{name:'Refresh',exact:true}).click();
  assert(calls.some(c=>c[0]==='refresh_history'));
  for(const action of ['click','Enter',' ']){

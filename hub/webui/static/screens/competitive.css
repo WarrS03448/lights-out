@@ -18,7 +18,7 @@
 .hero {
   background: var(--accent);
   color: #fff;
-  padding: 44px 40px 32px;
+  padding: 92px 40px 32px;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -37,6 +37,11 @@
  * be the thing that scrolls; it also finally gives .hero-spacer a height to push against, so
  * the action block sits at the bottom of a tall window instead of under the stats. */
 .hero-inner { position: relative; display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.ranked-mode-bar { position: absolute; inset: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid rgba(255,255,255,.45); }
+.ranked-mode-choice { min-height: 42px; padding: 8px; border: 0; border-right: 1px solid rgba(255,255,255,.45); border-radius: 0; background: transparent; color: #fff; font-family: var(--font-display); font-size: 13px; cursor: pointer; }
+.ranked-mode-choice.active { background: rgba(0,0,0,.27); }
+.ranked-mode-choice:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+.ranked-mode-choice:disabled { cursor: default; opacity: .6; }
 .hero-id { display: flex; align-items: center; gap: 12px; }
 .hero-badge {
   width: 48px; height: 48px;
@@ -644,3 +649,5 @@ button.veto-map:focus-visible { outline-color: var(--accent); }
 /* Account disclosures remain readable beside the sign-in controls. */
 .account-disclosure{font-size:12px;line-height:1.45;opacity:.85;max-width:430px;margin:18px 0 0}
 .account-policies{display:flex;gap:18px;flex-wrap:wrap}
+
+.hero:has(.ranked-mode-bar) .hero-tools { top: 50px; }

@@ -1,11 +1,11 @@
 {
   "catalogue_version": 1,
   "hub": {
-    "version": "2.6.9",
-    "download_url": "https://play.lightsoutranked.com/hub/LightsOut-Setup-2.6.9.exe",
+    "version": "2.6.10",
+    "download_url": "https://play.lightsoutranked.com/hub/LightsOut-Setup-2.6.10.exe",
     "page_url": "https://lightsoutranked.com/",
-    "sha256": "3977f449f98aab7f7686b567b58c5b1745695d9aa937708cd2f8d2d93e4d4eb8",
-    "size": 21525544,
+    "sha256": "edece8d13a6f26a60e4f9d92a9adc53a8310bd03231ca82d00c578a29a101d96",
+    "size": 21534976,
     "kind": "inno-setup"
   },
   "gamemodes": [
@@ -76,6 +76,42 @@
         "team_switch_interval": 6,
         "team_size": 5,
         "max_players": 10
+      }
+    },
+    {
+      "id": "BB1",
+      "title": "Bodybomb 1v1 (Paintball)",
+      "titles": {
+        "de": "Bodybomb 1v1 (Paintball)",
+        "en": "Bodybomb 1v1 (Paintball)",
+        "es": "Bodybomb 1v1 (Paintball)",
+        "fr": "Bodybomb 1v1 (Paintball)",
+        "pt": "Bodybomb 1v1 (Paintball)",
+        "ru": "Bodybomb 1v1 (Paintball)",
+        "zh": "Bodybomb 1v1 (Paintball)"
+      },
+      "version": "1.0.0",
+      "description": "Ranked 1v1 Bodybomb on Paintball. First to 7 wins, 13 rounds maximum. Two-minute rounds. Sides and spawns switch every round. Drone cooldown 3x. No spectator drones or bots. The coin-flip winner chooses their starting side. No map bans.",
+      "pack_url": "https://play.lightsoutranked.com/packs/BB1-1.0.0.zip",
+      "sha256": "cb76f277f4d842535372789f2c6a2c37e24bdabcd9b533f3dd58e3dae62f48a8",
+      "size": 71485,
+      "localized": true,
+      "rulesets": {
+        "de": "Bodybomb 1v1 (Paintball)\n\nGewertetes 1v1 Bodybomb auf Paintball. Zuerst 7 Siege, maximal 13 Runden. Runden dauern 2 Minuten. Seiten und Spawns wechseln jede Runde. Drohnen-Abklingzeit 3x. Keine Zuschauer-Drohnen oder Bots. Der Münzwurf-Sieger wählt seine Startseite. Keine Kartenbanns.",
+        "en": "Bodybomb 1v1 (Paintball)\n\nRanked 1v1 Bodybomb on Paintball. First to 7 wins, 13 rounds maximum. Two-minute rounds. Sides and spawns switch every round. Drone cooldown 3x. No spectator drones or bots. The coin-flip winner chooses their starting side. No map bans.",
+        "es": "Bodybomb 1v1 (Paintball)\n\nBodybomb 1v1 clasificatorio en Paintball. Primero en ganar 7 rondas, máximo 13. Rondas de 2 minutos. Cambio de bandos y apariciones cada ronda. Recarga del dron 3x. Sin drones de espectador ni bots. El ganador del sorteo elige el bando inicial. Sin vetos de mapas.",
+        "fr": "Bodybomb 1v1 (Paintball)\n\nBodybomb classé 1v1 sur Paintball. Premier à 7 victoires, 13 manches maximum. Manches de 2 minutes. Camps et points de départ changent chaque manche. Recharge du drone 3x. Aucun drone spectateur ni bot. Le gagnant du tirage choisit son camp initial. Aucun bannissement de carte.",
+        "pt": "Bodybomb 1v1 (Paintball)\n\nBodybomb ranqueado 1v1 em Paintball. Primeiro a vencer 7 rounds, máximo de 13. Rounds de 2 minutos. Lados e spawns trocam a cada round. Recarga do drone 3x. Sem drones espectadores ou bots. O vencedor do sorteio escolhe o lado inicial. Sem vetos de mapas.",
+        "ru": "Bodybomb 1v1 (Paintball)\n\nРейтинговый Bodybomb 1 на 1 на Paintball. До 7 побед, максимум 13 раундов. Раунд длится 2 минуты. Стороны и точки появления меняются каждый раунд. Перезарядка дрона 3x. Без дронов-наблюдателей и ботов. Победитель жеребьёвки выбирает начальную сторону. Без запрета карт.",
+        "zh": "Bodybomb 1v1 (Paintball)\n\nPaintball 地图上的 1v1 排位 Bodybomb。率先赢得 7 回合获胜，最多 13 回合。每回合 2 分钟，每回合交换阵营和出生点。无人机冷却时间为 3 倍。无观战无人机或机器人。掷硬币获胜者选择起始阵营。没有地图禁选。"
+      },
+      "rules": {
+        "score_limit": 7,
+        "max_rounds": 13,
+        "team_switch_interval": 1,
+        "team_size": 5,
+        "max_players": 10,
+        "time_limit": 120
       }
     }
   ]

@@ -39,7 +39,7 @@ function filters(raw={},now=Date.now(),permanent=false){
   const to=Math.min(now,parse(raw.to,now)+(/^\d{4}-\d\d-\d\d$/.test(String(raw.to))?DAY-1:0));
   const from=Math.floor(parse(raw.from,to-6*DAY)/DAY)*DAY;
   if(from>to||from<(permanent?0:now-1096*DAY))throw Error(permanent?'Invalid date range':'Date range must be within three years');
-  const size=raw.size==='all'?'all':Number(raw.size||10);
+  const size=raw.size==='all'?'all':Number(raw.size||(raw.mode==='BB1'?2:10));
   if(size!=='all'&&(!Number.isInteger(size)||size<1||size>64))throw Error('Invalid match size');
   return {from,to,size,map:String(raw.map||'').slice(0,96),version:String(raw.version||'').slice(0,96),rules_id:String(raw.rules_id||'').slice(0,64),region:String(raw.region||'').slice(0,40),mode:String(raw.mode||'').slice(0,40),
     q:String(raw.q||'').trim().slice(0,96),category:String(raw.category||'').slice(0,32),severity:String(raw.severity||'').slice(0,8),
@@ -86,7 +86,7 @@ function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB
   }
   // The retry identity is the immutable receipt, independent of later UI projections.
   // Reducer/schema changes require an explicit aggregate migration, not replay into v1 totals.
-  async function project(receipt,owner=prefix+'settlement:'+(receipt.matchId||receipt.match_id)){
+  async function project(receipt,owner=prefix+(receipt.mode==='BB1'?'ranked:BB1:':'')+'settlement:'+(receipt.matchId||receipt.match_id)){
     receipt=await combatStorage.unpack(store,receipt,owner);
     // Both projections must succeed before the durable outbox is acknowledged. A retry
     // after either projection succeeds is harmless because both are idempotent.
@@ -114,10 +114,17 @@ function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB
     }
     return {ok:true,rows,filters:f,next:exhausted?null:offset,scanned,complete:exhausted,persisted:db.persisted,retention:db.retention};
   }
+  async function rawReceipt(id){
+    for(const key of [prefix+'settlement:'+id,prefix+'ranked:BB1:settlement:'+id]){
+      const raw=await db.call(['GET',key]);
+      if(raw)return combatStorage.unpack(store,JSON.parse(raw),key);
+    }
+    return null;
+  }
   async function detail(id){
     if(!/^[A-Za-z0-9_.:-]{1,80}$/.test(id))throw Error('Invalid match ID');
     let row=await db.detail(id);
-    if(!row&&store){const key=prefix+'settlement:'+id,receipt=await db.call(['GET',key]);if(receipt)row=projectReceipt(await combatStorage.unpack(store,JSON.parse(receipt),key));}
+    if(!row&&store){const receipt=await rawReceipt(id);if(receipt)row=projectReceipt(receipt);}
     return row?{...row,fair_play:reviewOf(row)}:null;
   }
   const upgradedReviews=new Map();
@@ -150,8 +157,8 @@ function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB
     if(!/^[A-Za-z0-9_.:-]{1,80}$/.test(id))throw Error('Invalid match ID');
     const start=Math.max(0,Math.floor(Number(offset)||0));
     if(!store)return {rows:[],next:null,available:false};
-    const raw=await db.call(['GET',prefix+'settlement:'+id]);
-    const events=raw?(await combatStorage.unpack(store,JSON.parse(raw),prefix+'settlement:'+id))?.inputs?.combatState?.events||[]:[];
+    const raw=await rawReceipt(id);
+    const events=raw?.inputs?.combatState?.events||[];
     return {rows:metrics.evidence(events.slice(start,start+100)),total:events.length,next:start+100<events.length?start+100:null,available:Boolean(raw)};
   }
   async function summary(raw={}){
@@ -175,17 +182,19 @@ function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB
       const out=await db.call(['SSCAN',db.base+'outbox',outboxCursor,'COUNT','4']);
       outboxCursor=String(out[0]);
       for(const key of (out?.[1]||[])){
-        if(!String(key).startsWith(prefix+'settlement:')&&!String(key).startsWith(db.base+'terminal:'))continue;
+        if(!String(key).startsWith(prefix+'settlement:')&&!String(key).startsWith(prefix+'ranked:BB1:settlement:')&&!String(key).startsWith(db.base+'terminal:'))continue;
         await consume(key);
       }
-      const done=await db.call(['GET',db.base+'backfill_done:'+backfillVersion]);
+      for(const [scope,version] of [[prefix,backfillVersion],[prefix+'ranked:BB1:',backfillVersion+'-BB1']]){
+      const done=await db.call(['GET',db.base+'backfill_done:'+version]);
       if(!done){
-        const cursorKey=db.base+'backfill_cursor'+(backfillVersion==='v1'?'':':'+backfillVersion);
+        const cursorKey=db.base+'backfill_cursor'+(version==='v1'?'':':'+version);
         const cursor=await db.call(['GET',cursorKey])||'0';
-        const result=await db.call(['SCAN',String(cursor),'MATCH',prefix+'settlement:*','COUNT','10']);
+        const result=await db.call(['SCAN',String(cursor),'MATCH',scope+'settlement:*','COUNT','10']);
         for(const key of result?.[1]||[]){if(String(key).includes(':combat:v1:'))continue;await db.call(['SADD',db.base+'outbox',key]);await consume(key);}
         await db.call(['SET',cursorKey,String(result[0])]);
-        if(String(result[0])==='0')await db.call(['SET',db.base+'backfill_done:'+backfillVersion,String(now())]);
+        if(String(result[0])==='0')await db.call(['SET',db.base+'backfill_done:'+version,String(now())]);
+      }
       }
       if(!failed)health.last_error=null;
     })().catch(()=>{health.write_failures++;health.last_error='Storage unavailable or a projection needs repair';}).finally(()=>{working=null;});return working;

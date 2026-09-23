@@ -39,6 +39,7 @@ if SCRIPTS not in sys.path: sys.path.insert(0, SCRIPTS)
 import ctf_graphs as CG
 importlib.reload(CG)
 import bb5_graphs as BG
+import bodybomb_variant as BV
 importlib.reload(BG)
 import migration_graphs as MIGRATION
 importlib.reload(MIGRATION)
@@ -182,6 +183,13 @@ def cls_of(path):
 
 def pre_clean():
     """delete last run's assets in dependency order (referencing assets first), so re-runs start clean"""
+    for path in ["/Game/GM/Gamemode/GM_BB1"] + [
+            "/Game/GM/Gamemode/BB1/" + asset for asset in (
+                "BP_BB1MigrationRequest", "BP_BB1StartRequest", "BP_BB1TeamRequest",
+                "BP_CHCombatRequest", "BP_CHCombatObserver", "BP_CHCombatManager",
+                "AC_BB1BombRule", "GE_BB1_DroneCooldown")] + ["/Game/GM/DATA/DataAsset/DA_BB1"]:
+        if EAL.does_asset_exist(path) and not EAL.delete_asset(path):
+            raise BuildFailed("Could not remove stale " + path)
     for path in ("/Game/GM/Gamemode/GM_DOM", DOM_DIR + "/BP_DOM_Point", DOM_DIR + "/GE_DOM_DroneCooldown", "/Game/GM/DATA/DataAsset/DA_DOM",
                  "/Game/GM/Gamemode/GM_CTF", CTF_DIR + "/BP_CTF_Base", CTF_DIR + "/BP_CTF_Flag", CTF_DIR + "/GE_CTF_NoPerk", CTF_DIR + "/GE_CTF_DroneCooldown", "/Game/MenuSystemPro/INGAME/HUD_Dot",
                  "/Game/GM/DATA/DataAsset/DA_CTF",
@@ -349,23 +357,37 @@ def stage2(parent, da, gm):
     log("stage 2 done")
 
 # ----------------------------------------------------------------------------------------------------------------------
-def stage3_bb5(parent):
+def stage3_bb5(parent, mode_id="BB5"):
     """Bodybomb 5v5 (Sam, 2026-09-14). Stock Bodybomb minus the spectator drone (pak builder: DefaultDroneClass), plus: the bomb
     dropped at the centre of the attacker spawn instead of equipped, 4x drone cooldown, first to 7 with a side swap every 6 rounds,
     no bots. See bb5_graphs.py for the graphs."""
+    # Each mode owns its authored assets; the established graph logic is shared.
+    def variant_name(value):
+        return BV.remap(value, mode_id)
+    def build(bp, graph, js, label):
+        return globals()["build"](bp, graph, BV.graph(js, mode_id), variant_name(label))
+    def make_blueprint(path, asset, parent_class):
+        return globals()["make_blueprint"](variant_name(path), variant_name(asset), parent_class)
+    def make_config_asset(asset, phase, scoring, team, note):
+        return globals()["make_config_asset"](variant_name(asset), phase, scoring, team, variant_name(note))
+    def make_drone_cooldown_ge(path, asset, factor):
+        return globals()["make_drone_cooldown_ge"](variant_name(path), variant_name(asset), factor)
+    def add_component(bp, cls, variable):
+        return globals()["add_component"](bp, cls, variant_name(variable))
     # ---------- stand-ins at the game's paths (referenced by our component, never shipped) ----------
-    bombe = make_blueprint(BG.BOMBE_PKG.rsplit("/", 1)[0], "Bombe", unreal.Actor)
-    compile_report(bombe, "Bombe stub"); EAL.save_loaded_asset(bombe)
-    inv = make_blueprint(BG.INV_PKG.rsplit("/", 1)[0], "BP_InventoryComponent", unreal.ActorComponent)
-    build(inv, "EventGraph", BG.inventory_events(), "BP_InventoryComponent stub events")
-    for fn in BG.INVENTORY_FUNCTIONS: build(inv, fn, BG.inventory_signature(fn), f"BP_InventoryComponent stub function {fn}")
-    compile_report(inv, "BP_InventoryComponent stub"); EAL.save_loaded_asset(inv)
+    if mode_id == "BB5":
+        bombe = make_blueprint(BG.BOMBE_PKG.rsplit("/", 1)[0], "Bombe", unreal.Actor)
+        compile_report(bombe, "Bombe stub"); EAL.save_loaded_asset(bombe)
+        inv = make_blueprint(BG.INV_PKG.rsplit("/", 1)[0], "BP_InventoryComponent", unreal.ActorComponent)
+        build(inv, "EventGraph", BG.inventory_events(), "BP_InventoryComponent stub events")
+        for fn in BG.INVENTORY_FUNCTIONS: build(inv, fn, BG.inventory_signature(fn), f"BP_InventoryComponent stub function {fn}")
+        compile_report(inv, "BP_InventoryComponent stub"); EAL.save_loaded_asset(inv)
 
-    make_drone_cooldown_ge(BB5_DIR, "GE_BB5_DroneCooldown", BG.DRONE_COOLDOWN_FACTOR)
+    make_drone_cooldown_ge(BB5_DIR, "GE_BB5_DroneCooldown", (3.0 if mode_id == "BB1" else BG.DRONE_COOLDOWN_FACTOR))
     # the game's DA_BodyBomb values (PhaseDuration 180, warm-up 6, 5 per team / 10 players) with Sam's round format; the pak
     # builder writes the same numbers from the manifest's "rules" (score_limit 7, max_rounds 12, team_switch_interval 6)
-    da = make_config_asset("DA_BB5", {"phase_duration": 180.0, "round_warmup_duration": 6.0}, {"score_limit": 7, "max_phases": 12},
-                           {"team_max_size": 5, "max_players": 10, "team_switch_interval": 6}, "first to 7 of 12 rounds, sides swap every 6, 5 per team, 10 players, 180 s rounds")
+    da = make_config_asset("DA_BB5", {"phase_duration": (120.0 if mode_id == "BB1" else 180.0), "round_warmup_duration": 6.0}, {"score_limit": 7, "max_phases": 13},
+                           {"team_max_size": 5, "max_players": 10, "team_switch_interval": (1 if mode_id == "BB1" else 6)}, "first to 7 of 12 rounds, sides swap every 6, 5 per team, 10 players, 180 s rounds")
 
     # ---------- AC_BB5BombRule: pass 1 variables ----------
     rule = make_blueprint(BB5_DIR, "AC_BB5BombRule", unreal.ObjectiveRuleSetComponent)
@@ -465,7 +487,7 @@ def stage3_bb5(parent):
     compile_report(request, "BP_CHCombatRequest (events)")
     for bp, specs in ((manager, COMBAT.GM_VARIABLES + TRANSPORT.VARIABLES), (observer, COMBAT.OBSERVER_VARIABLES)):
         for name, category, cls, container in specs:
-            if not add_var(bp, name, pin(category, unreal.load_class(None, cls) if cls else None, container)):
+            if not add_var(bp, name, pin(category, unreal.load_class(None, variant_name(cls)) if cls else None, container)):
                 raise BuildFailed("combat variable " + name)
         compile_report(bp, bp.get_name() + " (vars)")
     build(manager, "EventGraph", COMBAT.gm_events(), "combat manager events")
@@ -742,6 +764,7 @@ def main():
         stage2(parent, da, gm)
         gi = make_bodycam_gi_stub()
         stage3_bb5(parent)
+        stage3_bb5(parent, "BB1")
         stage4_dom(parent)
         stage5_lobby(gi)
         ok = True

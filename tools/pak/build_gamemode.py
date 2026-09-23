@@ -83,6 +83,11 @@ BASES = {"DeathMatch": {"prefix": "DM_", "enum": 2, "ui_row": "DeathMatch", "gmd
                         "maps_table": "/Game/UI/Menus/Play/Cards/Data/DT_UI_TeamDeathmatchMaps", "level_dir": "/Game/GM_Maps/TeamDeathmatch",
                         "extra_dirs": ["GM/Gamemode/DOM"]},
          }
+# Separate authored assets, with the same stock Bodybomb map and rule contracts.
+BASES["BB1"] = {key: (value.replace("BB5", "BB1") if isinstance(value, str)
+                     else [v.replace("BB5", "BB1") for v in value] if key == "extra_dirs"
+                     else value) for key, value in BASES["BB5"].items()}
+
 # Native ABodycamGameMode.DefaultDroneClass (BP_FPV_Drone_Spectator_C on the game's abstract GM: the free-fly drone a dead player gets
 # in round-based modes). Manifest "drone_class": "spectator" -> the game's own SpectatorCamera_C instead (follows team-mates: "dead
 # players go straight to spectating"), "none" -> null (native fallback), absent -> whatever the cooked class stores (inherit).

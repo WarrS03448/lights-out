@@ -6,6 +6,16 @@ test('persistent private messaging service exists',()=>assert(fs.existsSync(file
 const api=fs.existsSync(file)?require(file):{};
 function redis(t){const child=spawn(process.env.ACCOUNT_TEST_PYTHON||'python',['-u',path.join(__dirname,'account-redis-fixture.py')]);let seq=0;const waiting=new Map();readline.createInterface({input:child.stdout}).on('line',line=>{const r=JSON.parse(line),p=waiting.get(r.id);waiting.delete(r.id);if(p)r.error?p.reject(Error(r.error)):p.resolve(r.result);});child.on('exit',()=>{for(const p of waiting.values())p.reject(Error('Fixture exited'));});t.after(()=>child.kill());return args=>new Promise((resolve,reject)=>{const id=++seq;waiting.set(id,{resolve,reject});child.stdin.write(JSON.stringify({id,command:args})+'\n');});}
 const a='76561198000000001',b='76561198000000002',c='a1111111-1111-4111-8111-111111111111';
+test('official RR refund notice carries mode amount and Steam name and deduplicates permanently',async t=>{
+ const store=redis(t),svc=api.create({store});
+ const notice={target:b,mode:'BB1',match_id:'0123456789abcdef',amount:24,cheaters:['Steam Player']};
+ assert.equal((await svc.notifyRefund(notice)).ok,true);
+ const rebuilt=api.create({store});assert.equal((await rebuilt.notifyRefund({...notice,cheaters:['Renamed Steam Player']})).ok,true);
+ const thread=await rebuilt.thread(b,'admin');assert.equal(thread.messages.length,1);
+ assert.equal(thread.messages[0].context.type,'rr_refund');assert.equal(thread.messages[0].context.amount,24);
+ assert.equal(thread.messages[0].context.mode,'BB1');assert.deepEqual(thread.messages[0].context.cheaters,['Steam Player']);
+ assert.match(thread.messages[0].text,/24 RR/);assert.match(thread.messages[0].text,/Steam Player/);
+});
 test('only mutual friends send; retries, unread receipts and offline history survive restart',async t=>{
  const store=redis(t),svc=api.create({store}),body={target:b,text:'Hello <script>friend</script>',client_id:require('node:crypto').randomUUID()};
  assert.equal((await svc.send(a,body)).ok,false);await store(['SADD','hub:friends:'+a,b]);assert.equal((await svc.send(a,body)).ok,false);await store(['SADD','hub:friends:'+b,a]);

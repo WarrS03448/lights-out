@@ -265,7 +265,7 @@ function findMatchPool(units, options = {}) {
     if (split.delta > tolerance) return;
 
     const waited = mean(chosen.map((u) => waitedSeconds(u, now)));
-    const score = split.score - WAIT_BONUS * waited;
+    const score = split.score - WAIT_BONUS * waited + (options.repeatCost ? options.repeatCost(chosen,now) : 0);
     const candidate = { chosen, split, tolerance, score, waited, network:connection };
     if (!best || compareMatches(candidate,best) < 0) {
       best = candidate;

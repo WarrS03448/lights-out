@@ -3,7 +3,7 @@ const crypto=require('node:crypto'),identity=require('./player-identity.cjs');
 const SEND=`-- private-message-send-v1
 local types={'zset','string','hash','hash','zset','string','string','set','set','set','set','zset','hash','zset'}
 for i,k in ipairs(KEYS) do local t=redis.call('TYPE',k).ok;if t~='none' and t~=types[i] then return redis.error_reply('message key type') end end
-local old=redis.call('GET',KEYS[6]);if old then local prior=cjson.decode(old);if prior.hash~=ARGV[8] then return {'conflict'} end;return {'sent',prior.message} end
+local old=redis.call('GET',KEYS[6]);if old then local prior=cjson.decode(old);if prior.hash~=ARGV[8] and ARGV[9]~='permanent' then return {'conflict'} end;return {'sent',prior.message} end
 local official=ARGV[6]~='0'
 if ARGV[6]=='2' and redis.call('HEXISTS',KEYS[3],cjson.decode(ARGV[1]).thread)==0 then return {'admin_contact_required'} end
 if not official and (redis.call('SISMEMBER',KEYS[8],ARGV[5])~=1 or redis.call('SISMEMBER',KEYS[9],ARGV[4])~=1) then return {'friends_only'} end
@@ -22,7 +22,8 @@ redis.call('HSET',KEYS[3],row.thread,cjson.encode(sent))
 redis.call('HSET',KEYS[4],row.thread,cjson.encode(received))
 if official then redis.call('ZADD',KEYS[14],ARGV[7],row.thread) end
 redis.call('INCR',KEYS[7]);if redis.call('TTL',KEYS[7])<0 then redis.call('EXPIRE',KEYS[7],60) end
-redis.call('SET',KEYS[6],cjson.encode({hash=ARGV[8],message=encoded}),'EX',604800)
+if ARGV[9]=='permanent' then redis.call('SET',KEYS[6],cjson.encode({hash=ARGV[8],message=encoded}))
+else redis.call('SET',KEYS[6],cjson.encode({hash=ARGV[8],message=encoded}),'EX',604800) end
 return {'sent',encoded}`;
 const INBOX=`-- private-message-inbox-v1
 local rows=redis.call('HVALS',KEYS[1]);if #rows>tonumber(ARGV[2]) then return redis.error_reply('message inbox capacity') end
@@ -42,7 +43,7 @@ function create({store,prefix='hub:',now=Date.now,nudge=()=>{},nameOf=()=>''}={}
  async function call(args){if(!store)throw Error('Message storage unavailable');return store(args,{strict:true,timeout:5000});}
  const threadId=(me,target)=>target==='admin'?'official:'+me:'friend:'+ [me,target].sort().join(':');
  const clean=m=>({id:m.id,seq:m.seq,at:m.at,sender:m.sender,text:m.text,official:m.official,context:m.context||null});
- async function send(sender,body,{admin=false,context=null}={}){
+ async function send(sender,body,{admin=false,context=null,permanent=false}={}){
    const target=String(body?.target||''),text=String(body?.text||'').trim(),id=String(body?.client_id||'');
    const reply=!admin&&target==='admin';
    if(!identity.validPlayer(sender)||!(reply||identity.validPlayer(target))||!admin&&target===sender||text.length<1||text.length>1000||!/^[0-9a-f-]{36}$/.test(id))return {ok:false,error:'invalid_message'};
@@ -51,7 +52,8 @@ function create({store,prefix='hub:',now=Date.now,nudge=()=>{},nameOf=()=>''}={}
    const message={id,thread,at,sender:admin?'admin':sender,text:filtered,official:admin,...(admin?{admin_actor:sender,context}: {})};
    const outgoing={thread,target,persona:reply?'Lights Out Admin':String(await nameOf(target)||target).slice(0,80),last_at:at,last_text:filtered.slice(0,120),official:reply};
    const incoming={thread,target:admin?'admin':sender,persona:admin?'Lights Out Admin':String(await nameOf(sender)||sender).slice(0,80),last_at:at,last_text:filtered.slice(0,120),official:admin};
-   const result=await call(['EVAL',SEND,'14',base+'thread:'+thread,base+'seq:'+thread,base+'inbox:'+(admin?'admin':sender),base+'inbox:'+target,base+'unread:'+target+':'+thread,base+'dedupe:'+sender+':'+id,base+'rate:'+sender,prefix+'friends:'+sender,prefix+'friends:'+target,base+'blocks:'+sender,base+'blocks:'+target,base+'unread:'+(admin?'admin':sender)+':'+thread,base+'inbox:admin',base+'admin-index',JSON.stringify(message),JSON.stringify(outgoing),JSON.stringify(incoming),sender,target,admin?'1':reply?'2':'0',String(at),crypto.createHash('sha256').update(JSON.stringify({target,text,admin,context})).digest('hex')]);
+   if(admin&&context){outgoing.last_context=context;incoming.last_context=context;}
+   const result=await call(['EVAL',SEND,'14',base+'thread:'+thread,base+'seq:'+thread,base+'inbox:'+(admin?'admin':sender),base+'inbox:'+target,base+'unread:'+target+':'+thread,base+'dedupe:'+sender+':'+id,base+'rate:'+sender,prefix+'friends:'+sender,prefix+'friends:'+target,base+'blocks:'+sender,base+'blocks:'+target,base+'unread:'+(admin?'admin':sender)+':'+thread,base+'inbox:admin',base+'admin-index',JSON.stringify(message),JSON.stringify(outgoing),JSON.stringify(incoming),sender,target,admin?'1':reply?'2':'0',String(at),crypto.createHash('sha256').update(JSON.stringify({target,text,admin,context})).digest('hex'),permanent&&admin?'permanent':'temporary']);
    if(result?.[0]!=='sent')return {ok:false,error:result?.[0]||'unavailable'};
    nudge(target);if(!admin)nudge(sender);return {ok:true,message:clean(JSON.parse(result[1]))};
  }
@@ -84,6 +86,18 @@ function create({store,prefix='hub:',now=Date.now,nudge=()=>{},nameOf=()=>''}={}
    if(blocked){const result=await call(['EVAL',BLOCK,'8',base+'blocks:'+me,prefix+'friends:'+me,prefix+'friends:'+target,prefix+'friendreq:in:'+me,prefix+'friendreq:out:'+me,prefix+'friendreq:in:'+target,prefix+'friendreq:out:'+target,base+'inbox:'+me,target,me,threadId(me,target)]);if(result!=='blocked')return {ok:false,error:result};}
    else await call(['SREM',base+'blocks:'+me,target]);return {ok:true};
  }
- return {send,inbox,thread,markRead,block,adminInbox,adminThread,adminRead};
+ async function notifyRefund({target,mode,match_id,amount,cheaters}){
+   require('./ranked-modes.cjs').modeOf(mode);
+   if(!identity.validPlayer(target)||!Number.isSafeInteger(amount)||amount<=0||
+      !/^[A-Za-z0-9_.:-]{1,80}$/.test(match_id||'')||!Array.isArray(cheaters)||!cheaters.length||
+      cheaters.some(name=>typeof name!=='string'||!name.trim()||name.length>80))return {ok:false,error:'invalid_refund'};
+   const digest=crypto.createHash('sha256').update(mode+':'+match_id+':'+target).digest('hex');
+   const id=digest.slice(0,8)+'-'+digest.slice(8,12)+'-'+digest.slice(12,16)+'-'+digest.slice(16,20)+'-'+digest.slice(20,32);
+   const names=cheaters.join(', '),label=mode==='BB1'?'1v1 Bodybomb':'5v5 Bodybomb';
+   return send('00000000-0000-4000-8000-000000000001',{target,client_id:id,
+     text:amount+' RR refunded in '+label+' after '+names+' received a cheating ban.'},
+     {admin:true,permanent:true,context:{type:'rr_refund',mode,match_id,amount,cheaters}});
+ }
+ return {send,inbox,thread,markRead,block,adminInbox,adminThread,adminRead,notifyRefund};
 }
 module.exports={create,SEND,INBOX,BLOCK};

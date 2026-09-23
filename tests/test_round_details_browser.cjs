@@ -56,7 +56,7 @@ print(json.dumps(dict(state=state_snapshot(s,p),history=H._detail(rec,'1'*17),po
    assert.equal(await overlay.locator('.combat-panel:visible [data-stat="damage"] .combat-value').textContent(),'35','expanded round detail survives background refresh');
    await overlay.getByRole('button',{name:'Round 1',exact:true}).press(' ');
    assert.match(await overlay.locator('.round-summary').textContent(),/not recorded/);
-   assert.equal(await overlay.locator('.'+prefix+'-player.sb .'+prefix+'-n').first().textContent(),'—');
+   assert.equal(await overlay.locator('.'+prefix+'-player.sb .'+prefix+'-n').first().textContent(),prefix==='md'?s.history.strings.stat_none:s.postmatch.strings.stat_none);
    await overlay.getByRole('button',{name:'All rounds',exact:true}).click();
    assert.equal(await overlay.locator('.'+prefix+'-player.sb .'+prefix+'-n').first().textContent(),'14');
    for(const [lang,labels] of Object.entries(fixture.languages)) {

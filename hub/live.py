@@ -45,6 +45,7 @@ class LiveClient:
     def __init__(self, token, on_event=None, on_status=None, versions=None,
                  network_config=None, network_probe_factory=None):
         self.token = token
+        self.ranked_mode = "BB5"
         self.on_event = on_event or (lambda event: None)
         self.on_status = on_status or (lambda connected, detail: None)
         # What this hub is running, as a callable so it is read FRESH on every request: update
@@ -96,7 +97,11 @@ class LiveClient:
         # the web UI, which is how a fresh install queued for a mode it did not own. The server
         # now refuses hub-present-mode-absent outright (live.cjs versionProblem), so this silence
         # IS the signal rather than a thing nobody was meant to be able to send.
-        mode = str(v.get("mode") or "")
+        req.add_header("x-ranked-mode", self.ranked_mode)
+        for mid in ("BB5", "BB1"):
+            if v.get(mid):
+                req.add_header("x-" + mid.lower() + "-version", str(v[mid]))
+        mode = str(v.get(self.ranked_mode) or v.get("mode") or "")
         if mode:
             req.add_header("x-mode-version", mode)
 
@@ -466,6 +471,9 @@ class LiveClient:
     def accept(self):
         return self._post("/api/match/accept")
 
+    def concede(self, match_id):
+        return self._post("/api/match/concede", {"match_id": match_id})
+
     def leave_match(self):
         return self._post("/api/match/leave")
 
@@ -580,8 +588,8 @@ class LiveClient:
         Without an id: {"matches": [compact row, ...]}. With one: {"match": {...}} for the
         detail pop-up, or a 404 if the player was not in that match."""
         if match_id:
-            return self._get("/api/match/history?id=" + urllib.parse.quote(str(match_id), safe=""))
-        return self._get("/api/match/history")
+            return self._get("/api/match/history?mode=all&id=" + urllib.parse.quote(str(match_id), safe=""))
+        return self._get("/api/match/history?mode=all")
 
     # ---------------------------------------------------------------- friends
     # Keyed by SteamID64 on the server and persisted, so this list follows the account rather
@@ -620,8 +628,11 @@ class LiveClient:
         return self._post("/api/bug", {"text": text})
 
     # ---------------------------------------------------------------- leaderboard
-    def leaderboard(self, limit=50):
-        return self._get("/api/leaderboard?limit=%d" % int(limit))
+    def leaderboard(self, limit=50, mode=None):
+        selected = mode or self.ranked_mode
+        if selected not in ("BB5", "BB1"):
+            raise ValueError("Unknown ranked mode")
+        return self._get("/api/leaderboard?limit=%d&mode=%s" % (int(limit), selected))
 
     def tournament(self):
         return self._get("/api/tournament")

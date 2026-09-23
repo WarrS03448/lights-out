@@ -14,7 +14,71 @@
 (function () {
   "use strict";
 
-  window.HubUI.registerScreen("competitive", { render: render });
+  window.HubUI.registerScreen("competitive", { render: render, update: update });
+  var latestModeContext = null;
+  function modeBar(state, ctx) {
+    latestModeContext = {state:state, ctx:ctx};
+    var bar=ctx.ui.el("div","ranked-mode-bar");
+    ["BB5","BB1"].forEach(function (mode) {
+      var button=ctx.ui.el("button","ranked-mode-choice",mode==="BB5"?"5v5 Bodybomb":"1v1 Bodybomb (Paintball)");
+      button.type="button";button.dataset.mode=mode;
+      button.addEventListener("click",function(){if(latestModeContext)latestModeContext.ctx.call("select_ranked_mode",mode);});
+      bar.appendChild(button);
+    });
+    syncModeBar(bar,state);return bar;
+  }
+  function syncModeBar(bar,state) {
+    Array.from(bar.children).forEach(function(button){
+      var active=button.dataset.mode===((state.comp||{}).mode_id||"BB5");
+      button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));
+      button.disabled=(state.comp||{}).mode_selectable===false;
+    });
+  }
+  function refreshKey(state) {
+    var a=state.auth||{},c=state.comp||{};
+    return JSON.stringify([a.signed_in,a.player_id||a.steam_id||"",state.lang,c.phase,c.match_id,
+      (c.lobby||{}).match_id,(c.connect||{}).match_id,a.account_step]);
+  }
+  var retained = ".ranked-mode-bar,.comp-network-row,.chat-row,.join-row,.account-field,.account-remember,.ranked-history-modes";
+  function nodeKey(n) { return n.nodeType===1 ? n.tagName+":"+(n.id||n.classList[0]||"") : "#text"; }
+  function syncAttrs(oldNode,newNode) {
+    Array.from(oldNode.attributes).forEach(function(a){if(!newNode.hasAttribute(a.name))oldNode.removeAttribute(a.name);});
+    Array.from(newNode.attributes).forEach(function(a){if(oldNode.getAttribute(a.name)!==a.value)oldNode.setAttribute(a.name,a.value);});
+  }
+  // Retain controls together with their closures and every ancestor. Moving even a
+  // retained select out of its parent closes its native popup on WebView2.
+  function patchChildren(parent,draft) {
+    var unused=Array.from(parent.childNodes),cursor=parent.firstChild;
+    Array.from(draft.childNodes).forEach(function(next){
+      var old=unused.find(function(n){return nodeKey(n)===nodeKey(next);});
+      var keep=old&&old.nodeType===1&&(old.matches(retained)||old.querySelector(retained)||old.matches(".chat-log,.lobby-top"));
+      if(keep){
+        unused.splice(unused.indexOf(old),1);
+        while(cursor&&cursor!==old){var after=cursor.nextSibling;if(unused.includes(cursor)){unused.splice(unused.indexOf(cursor),1);cursor.remove();}cursor=after;}
+        syncAttrs(old,next);
+        if(old.matches(".account-form"))old.onsubmit=next.onsubmit;
+        if(old.matches(".ranked-mode-bar"))syncModeBar(old,latestModeContext.state);
+        else if(old.matches(".ranked-history-modes")){
+          Array.from(old.children).forEach(function(button,i){if(next.children[i])syncAttrs(button,next.children[i]);});
+        }else if(old.matches(".comp-network-row")){
+          var a=old.querySelector("select"),b=next.querySelector("select");a.disabled=b.disabled;a.title=b.title;
+          if(document.activeElement!==a){if(a.innerHTML!==b.innerHTML)a.innerHTML=b.innerHTML;a.value=b.value;}
+          var check=old.querySelector("input"),fresh=next.querySelector("input");check.checked=fresh.checked;check.disabled=fresh.disabled;
+        }else if(!old.matches(retained)){
+          var top=old.scrollTop,left=old.scrollLeft,atBottom=old.scrollHeight-old.clientHeight-top<8;
+          patchChildren(old,next);old.scrollTop=old.matches(".chat-log")&&atBottom?old.scrollHeight:top;old.scrollLeft=left;
+        }
+        cursor=old.nextSibling;
+      }else{parent.insertBefore(next,cursor);}
+    });
+    unused.forEach(function(n){n.remove();});
+  }
+  window.HubUI.patchRankedChildren=patchChildren;
+  function update(root,state,ctx) {
+    if(root._refreshKey!==refreshKey(state)||!root.querySelector(".ranked-mode-bar"))return false;
+    var draft=document.createElement("div");render(draft,state,ctx,root);
+    patchChildren(root,draft);return true;
+  }
 
   // The no-show ban ticks down in the browser between the 300ms /state polls: Python only rebuilds
   // the snapshot at expiry, so without this the clock would look frozen until something else
@@ -140,6 +204,8 @@
   }
 
   function render(root, state, ctx) {
+    var liveRoot=arguments[3];
+    root._refreshKey=refreshKey(state);
     var restoreScroll = [];
     var ui = ctx.ui, call = ctx.call, t = ctx.t;
     var esc = ui.esc, initials = ui.initials, clock = ui.clock, el = ui.el;
@@ -154,7 +220,7 @@
 
     clearBanTimer();   // any prior ban countdown belongs to a DOM node this render is about to wipe
     var guideAuth = state.auth || {};
-    var identity = guideAuth.signed_in ? (guideAuth.steam_id || guideAuth.persona || "signed-in") : null;
+    var identity = guideAuth.signed_in ? (guideAuth.player_id || guideAuth.steam_id || "signed-in") : null;
     if (!identity || guideAuth.placing || !guideAuth.rank || identity !== rankGuideIdentity ||
         rankGuidePhase !== (state.comp || {}).phase) { rankGuideOpen = false; }
     rankGuideIdentity = identity;
@@ -175,6 +241,7 @@
       return;
     }
     root.appendChild(buildCompetitive());
+    if(liveRoot)root=liveRoot;
     restoreScroll.forEach(function (restore) { restore(); });
     // The modal is appended to the BODY, not into the screen, so it is not inside the grid it
     // would otherwise have to fight (the corner-panel version ran off the bottom of the screen).
@@ -248,6 +315,7 @@
     function heroSignedOut() {
       var auth = state.auth || {};
       var h = el("div", "hero");
+      h.appendChild(modeBar(state,ctx));
       h.appendChild(el("div", "ghost", "◆"));
       var inner = el("div", "hero-inner signin");
       inner.innerHTML =
@@ -324,15 +392,17 @@
           submit.disabled = !!auth.account_busy; form.appendChild(submit);
           form.onsubmit = function (event) {
             event.preventDefault(); if (auth.account_busy) return;
+            var activeForm=event.currentTarget;
+            var activeConfirmation=activeForm.querySelector('input[name="confirm_password"]');
             var fields = Object.assign({}, accountDraft);
-            if (confirmation && fields.password !== fields.confirm_password) {
-              confirmation.setCustomValidity(t("account_password_mismatch")); confirmation.reportValidity(); return;
+            if (activeConfirmation && fields.password !== fields.confirm_password) {
+              activeConfirmation.setCustomValidity(t("account_password_mismatch")); activeConfirmation.reportValidity(); return;
             }
             delete fields.confirm_password;
             if (fields.code) fields.code = fields.code.trim();
             if (fields.token) fields.token = fields.token.trim();
             delete accountDraft.password; delete accountDraft.confirm_password; delete accountDraft.code; delete accountDraft.token;
-            form.querySelectorAll('input[type="password"], input[name="code"], input[name="token"]').forEach(function (field) { field.value = ""; });
+            activeForm.querySelectorAll('input[type="password"], input[name="code"], input[name="token"]').forEach(function (field) { field.value = ""; });
             var actions = {login_code:"login/verify", register_code:"verify", forgot_password:"forgot-password", recovery_code:"forgot-password/verify", reset_password:"reset-password"};
             call("account_action", actions[step] || step, fields);
           };
@@ -376,6 +446,7 @@
     function hero() {
       var auth = state.auth || {}, comp = state.comp || {}, party = state.party || {};
       var h = el("div", "hero");
+      h.appendChild(modeBar(state,ctx));
       var tools = heroTools();
       if (tools) { h.appendChild(tools); }
 
@@ -764,9 +835,13 @@
         }
         box.appendChild(el("div", "hero-ready",
                            comp.mode_listed ? t("comp_gate_body") : t("comp_gate_waiting")));
+        if (comp.ranked_ban) { box.appendChild(el("div", "hero-error", (comp.mode_strings||{}).banned)); }
+        if (comp.mode_id === "BB1" && party.size > 1) { box.appendChild(el("div", "hero-error", (comp.mode_strings||{}).solo_only)); }
         if (comp.error) { box.appendChild(el("div", "hero-error", comp.error)); }
         return box;
       }
+      if (comp.ranked_ban) { box.appendChild(el("div", "hero-error", (comp.mode_strings||{}).banned)); }
+      if (comp.mode_id === "BB1" && party.size > 1) { box.appendChild(el("div", "hero-error", (comp.mode_strings||{}).solo_only)); }
       var isLeader = comp.is_leader;
       if (isLeader) {
         var find = btn("btn-find", t("comp_find_match"), function () { call("find_match"); });
@@ -1137,7 +1212,7 @@
         var won = r.won === true;
         box.appendChild(el("div", "result-headline " + (won ? "win" : "loss"),
           won ? t("comp_result_win") : t("comp_result_loss")));
-        var score = r.score || [0, 0];
+        var score = r.score || ["—", "—"];
         box.appendChild(el("div", "result-score", score[0] + " : " + score[1]));
         // The RR the match moved - not `delta`, which is an arrow count and read as "+2 RR" here.
         if (r.placing) {
@@ -1253,7 +1328,7 @@
       top.appendChild(teamsBlock(lb.teams, lb.stage === "veto" || lb.stage === "ready", lb));
       restoreScroll.push(keepScroll(top, "lobby-top", false));
       wrap.appendChild(top);
-      if (lb.stage === "veto" || lb.stage === "ready") { wrap.appendChild(vetoList(lb)); }
+      if (comp.mode_id !== "BB1" && (lb.stage === "veto" || lb.stage === "ready")) { wrap.appendChild(vetoList(lb)); }
       wrap.appendChild(chatBlock(lb, matchId));
       return wrap;
     }
@@ -1383,7 +1458,10 @@
       var lv = comp.live || {};
       var wrap = el("div", "live-pane");
       wrap.appendChild(teamsBlock(lv.teams, true));
-      if (lv.can_vote && lv.vote) {
+      if (lv.can_concede) {
+        var copy=(state.comp||{}).mode_strings||{};
+        wrap.appendChild(ui.btn("btn-solid ghost",copy.concede,function(){if(window.confirm(copy.concede_confirm))call("concede_match");},{tag:"button"}));
+      } else if (lv.can_vote && lv.vote) {
         wrap.appendChild(voteCard(lv.vote));
       } else if (lv.can_vote) {
         wrap.appendChild(ui.btn("btn-solid ghost void-vote-button", t("comp_report"), function () { call("start_vote"); }, { tag: "button" }));

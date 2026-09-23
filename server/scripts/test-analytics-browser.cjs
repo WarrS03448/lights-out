@@ -36,7 +36,7 @@ const server=http.createServer(async(req,res)=>{const u=new URL(req.url,'http://
       assert.equal(await page.locator('#content tbody tr').count(),33);
       await page.locator('[name=size]').selectOption('2');await page.getByRole('button',{name:'Apply filters',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#notice').textContent!=='Loading…');
       assert.match(await page.locator('#content').innerText(),/No evidence/);
-      await page.locator('[name=size]').selectOption('10');await page.locator('[name=map]').fill('');await page.getByRole('button',{name:'Apply filters',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#notice').textContent!=='Loading…');
+      await page.locator('[name=size]').selectOption('');await page.locator('[name=map]').fill('');await page.getByRole('button',{name:'Apply filters',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#notice').textContent!=='Loading…');
       await page.locator('[data-match]').first().click();await page.locator('#detail-body table').first().waitFor();
       assert.equal(await page.locator('#detail-body img').count(),0);
       await page.getByText(/Round 1 · Team 1 won/).click();await page.screenshot({path:`work/analytics-browser/match-${width}.png`});

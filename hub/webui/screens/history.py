@@ -528,6 +528,7 @@ def _row(row: dict) -> dict:
         "id": str(row.get("id") or ""),
         "ended": _int_or_none(row.get("ended")) or 0,
         "map": str(row.get("map") or ""),
+        "mode": row.get("mode") or "BB5",
         "outcome": str(row.get("outcome") or ""),
         "reason": str(row.get("reason") or ""),
         "blamed": bool(row.get("blamed")),
@@ -632,9 +633,13 @@ def snapshot(session, panel) -> dict:
     different thing for each. ``seq`` lets JS tell one answer from the next even when the rows are
     identical (session.history_seq), and ``error`` carries the session's already-localised line."""
     rows = getattr(session, "history", None)
+    mode = getattr(session, "history_mode", "all")
+    if rows is not None and mode != "all":
+        rows = [r for r in rows if (r.get("mode") or "BB5") == mode]
     asked = rows is not None
     serialised = [_row(r) for r in rows if isinstance(r, dict)] if asked else []
     return {"history": {
+        "mode": mode,
         "asked": asked,
         "loading": bool(getattr(session, "history_loading", False)),
         "error": getattr(session, "history_error", "") or "",
@@ -725,6 +730,7 @@ def _detail(rec, my_id: str):
 register_verbs("history", {
     "load_history":    lambda panel: panel.post(lambda: panel.session.load_history(force=False)),
     "refresh_history": lambda panel: panel.post(lambda: panel.session.load_history(force=True)),
+    "history_mode": lambda panel, mode: panel.post(lambda: panel.session.select_history_mode(str(mode))),
 })
 
 

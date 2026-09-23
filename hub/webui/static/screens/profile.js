@@ -17,7 +17,12 @@
 (function () {
   "use strict";
 
-  window.HubUI.registerScreen("profile", { render: render, renderRankGuide: function (root, state, ctx) {
+  window.HubUI.registerScreen("profile", { render: render, update: function(root,state,ctx){
+    var a=state.auth||{},scope=JSON.stringify([a.signed_in,a.player_id||a.steam_id,state.lang]);
+    if(root._rankedScope!==scope||rankGuideOpen||root.querySelector('.profile-ranks'))return false;
+    var draft=document.createElement('div');render(draft,state,ctx,root);
+    ctx.ui.patchRankedChildren(root,draft);return true;
+  }, renderRankGuide: function (root, state, ctx) {
     if (ctx.resetRankGuideScroll) { rankGuideScroll = 0; }
     render(root, state, Object.assign({}, ctx, { rankGuide: true }));
   } });
@@ -38,6 +43,8 @@
   };
 
   function render(root, state, ctx) {
+    var liveRoot=arguments[3],a=state.auth||{};
+    root._rankedScope=JSON.stringify([a.signed_in,a.player_id||a.steam_id,state.lang]);
     var ui = ctx.ui, call = ctx.call, t = ctx.t, esc = ui.esc, el = ui.el;
     var auth = state.auth || {};
     var prof = state.profile || {};
@@ -48,7 +55,7 @@
     var strings = prof.strings || {};
     var stats = prof.stats || {};
     var currentRank = auth.placing ? null : (auth.rank || null);
-    var identity = auth.signed_in && prof.signed_in ? (auth.steam_id || prof.steam_id || auth.persona || "signed-in") : null;
+    var identity = auth.signed_in && prof.signed_in ? (auth.player_id || auth.steam_id || prof.steam_id || auth.persona || "signed-in") : null;
     if (profileIdentity !== identity) {
       rankGuideOpen = false;
       rankGuideScroll = 0;
@@ -74,6 +81,7 @@
     if (!history.asked && !history.loading && !history.error) { call("load_history"); }
 
     draw();
+    if(liveRoot)root=liveRoot;
 
     function draw() {
       root.innerHTML = "";
@@ -289,6 +297,7 @@
       rankText.appendChild(el("div", "profile-rank-rr", pt("profile_rank_rating") + " · " +
         (hasRr ? (rank.rr + " RR") : pt("profile_not_tracked"))));
       rankHead.appendChild(rankText);
+      rankCard.appendChild(el("div","profile-section-title",prof.ranked_mode==="BB1"?"1v1 Bodybomb":"5v5 Bodybomb"));
       rankCard.appendChild(rankHead);
       rankCard.appendChild(ui.btn("profile-rank-link", pt("profile_ranks_open"), function () { openRankGuide(false); }));
       side.appendChild(rankCard);
@@ -303,13 +312,24 @@
       grid.appendChild(ui.statTile(numOrNull(stats.cancelled), pt("profile_stat_cancelled")));
       side.appendChild(grid);
 
-      side.appendChild(el("div", "profile-note", pt("profile_ranked_only")));
+      side.appendChild(el("div", "profile-note", prof.history_mode==="all"?pt("profile_ranked_only"):(prof.history_mode==="BB1"?"1v1 Bodybomb":"5v5 Bodybomb")));
       return side;
     }
 
     // -- right column: recent matches ----------------------------------------
     function buildMain() {
       var main = el("div", "profile-main");
+      var ladders=el("div","profile-section ranked-profile-ranks");
+      ["BB5","BB1"].forEach(function(mode){
+        var rank=(prof.ranked_ranks||{})[mode],card=el("div","profile-section");
+        card.appendChild(el("div","profile-section-title",mode==="BB1"?"1v1 Bodybomb (Paintball)":"5v5 Bodybomb"));
+        if(rank&&!rank.placing){var badge=ui.rankBadge(rank,ranks);if(badge)card.appendChild(badge);card.appendChild(el("div","",rankName(rank)));card.appendChild(el("div","",String(rank.rr||0)+" RR"));}
+        else card.appendChild(el("div","",pt("profile_unranked")));
+        ladders.appendChild(card);
+      });
+      main.appendChild(ladders);
+      var modeTabs=ui.tabs([{id:"all",label:(history.strings||{}).filter_all||"All"},{id:"BB5",label:"5v5"},{id:"BB1",label:"1v1"}],prof.history_mode||"all",function(mode){call("history_mode",mode);});
+      modeTabs.classList.add("ranked-history-modes");main.appendChild(modeTabs);
       main.appendChild(recentSection());
       return main;
     }
@@ -342,7 +362,7 @@
         var row = ui.listRow({
           leading: el("span", "recent-res " + res.cls, res.letter),
           children: [
-            el("div", "recent-map", m.map || "—"),
+            el("div", "recent-map", (m.mode==="BB1"?"1v1":"5v5")+" · "+(m.map || "—")),
             el("div", m.cheater_reverted ? "cheater-reverted-notice" : "recent-meta", m.cheater_reverted ? pt("profile_cheater_reverted") : eloText(m.elo) + (m.ended ? " · " + whenText(m.ended) : ""))
           ]
         });

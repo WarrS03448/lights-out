@@ -53,6 +53,7 @@ const { roundDetails } = require('./round-details.cjs');
 const combatLedger = require('./combat-ledger.cjs');
 const penaltyWriteLib = require('./penalty-write.cjs');
 const censorLib = require('./censor.cjs');
+const rankedModes = require('./ranked-modes.cjs');
 
 const MATCH_SIZE = Math.max(1, Math.min(10, Number(process.env.COMP_MATCH_SIZE) || 10));
 // THE ACCEPT WINDOW IS 30 s, NOT 20 (Sam, 2026-09-15: "lets do around 30 seconds yeah").
@@ -418,7 +419,7 @@ const PARTY_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 // /api/report and /api/leaderboard fell through its router to a 404. A second, hand-copied list of
 // paths in the caller is what made a fully-implemented feature dead on arrival, so there is one
 // list now and `owns()` is what server.cjs asks. ADD A ROUTE HERE OR IT IS NOT REACHABLE.
-const NEEDS_AUTH = ['/api/messages', '/api/messages/thread', '/api/messages/send', '/api/messages/read', '/api/messages/block', '/api/tournament', '/api/tournament/register', '/api/tournament/support', '/api/match/combat-warning', '/api/live', '/api/queue/join', '/api/queue/leave',
+const NEEDS_AUTH = ['/api/match/concede', '/api/messages', '/api/messages/thread', '/api/messages/send', '/api/messages/read', '/api/messages/block', '/api/tournament', '/api/tournament/register', '/api/tournament/support', '/api/match/combat-warning', '/api/live', '/api/queue/join', '/api/queue/leave',
                     '/api/network/relay', '/api/network/profile', '/api/network/peers',
                     '/api/network/signal', '/api/network/pings',
                     '/api/match/accept', '/api/match/leave',
@@ -427,7 +428,7 @@ const NEEDS_AUTH = ['/api/messages', '/api/messages/thread', '/api/messages/send
                     '/api/match/chat', '/api/match/void-vote',
                     '/api/report',
                     '/api/bug',
-                    '/api/leaderboard',
+                    '/api/leaderboard', '/api/ranked/profile',
                     '/api/admin/overview', '/api/admin/player',
                     '/api/admin/ban', '/api/admin/unban', '/api/admin/chat',
                     '/api/friends/list', '/api/friends/code', '/api/friends/request',
@@ -762,16 +763,29 @@ function banFirstTeam(poolSize, advantageTeam) {
 }
 
 const HEARTBEAT_MS = 15000;          // SSE comment frames, so proxies keep the pipe open
+const LEGACY_COMPETITION = {MATCH_SIZE,TEAM_SIZE,MAX_PARTY,GATED_MODE_ID,COMP_MAP_POOL,DEFAULT_SCORE_LIMIT};
 
 function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, upstashCmd, prefix, analytics, tournament, accountDirectory, admitGameplay, activityGate,
-                 collectSeconds, requiredVersions, profileOf, relayIssuer, expectedRules, rankedRules, privateSoloSteam='' }) {
+                 collectSeconds, requiredVersions, profileOf, relayIssuer, expectedRules, rankedRules, privateSoloSteam='',
+                 modeId, competitionGuard, socialPrefix, sharedNetworkRegistry }) {
+  const mode = rankedModes.modeOf(modeId);
+  const duel = mode.id === 'BB1';
+  socialPrefix = socialPrefix || prefix || 'hub:';
+  prefix = rankedModes.rankedPrefix(prefix, mode.id);
+  const MATCH_SIZE = duel ? mode.players : LEGACY_COMPETITION.MATCH_SIZE;
+  const TEAM_SIZE = duel ? mode.teamSize : LEGACY_COMPETITION.TEAM_SIZE;
+  const MAX_PARTY = duel ? mode.maxParty : LEGACY_COMPETITION.MAX_PARTY;
+  const GATED_MODE_ID = duel ? mode.id : LEGACY_COMPETITION.GATED_MODE_ID;
+  const COMP_MAP_POOL = duel ? [mode.fixedMap] : LEGACY_COMPETITION.COMP_MAP_POOL;
+  const DEFAULT_SCORE_LIMIT = duel ? mode.scoreLimit : LEGACY_COMPETITION.DEFAULT_SCORE_LIMIT;
   const soloMatch=match=>Boolean(privateSoloSteam&&identity.validSteam(privateSoloSteam)&&match?.players?.length===1&&
     identity.gameFor(match,match.host)===privateSoloSteam&&match.players[0].player_id===match.host);
   const sendJson = (res, status, body) => rawSendJson(res, status, identity.wire(body));
   // How long this service holds a decided match open for its last stats (see COLLECT_SECONDS).
   // Overridable per service so a test can close the window at once, or hold it open and drive it.
   const collectFor = Number.isFinite(Number(collectSeconds)) ? Number(collectSeconds) : COLLECT_SECONDS;
-  const rulesExpected = typeof expectedRules === 'function' ? expectedRules : () => ({ score_limit: DEFAULT_SCORE_LIMIT, max_rounds: 12 });
+  const rulesExpected = typeof expectedRules === 'function' ? expectedRules : () => duel
+    ? rankedModes.rulesOf(mode.id) : ({ score_limit: DEFAULT_SCORE_LIMIT, max_rounds: 12 });
   // What the queue demands right now: { hub, mode }, or null. server.cjs reads it off the
   // catalogue it is serving; the unit tests and solo_flow build this module directly and pass
   // nothing, and NOTHING REQUIRED MEANS NO GATE - the same fail-open as an unreadable catalogue.
@@ -780,7 +794,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   // EVERY authenticated request, which is the only reason a party member's version is known
   // without asking for it - their open stream is a request too, and they never POST a thing.
   const versions = new Map();
-  const networkRegistry = new networkLib.Registry();
+  const recentDuels = new Map();
+  const networkRegistry = sharedNetworkRegistry || new networkLib.Registry();
   const credentialIssuer = relayIssuer || relayLib.createCredentialIssuer();
   const signalLimiter = relayLib.createRateLimiter({limit:120,windowMs:60000,maxEntries:2048});
   const reportLimiter = relayLib.createRateLimiter({limit:60,windowMs:60000,maxEntries:2048});
@@ -895,7 +910,24 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   const partyInvites = new Map();
 
   const store = typeof upstashCmd === 'function' ? upstashCmd : null;
-  const restitution = require('./cheater-restitution.cjs').create({store,prefix,
+  const restitution = require('./cheater-restitution.cjs').create({store,prefix,modeId:mode.id,
+    notifyRefund:async correction=>{
+      if(!correction.refunds?.length)return;
+      const cheaters=await Promise.all(correction.cheaters.map(async id=>{
+        const game=correction.cheater_games?.[id];
+        const name=game&&typeof profileOf==='function'
+          ?String((await profileOf(game,{signal:AbortSignal.timeout(5000)}))?.persona||'').trim():'';
+        // Keep delivery pending when Steam is unavailable. An account nickname is
+        // not a substitute for the Steam identity that played this match.
+        if(!name)throw Error('Refund Steam profile unavailable');
+        return name.slice(0,80);
+      }));
+      for(const refund of correction.refunds){
+        const result=await messages.notifyRefund({target:refund.player_id,mode:mode.id,
+          match_id:correction.match_id,amount:refund.amount,cheaters});
+        if(!result.ok)throw Error('Refund notice pending: '+result.error);
+      }
+    },
     withRatings:(ids,fn)=>withRatingLocks(ids,async()=>{await Promise.all(ids.map(drainRatingWrites));return fn();}),
     committed:async(rows,fresh)=>{
       for(const row of rows){
@@ -907,7 +939,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     }});
   const restitutionTick=setInterval(()=>{restitution.run().catch(()=>{});},15000);
   restitutionTick.unref?.();
-  const messages = require('./messages.cjs').create({store,prefix,
+  const messages = require('./messages.cjs').create({store,prefix:socialPrefix,
     nudge:id=>sendTo(id,{type:'message_update'}),
     nameOf:async id=>{await loadProfile(id);return personaOf(id);}});
   const penaltyKey = (steamId) => `${prefix || 'hub:'}penalty:${steamId}`;
@@ -923,12 +955,12 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   // and it costs one unused sorted set.
   const boardKey = () => `${prefix || 'hub:'}leaderboard:rr`;
   const banKey = (steamId) => `${prefix || 'hub:'}ban:${steamId}`;
-  const friendsKey = (steamId) => `${prefix || 'hub:'}friends:${steamId}`;
-  const profileKey = (steamId) => `${prefix || 'hub:'}profile:${steamId}`;
-  const reqInKey = (steamId) => `${prefix || 'hub:'}friendreq:in:${steamId}`;
-  const reqOutKey = (steamId) => `${prefix || 'hub:'}friendreq:out:${steamId}`;
-  const codeKey = (steamId) => `${prefix || 'hub:'}friendcode:${steamId}`;
-  const codeOwnerKey = (code) => `${prefix || 'hub:'}friendcodeowner:${code}`;
+  const friendsKey = (steamId) => `${socialPrefix}friends:${steamId}`;
+  const profileKey = (steamId) => `${socialPrefix}profile:${steamId}`;
+  const reqInKey = (steamId) => `${socialPrefix}friendreq:in:${steamId}`;
+  const reqOutKey = (steamId) => `${socialPrefix}friendreq:out:${steamId}`;
+  const codeKey = (steamId) => `${socialPrefix}friendcode:${steamId}`;
+  const codeOwnerKey = (code) => `${socialPrefix}friendcodeowner:${code}`;
   const historyKey = (steamId) => `${prefix || 'hub:'}history:${steamId}`;
   const matchKey = (matchId) => `${prefix || 'hub:'}match:${matchId}`;
   const chatKey = (matchId) => `${prefix || 'hub:'}chat:${matchId}`;
@@ -1118,6 +1150,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    */
   function enqueue(members, code, joined) {
     const ids = [...new Set(members.filter(Boolean))];
+    if (duel && ids.length !== 1) return null;
+    if (competitionGuard && !competitionGuard.canEnter(mode.id, ids, ids.map(gameOfPlayer))) return null;
     if (!ids.length || ids.some(id => inMatch.has(id) || queueOf.has(id))) return null;
     const unit = {
       key: code ? `party:${code}` : `solo:${ids[0]}`,
@@ -1541,6 +1575,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const team = teamOf(match, steamId);
     return {
       id: match.id,
+      mode: match.mode || mode.id,
+      ...(duel?{opponents:roster.filter(p=>p.player_id!==steamId).map(p=>p.player_id)}:{}),
       ended: record.ended,
       map: record.map || '',
       outcome: me.left ? 'cancelled' : record.outcome,
@@ -1693,8 +1729,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const detailRounds = roundDetails(match);
     return {
       id: match.id,
+      mode: match.mode || mode.id,
       created: match.created,
       started: match.live_at || null,
+      initial_host:match.initial_host||null,starting_sides:match.starting_sides||null,
       ended: record.ended,
       outcome: record.outcome,
       reason: record.reason || '',
@@ -1961,6 +1999,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   function queueSnapshot() {
     return queue.map((unit) => ({
       key: unit.key,
+      members:unit.members,
+      ...(duel?{recent:recentDuels.get(unit.members[0])||[]}:{}),
       joined: unit.joined,
       ratings: unit.members.map((id) => ratingLib.ageUncertainty(ratingOf(id), Date.now())),
       network: unit.members.map((id) => networkRegistry.player(id)),
@@ -2002,6 +2042,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const teamSize = Math.max(1, Math.floor(MATCH_SIZE / 2));
     const picked = matchmaker.findMatch(queueSnapshot(), {
       now: Date.now(), matchSize: MATCH_SIZE, teamSize,
+      ...(duel?{repeatCost:require('./duel-matching.cjs').cost}:{}),
     });
     // Nothing inside anybody's tolerance yet. They wait, their windows widen, the tick asks
     // again - and at TOL_OPEN_SECONDS the widest of them accepts anything at all.
@@ -2045,7 +2086,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
                avatar: (anyClient && anyClient.avatar) || avatarOf(steamId),
                accepted: false, connected: false };
     });
-    const match = { id: matchId, players, state: 'found', created: Date.now(),
+    const match = { id: matchId, mode: mode.id, players, state: 'found', created: Date.now(),
                     timer: null, deadline: 0, map: '', host: picked.network ? picked.network.host : '',
                     network: picked.network || null,
                     network_preferences: Object.fromEntries(taken.flatMap(u => u.members).map(id =>
@@ -2135,6 +2176,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
 
   /** The inverse. Timers come back null and rearm() puts the real ones on. */
   function reviveMatch(raw) {
+    if (rankedModes.modeOf(raw?.mode).id !== mode.id) throw Error('Saved match belongs to another ranked mode');
     const out = { timer: null, ban_timer: null, stage_timer: null };
     for (const [key, value] of Object.entries(raw || {})) {
       if (value && typeof value === 'object' && Array.isArray(value.__map)) out[key] = new Map(value.__map);
@@ -2190,6 +2232,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (!store) return Promise.resolve();
     const writes = [];
     for (const match of matches.values()) {
+      if(match.terminal){writes.push(matchOperation(match.id,()=>finishDuelDecision(match)));continue;}
       if (match.void_pending) {
         writes.push(matchOperation(match.id, () => finishVoidVote(match)));
         continue;
@@ -2334,7 +2377,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   function analyticsContext(match) {
     const ratings=match.mm?.ratings;
     return { rules: { ...require('./analytics.cjs').ruleSnapshot(), game: rulesExpected() },
-      deployment: process.env.RAILWAY_GIT_COMMIT_SHA || 'local', hub: requiredVersions?.()?.hub || 'unknown', mode: 'BB5',
+      deployment: process.env.RAILWAY_GIT_COMMIT_SHA || 'local', hub: requireVersions()?.hub || 'unknown', mode: mode.id,
+      balance:duel?{initial_host:match.initial_host||null,starting_sides:match.starting_sides||null,host_changed:Boolean(match.host_migrations?.length)}:null,
       region: match.network?.region || 'unknown',
       predicted_win: ratings?.[1] && ratings?.[2] ? ratingLib.winProbability(ratings[1],ratings[2]) : null };
   }
@@ -2384,7 +2428,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * deadline already in the past fires at once, which is the correct answer - that expiry was
    * owed while the container was starting. */
   function rearm(match) {
-    if (match.final_snapshot) return;
+    if (match.final_snapshot || match.terminal || match.void_pending) return;
     if (match.collecting && !match.start_ready_verified) {
       const c = match.collecting;
       c.deadline = Number(c.deadline) || Number(c.since) + collectFor * 1000;
@@ -2562,16 +2606,17 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    */
   function expireLive(matchId) {
     const match = matches.get(matchId);
-    if (!match || match.state !== 'live' || match.final_snapshot || match.collecting) return;
+    if (!match || match.state !== 'live' || match.final_snapshot || match.collecting || match.terminal || match.void_pending) return;
+    if(duel)return matchOperation(match.id,()=>voidServiceFailure(match));
     closeMatch(match, 'stalled', []);
   }
 
   function closeMatch(match, reason, blame = [], punished = {}) {
-    if (matches.get(match.id)!==match || match.collecting || match.settling || match.final_snapshot) return;
+    if (matches.get(match.id)!==match || match.collecting || match.settling || match.final_snapshot || match.terminal || match.void_pending) return;
     if(store && match.migration_capabilities && !approvedClosures.has(match)) {
       const host=match.host,epoch=match.host_epoch||0;
       return matchOperation(match.id,async()=>{
-        if(matches.get(match.id)!==match || match.collecting || match.settling || match.final_snapshot ||
+        if(matches.get(match.id)!==match || match.collecting || match.settling || match.final_snapshot || match.terminal || match.void_pending ||
            match.host!==host || (match.host_epoch||0)!==epoch)return;
         const closed=await store(['EVAL',require('./migration.cjs').CLOSE,'2',authorityKey(match.id),settlementKey(match.id),
           host,String(epoch),String(Date.now()),'0',String(LIVE_STATE_TTL_SECONDS)],{strict:true});
@@ -2850,7 +2895,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   function landCoin(match) {
     const L = match.lobby;
     if (L.stage !== 'flipping') return;
-    L.stage = 'choice';
+    L.stage = duel ? 'side' : 'choice';
+    if (duel) { L.side_picker = L.toss_winner; L.advantage = 'side'; L.map = mode.fixedMap; }
     armStageTurn(match);
     broadcastLobby(match);
   }
@@ -2859,6 +2905,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * selector) or the last BAN. The other team gets whatever is left. The ban ORDER is set so
    * the advantage team bans LAST whatever the pool size. */
   function chooseAdvantage(steamId, body) {
+    if (duel) return {ok:false,error:'This mode has no advantage choice.'};
     const match = matches.get(inMatch.get(steamId));
     if (!match || match.state !== 'ready' || !match.lobby) return { ok: false, error: 'No lobby.' };
     const L = match.lobby;
@@ -2906,14 +2953,16 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const other = L.side_picker === 1 ? 2 : 1;
     L.sides = { [L.side_picker]: side, [other]: side === 'attack' ? 'defend' : 'attack' };
     L.side_auto = Boolean(auto);
-    L.stage = 'veto';
-    armStageTurn(match);              // the first turn is on the clock like every other stage
+    L.stage = duel ? 'ready' : 'veto';
+    if (duel) { L.map = mode.fixedMap; match.map = mode.fixedMap; clearStageTurn(match); }
+    else armStageTurn(match);         // the first turn is on the clock like every other stage
     broadcastLobby(match);
   }
 
   /** One veto ban, by the captain whose turn it is. When one map is left it is the match map and
    * the lobby is decided (stage 'ready'); a client then opens the connect window. */
   function banMap(steamId, body) {
+    if (duel) return {ok:false,error:'This mode has no map bans.'};
     const match = matches.get(inMatch.get(steamId));
     if (!match || match.state !== 'ready' || !match.lobby) return { ok: false, error: 'No lobby.' };
     const L = match.lobby;
@@ -3077,7 +3126,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (!match.agreedScoreLimit) {
       const rules = typeof rankedRules === 'function' ? rankedRules() : null;
       const requested = Number(rules && rules.score_limit);
-      match.agreedScoreLimit = forcedScoreLimit() ??
+      match.agreedScoreLimit = (duel ? mode.scoreLimit : forcedScoreLimit()) ??
         (Number.isInteger(requested) && requested > 0 && requested <= 999 ? requested : DEFAULT_SCORE_LIMIT);
     }
   }
@@ -3336,6 +3385,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     match.state = 'connecting';
     match.map = map;
     match.host = host;
+    match.initial_host ||= host;
+    match.starting_sides ||= structuredClone(match.sides||{});
     ensureReportCredential(match);
     match.openedBy = steamId;         // who opened the window, for attribution
     for (const p of match.players) p.connected = false;
@@ -3775,7 +3826,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const t = match.assigned_teams;
     if (!Array.isArray(t?.[1]) || !Array.isArray(t?.[2])) return reject('no frozen assignment');
     const ids = [...t[1], ...t[2]].map(String), unique = new Set(ids);
-    if (ids.length < (soloMatch(match)?1:2) || ids.length > 10 || unique.size !== ids.length || ids.some(x => !identity.validPlayer(x)))
+    if(duel&&(ids.length!==2||assigned[1].length!==1||assigned[2].length!==1))return reject('invalid duel assignment');
+      if (ids.length < (soloMatch(match)?1:2) || ids.length > 10 || unique.size !== ids.length || ids.some(x => !identity.validPlayer(x)))
       return reject('invalid frozen assignment');
     const sideOf = new Map([...t[1].map(x => [String(x), 0]), ...t[2].map(x => [String(x), 1])]);
     if (!Array.isArray(rows) || rows.length !== ids.length) return reject('wrong roster size');
@@ -3840,7 +3892,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   function matchPresence(host, id, present) {
     return matchOperation(id, async () => {
       const match=matches.get(id);
-      if(!match || match.host!==host || inMatch.get(host)!==id)return {ok:false,error:'not the host'};
+      if(!match || match.terminal || match.void_pending || match.host!==host || inMatch.get(host)!==id)return {ok:false,error:'not the host'};
       const observation=require('./reconnect.cjs').observe(match,present);
       if(!observation.ok)return observation;
       const previous=match.reconnect;
@@ -3853,6 +3905,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
           catch(e) { match.reconnect=previous; throw e; }
         }
         if(matches.get(id)!==match || match.state!=='live' || match.final_snapshot)return {ok:false,error:'match ended'};
+        if(duel&&observation.expired.length===1){
+          const player=observation.expired[0];
+          return decideDuel(match,player,'reconnect_timeout');
+        }
         const removed=[],departures=[];
         const beforeRemoval={players:match.players,left:match.left,reconnect:{...match.reconnect}};
         for(const player of observation.expired) {
@@ -4116,7 +4172,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       bans.set(target,saved.ban);bansLoaded.add(target);
       await voidMatchForBan(match);
       try{removeFromQueue(owner);}catch{}
-      for(const clientId of [...(bySteam.get(owner)||[])]){send(clientId,{type:'banned',reason:'Cheating',until:0});drop(clientId);}
+      for(const clientId of [...(bySteam.get(owner)||[])]){if(competitionGuard)send(clientId,{type:'ranked_ban',ban:saved.ban});else{send(clientId,{type:'banned',reason:'Cheating',until:0});drop(clientId);}}
       void restitution.run().catch(()=>{});
       return {ok:true,banned:target,until:0,corrections:'queued',decision_id:saved.decision.id};
     }
@@ -4137,8 +4193,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     // happen to close the app.
     try { removeFromQueue(owner); } catch { /* not queued */ }
     for (const clientId of [...(bySteam.get(owner) || [])]) {
-      send(clientId, { type: 'banned', reason: rec.reason, until: rec.until });
-      drop(clientId);
+      if(competitionGuard)send(clientId,{type:'ranked_ban',ban:rec});
+      else{send(clientId, { type: 'banned', reason: rec.reason, until: rec.until });drop(clientId);}
     }
     console.log('[admin] %s banned %s%s (%s)', adminId, target,
                 rec.until ? ` until ${new Date(rec.until).toISOString()}` : ' permanently',
@@ -4154,6 +4210,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (store) await restitution.setBan(String(adminId),target,null);
     bans.delete(target);
     bansLoaded.add(target);
+    if(competitionGuard)sendTo(target,{type:'ranked_ban',ban:null});
     console.log('[admin] %s unbanned %s', adminId, target);
     return { ok: true, unbanned: target };
   }
@@ -5497,7 +5554,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   // Ballots belong to authenticated, frozen game identities, never to a client-supplied count.
   // Six is absolute, including in a private/test match with fewer than ten humans.
   function voidVotePayload(match, recipient) {
-    if (!(match.void_votes instanceof Map)) return null;
+    if (duel || !(match.void_votes instanceof Map)) return null;
     const voters = new Set(), counts = { yes: 0, no: 0 };
     for (const [id, yes] of match.void_votes) {
       const game = identity.gameFor(match, id);
@@ -5514,6 +5571,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   }
 
   function voteToVoid(account, body) {
+    if(duel)return {ok:false,error:'Void voting is not available in 1v1.'};
     const id = String(body.match_id || ''), player = account.player_id;
     return matchOperation(id, async () => {
       const match = matches.get(id);
@@ -5527,7 +5585,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
           !identity.validBindings(match) || (Object.hasOwn(body, 'yes') && typeof body.yes !== 'boolean'))
         return { ok: false, error: 'Only players in this live match can vote.' };
       if (match.void_pending) return finishVoidVote(match);
-      if (match.collecting || match.settling || match.final_snapshot || match.finished)
+      if (match.collecting || match.settling || match.final_snapshot || match.terminal || match.void_pending || match.finished)
         return { ok: false, error: 'The match is already finishing.' };
       if (!(match.void_votes instanceof Map)) {
         match.void_votes = new Map();
@@ -5562,7 +5620,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   }
 
   function hasVoidDecision(match) {
-    return Boolean(match.void_pending && (match.void_reason === 'ban' || (voidVotePayload(match, '')?.yes || 0) >= 6));
+    return Boolean(match.void_pending && (match.void_reason === 'ban' || (duel && match.void_reason === 'service_failure') || (voidVotePayload(match, '')?.yes || 0) >= 6));
   }
 
   async function finishVoidVote(match) {
@@ -5578,12 +5636,12 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       }
       if (!hasVoidDecision(match) || match.collecting)
         return { ok: false, error: 'The match is already finishing.' };
-      const ids = everyone(match).map(p => p.player_id), now = Date.now(), reason = match.void_reason === 'ban' ? 'ban' : 'vote';
+      const ids = everyone(match).map(p => p.player_id), now = Date.now(), reason = ['ban','service_failure'].includes(match.void_reason) ? match.void_reason : 'vote';
       const record = { ended: match.void_pending, outcome: 'voided', reason, map: match.map,
         host: match.host, sides: match.sides || {} };
       const full = { ...fullRecord(match, record), voided: true, void_reason: reason, won_team: null,
         score: null, data_collected: true };
-      const receipt = { version: settlementLib.VERSION, matchId: match.id, match_id: match.id,
+      const receipt = { mode:mode.id, version: settlementLib.VERSION, matchId: match.id, match_id: match.id,
         host: match.host, host_epoch: match.host_epoch || 0, at: now, collected_at: now, close_after: now + 5000,
         report_digest: /^[a-f0-9]{64}$/.test(match.reportToken || '')
           ? crypto.createHash('sha256').update(match.reportToken).digest('hex') : null,
@@ -5595,7 +5653,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       const plan = { id: match.id, receipt, types, ttl: MATCH_TTL_SECONDS, history_ttl: HISTORY_TTL_SECONDS,
         keep: HISTORY_KEEP, writes: [], histories: [], board: [], hashes: [], rank_checks: [],
         result_index: add(resultKey(match.id), 'string'), live: add(liveMatchKey(match.id), 'string'),
-        live_index: add(liveIndexKey(), 'set'), analytics_outbox: add(`${prefix || 'hub:'}analytics:outbox`, 'set'),
+        live_index: add(liveIndexKey(), 'set'), analytics_outbox: add(`${socialPrefix}analytics:outbox`, 'set'),
         authority: add(authorityKey(match.id), 'string'), host: match.host, host_epoch: match.host_epoch || 0 };
       plan.writes.push({ index: add(matchKey(match.id), 'string'), value: JSON.stringify(full), ttl: MATCH_TTL_SECONDS });
       for (const sid of ids) {
@@ -5616,10 +5674,21 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     }
   }
 
+  async function voidServiceFailure(match) {
+    if(!duel||matches.get(match.id)!==match||match.state!=='live')return {ok:false};
+    if(match.terminal)return finishDuelDecision(match);
+    if(match.final_snapshot)return {ok:false};
+    if(match.collecting)match.interrupted_collection=match.collecting;
+    delete match.collecting;
+    match.void_pending ||= Date.now();match.void_reason='service_failure';
+    clearTimeout(match.timer);clearTimeout(match.collectTimer);match.timer=null;match.collectTimer=null;
+    return finishVoidVote(match);
+  }
+
   async function checkHostTimeouts() {
     if(!store)return;
     for(const m of matches.values()) {
-      if(m.state!=='live'||m.void_pending||!m.migration_capabilities||Date.now()-(hostChecks.get(m.id)||0)<10000)continue;
+      if(m.state!=='live'||m.terminal||m.void_pending||!m.migration_capabilities||Date.now()-(hostChecks.get(m.id)||0)<10000)continue;
       hostChecks.set(m.id,Date.now());
       await matchOperation(m.id,async()=>{
         await refreshAuthority(m);
@@ -5634,6 +5703,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
             rows:f.rows.map(r=>`${r.gameSteamId}|k=${r.kills};d=${r.deaths};sp=${r.spawnCount};t=${r.teamId};s=${r.teamScore};a=${r.alive}`).join(',')});
           return;
         }
+        if(duel){await voidServiceFailure(m);return;}
         const closed=await store(['EVAL',require('./migration.cjs').CLOSE,'2',authorityKey(m.id),settlementKey(m.id),
           m.host,String(m.host_epoch||0),String(Date.now()),'300000',String(LIVE_STATE_TTL_SECONDS)],{strict:true});
         if(closed!==1)return;
@@ -6961,6 +7031,12 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       if ((record.result_revision || 0) >= (careers.get(id)?.result_revision || 0)) careers.set(id, record);
       frozenCareers.delete(id);
     }
+    for(const [id,penalty] of Object.entries(receipt.penalties||{})){
+      if((penalty.last||0)>=(penalties.get(id)?.last||0)){
+        penalties.set(id,penalty);penaltyLoaded.add(id);
+        sendTo(id,{type:'penalty',...penalty,seconds:Math.max(0,Math.ceil((penalty.until-Date.now())/1000)),rr:0,next_seconds:rungSeconds(penalty.count+1)});
+      }
+    }
     for (const [id, row] of Object.entries(receipt.history)) {
       history.set(id, [row, ...(history.get(id) || []).filter(r => r.id !== receipt.match_id)].slice(0, HISTORY_KEEP));
     }
@@ -6984,6 +7060,146 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     }
   }
 
+  async function commitPlayedResult(match, {ids,side,winner,draw,score,total,limit,host,id,mergedRows}) {
+    const s0=score?.[1]||0,s1=score?.[2]||0;
+      const save = withRatingLocks(ids, async () => {
+        if (!store) throw Error('durable result store unavailable');
+        await Promise.all([matchWriting.get(id), ...ids.flatMap(sid => [...(careerWrites.get(sid) || [])]), ...ids.map(drainRatingWrites),...ids.map(drainPenaltyWrites)]);
+        await Promise.all(ids.map(async sid => {
+          await readRating(sid, false);
+          const raw = await store(['HGET', rosterKey(), sid], { strict: true });
+          if (raw) careers.set(sid, { ...blankCareer(sid), ...identity.parse(raw) });
+        }));
+        const settled = winner ? settleMatch(match, winner, { calculate: true }) : ids.map(steamId => {
+          const after = ratingOf(steamId), rank = progressLib.publicProgress(after);
+          return { steamId, before: after, after, won: null, rr: { delta: 0 }, event: { type: 'match_result', match_id: id,
+            won: null, draw: true, delta: 0, rr_delta: 0, ...rank, score, map: match.map,
+            scoreboard: scoreboardOf(match), round_details: roundDetails(match), round_index_base: 0, rounds_played: total,
+            you: { ...rank, rr_delta: 0 } } };
+        });
+        if (winner) {
+          for (const row of settled) row.after.revision = (row.before.revision || 0) + 1;
+          publishSettlement(match, winner, settled, Math.abs(s0 - s1) / Math.max(s0, s1, 1), true);
+        }
+        const now = Date.now();
+        const reviewPlayers=duel?settled.filter(r=>!r.won&&require('./duel-matching.cjs').review(recentDuels.get(r.steamId),ids.find(id=>id!==r.steamId),now)).map(r=>r.steamId):[];
+        const record = { ended: match.final_ended_at, outcome: 'played', reason:match.terminal?.reason||'', host, map: match.map, sides: match.sides || {} };
+        const full = fullRecord(match, record);
+        Object.assign(full, { terminal:match.terminal||null, won_team: winner || null, draw, score, final_stats: mergedRows, combat_end: match.combat_end, data_collected: true });
+        const canonical = { repeat_review:reviewPlayers, terminal:match.terminal||null, version: settlementLib.VERSION, matchId: id,host_epoch:match.host_epoch||0, at: now, winner, draw, score, limit,
+          report_digest: /^[a-f0-9]{64}$/.test(match.reportToken || '') ? crypto.createHash('sha256').update(match.reportToken).digest('hex') : null,
+          mode:mode.id, analytics_context: analyticsContext(match),
+          rules: Object.fromEntries(Object.entries(process.env).filter(([key]) => /^COMP_(RR_|PERF_|RANK_|RATING_|LEVEL_THRESHOLDS$|ARROW_|PLACEMENT_|REAPER_|W_|WEIGHT_|DECISIVE_|INT_|PRESENCE_|EXPECT_|PARTY_PREMIUM$|QUALITY_SCALE$)/.test(key))),
+          inputs: { round_index_base: 0, players: everyone(match), teams: match.teams, mm: match.mm, stats: combatStats(match), combatState: match.combatState,
+            combat_segments:match.combat_segments,host_migrations:match.host_migrations,
+            rounds: match.rounds, kills: match.kills, left: match.left },
+          board: scoreboardOf(match), publicMatch: full, rows: settled,
+          match_id: id, host, participants: ids, collected_at: now, close_after: now + 5000,
+          data_collected: true, full, ratings: {}, history: {}, events: {} };
+        const keys = [settlementKey(id)], types = ['string'];
+        const add = (key, type) => { keys.push(key); types.push(type); return keys.length; };
+        const plan = { id, receipt: canonical, types, ttl: MATCH_TTL_SECONDS, history_ttl: HISTORY_TTL_SECONDS,
+          keep: HISTORY_KEEP, writes: [], histories: [], board: [], hashes: [], rank_checks: [],
+          result_index: add(resultKey(id), 'string'),
+          live: add(liveMatchKey(id), 'string'), live_index: add(liveIndexKey(), 'set'),
+          analytics_outbox: add(`${socialPrefix}analytics:outbox`, 'set') };
+        plan.authority=add(authorityKey(id),'string');plan.host=host;plan.host_epoch=match.host_epoch||0;
+        plan.writes.push({ index: add(matchKey(id), 'string'), value: JSON.stringify(full), ttl: MATCH_TTL_SECONDS });
+        if(duel && match.terminal?.reason==='reconnect_timeout' && !noShowPenaltiesPaused()){
+          const loser=match.terminal.loser,key=penaltyKey(loser),raw=await store(['GET',key],{strict:true});
+          const prior=raw?identity.parse(raw):{},count=effectiveCount(prior)+1,seconds=rungSeconds(count);
+          // The ordinary loss supplies the RR change; save the escalating queue cooldown
+          // in the same transaction so failed/voided results never leave a separate charge.
+          const penalty={until:now+seconds*1000,last:now,reason:'reconnect_timeout',count,elo:prior.elo||0};
+          canonical.penalties={[loser]:penalty};
+          const index=add(key,'string');plan.string_checks=[{index,expected:raw||false}];
+          plan.writes.push({index,value:JSON.stringify(penalty)});
+        }
+        const boardIndex = add(boardKey(), 'zset');
+        for (const row of settled) {
+          const sid = row.steamId, team = side.get(sid) + 1;
+          const clean = ratingLib.normalise(row.after);
+          canonical.ratings[sid] = clean;
+          // The receipt retains both rows and events; copying every round board
+          // into each would exceed storage request limits in a full-size match.
+          delete row.event.round_details;
+          canonical.events[sid] = { ...row.event, mode:mode.id, terminal:match.terminal||null, data_collected: true, close_allowed: true, close_after: canonical.close_after };
+          const h = { ...historyRow(match, record, sid), ...(match.terminal?{outcome:'played',reason:match.terminal.reason}:{}), won: draw ? null : team === winner, draw,
+            score: score ? `${score[team]}-${score[team === 1 ? 2 : 1]}` : null, rr_delta: row.rr.delta,
+            delta: ratingLib.arrowsFor(row.rr.delta), placement: Boolean(row.rr.placing || row.rr.placed) };
+          canonical.history[sid] = h;
+          plan.histories.push({ index: add(historyKey(sid), 'list'), value: JSON.stringify(h) });
+          if (!draw) {
+            const index = add(ratingKey(sid), 'string');
+            plan.rank_checks.push({ index, expected: row.before.revision || 0 });
+            plan.writes.push({ index, value: JSON.stringify(clean) });
+            plan.board.push({ index: boardIndex, member: sid, value: ratingLib.isPlacing(clean) ? false : boardScore(clean) });
+          }
+        }
+        canonical.careers = creditMatch(match, { played: true, dryRun: true, now: match.final_ended_at });
+        const rosterIndex = add(rosterKey(), 'hash');
+        for (const [sid, rec] of Object.entries(canonical.careers)) {
+          const rating = canonical.ratings[sid];
+          Object.assign(rec, { rated: rating.matches || 0, wins: rating.wins || 0, losses: rating.losses || 0,
+            mmr: Math.round(rating.rating || 0), progress: rating.progress || 0, result_revision: now });
+          plan.hashes.push({ index: rosterIndex, field: sid, value: JSON.stringify(rec) });
+        }
+        const saved = await require('./result-commit.cjs').commit(store, keys, plan);
+        await acceptCommitted(match, saved);
+        return { ok: true, match_id: id, data_collected: true, close_allowed: true };
+      });
+      resultSaves.set(id, save);
+      try { return await save; } finally { resultSaves.delete(id); }
+  }
+
+  async function finishDuelDecision(match) {
+    let terminal=match.terminal;
+    if(!duel||!terminal||!['concede','reconnect_timeout'].includes(terminal.reason))return {ok:false,error:'No duel decision.'};
+    try {
+      await persistLive(match);
+      if(matches.get(match.id)!==match)return {ok:true,match_id:match.id,data_collected:true,close_allowed:true};
+      if(match.void_pending)return finishVoidVote(match);
+      terminal=match.terminal;
+      const ids=everyone(match).map(p=>p.player_id),assigned=match.assigned_teams;
+      if(ids.length!==2||assigned?.[1]?.length!==1||assigned?.[2]?.length!==1||!ids.includes(terminal.loser))throw Error('Invalid duel roster');
+      const side=new Map([...assigned[1].map(x=>[x,0]),...assigned[2].map(x=>[x,1])]);
+      const score=terminal.score,total=score ? score[1]+score[2] : null;
+      match.score=score;match.final_ended_at=terminal.at;
+      const mergedRows=(match.stats?.players||[]).map(row=>({...row,stats_complete:false}));
+      return await commitPlayedResult(match,{ids,side,winner:terminal.winner,draw:false,score,total,
+        limit:mode.scoreLimit,host:match.host,id:match.id,mergedRows});
+    }catch{return {ok:false,unavailable:true,error:'Match decision is being saved. Please retry.'};}
+  }
+  async function decideDuel(match,loser,reason) {
+    if(!duel||!match.start_ready_verified||match.state!=='live'||match.void_pending||match.final_snapshot||match.collecting||match.finished)
+      return {ok:false,error:'The match cannot be conceded now.'};
+    if(match.terminal && (match.terminal.loser!==loser || match.terminal.reason!==reason))return {ok:false,error:'The match is already decided.'};
+    if(!match.terminal){
+      const team=[1,2].find(n=>match.assigned_teams?.[n]?.includes(loser));
+      if(!team)return {ok:false,error:'Invalid duel player.'};
+      const score=match.score;
+      if(score && ![1,2].every(n=>Number.isSafeInteger(score[n])&&score[n]>=0&&score[n]<7))return {ok:false,error:'The match is already decided.'};
+      match.terminal={reason,loser,winner:team===1?2:1,at:Date.now(),score:score ? {1:score[1],2:score[2]} : null};
+      clearTimeout(match.timer);clearTimeout(match.collectTimer);match.timer=null;match.collectTimer=null;
+    }
+    return finishDuelDecision(match);
+  }
+  function concedeMatch(account,body){
+    const id=String(body?.match_id||'');
+    return matchOperation(id,async()=>{
+      if(!duel||!identity.validPlayer(account?.player_id))return {ok:false,error:'Not a 1v1 match.'};
+      const receipt=await readReceipt(id);
+      if(receipt){const full=receipt.publicMatch;identity.freezeMatch(full);
+        return identity.gameFor(full,account.player_id)===account.game_steam_id
+          ?{ok:true,match_id:id,data_collected:true,close_allowed:true}:{ok:false,error:'Not a match participant.'};}
+      const match=matches.get(id),player=account.player_id;
+      if(!match||inMatch.get(player)!==id||!identity.validBindings(match)||identity.gameFor(match,player)!==account.game_steam_id)
+        return {ok:false,error:'Not a match participant.'};
+      try{await refreshAuthority(match);return await decideDuel(match,player,'concede');}
+      catch{return {ok:false,unavailable:true,error:'Match decision is being saved. Please retry.'};}
+    });
+  }
+
   function finalSnapshot(hostId, fields) {
     return matchOperation(String(fields?.match_id || ''), () => applyFinalSnapshot(hostId, fields));
   }
@@ -7001,10 +7217,12 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       const match = matches.get(id);
       if (!match || match.host !== host || inMatch.get(host) !== id || match.state !== 'live' || !match.start_ready_verified)
         return reject('no confirmed live match');
+      if(match.terminal)return finishDuelDecision(match);
       if (!match.combat_end || String(fields.combat_end || '') !== `${match.combat_end.epoch};${match.combat_end.seq}`)
         return reject('combat capture is still draining');
       const assigned = match.assigned_teams;
       const ids = [...(assigned?.[1] || []), ...(assigned?.[2] || [])];
+      if(duel&&(ids.length!==2||assigned[1].length!==1||assigned[2].length!==1))return reject('invalid duel assignment');
       if (ids.length < (soloMatch(match)?1:2) || ids.length > 10 || new Set(ids).size !== ids.length) return reject('invalid assignment');
       const side = new Map([...assigned[1].map(x => [x, 0]), ...assigned[2].map(x => [x, 1])]);
       const meta = /^(\d{1,2});(\d{1,2});([01]);(\d{1,2});([01]);(\d{1,2})$/.exec(String(fields.meta || ''));
@@ -7075,83 +7293,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       }
       match.stats = { ...(match.stats || {}), players: mergedRows, series, round_index_base:0, rounds: total, limit };
       match.score = score;
-      const save = withRatingLocks(ids, async () => {
-        if (!store) throw Error('durable result store unavailable');
-        await Promise.all([matchWriting.get(id), ...ids.flatMap(sid => [...(careerWrites.get(sid) || [])]), ...ids.map(drainRatingWrites)]);
-        await Promise.all(ids.map(async sid => {
-          await readRating(sid, false);
-          const raw = await store(['HGET', rosterKey(), sid], { strict: true });
-          if (raw) careers.set(sid, { ...blankCareer(sid), ...identity.parse(raw) });
-        }));
-        const settled = winner ? settleMatch(match, winner, { calculate: true }) : ids.map(steamId => {
-          const after = ratingOf(steamId), rank = progressLib.publicProgress(after);
-          return { steamId, before: after, after, won: null, rr: { delta: 0 }, event: { type: 'match_result', match_id: id,
-            won: null, draw: true, delta: 0, rr_delta: 0, ...rank, score, map: match.map,
-            scoreboard: scoreboardOf(match), round_details: roundDetails(match), round_index_base: 0, rounds_played: total,
-            you: { ...rank, rr_delta: 0 } } };
-        });
-        if (winner) {
-          for (const row of settled) row.after.revision = (row.before.revision || 0) + 1;
-          publishSettlement(match, winner, settled, Math.abs(s0 - s1) / Math.max(s0, s1, 1), true);
-        }
-        const now = Date.now();
-        const record = { ended: match.final_ended_at, outcome: 'played', host, map: match.map, sides: match.sides || {} };
-        const full = fullRecord(match, record);
-        Object.assign(full, { won_team: winner || null, draw, score, final_stats: mergedRows, combat_end: match.combat_end, data_collected: true });
-        const canonical = { version: settlementLib.VERSION, matchId: id,host_epoch:match.host_epoch||0, at: now, winner, draw, score, limit,
-          report_digest: /^[a-f0-9]{64}$/.test(match.reportToken || '') ? crypto.createHash('sha256').update(match.reportToken).digest('hex') : null,
-          analytics_context: analyticsContext(match),
-          rules: Object.fromEntries(Object.entries(process.env).filter(([key]) => /^COMP_(RR_|PERF_|RANK_|RATING_|LEVEL_THRESHOLDS$|ARROW_|PLACEMENT_|REAPER_|W_|WEIGHT_|DECISIVE_|INT_|PRESENCE_|EXPECT_|PARTY_PREMIUM$|QUALITY_SCALE$)/.test(key))),
-          inputs: { round_index_base: 0, players: everyone(match), teams: match.teams, mm: match.mm, stats: combatStats(match), combatState: match.combatState,
-            combat_segments:match.combat_segments,host_migrations:match.host_migrations,
-            rounds: match.rounds, kills: match.kills, left: match.left },
-          board: scoreboardOf(match), publicMatch: full, rows: settled,
-          match_id: id, host, participants: ids, collected_at: now, close_after: now + 5000,
-          data_collected: true, full, ratings: {}, history: {}, events: {} };
-        const keys = [settlementKey(id)], types = ['string'];
-        const add = (key, type) => { keys.push(key); types.push(type); return keys.length; };
-        const plan = { id, receipt: canonical, types, ttl: MATCH_TTL_SECONDS, history_ttl: HISTORY_TTL_SECONDS,
-          keep: HISTORY_KEEP, writes: [], histories: [], board: [], hashes: [], rank_checks: [],
-          result_index: add(resultKey(id), 'string'),
-          live: add(liveMatchKey(id), 'string'), live_index: add(liveIndexKey(), 'set'),
-          analytics_outbox: add(`${prefix || 'hub:'}analytics:outbox`, 'set') };
-        plan.authority=add(authorityKey(id),'string');plan.host=host;plan.host_epoch=match.host_epoch||0;
-        plan.writes.push({ index: add(matchKey(id), 'string'), value: JSON.stringify(full), ttl: MATCH_TTL_SECONDS });
-        const boardIndex = add(boardKey(), 'zset');
-        for (const row of settled) {
-          const sid = row.steamId, team = side.get(sid) + 1;
-          const clean = ratingLib.normalise(row.after);
-          canonical.ratings[sid] = clean;
-          // The receipt retains both rows and events; copying every round board
-          // into each would exceed storage request limits in a full-size match.
-          delete row.event.round_details;
-          canonical.events[sid] = { ...row.event, data_collected: true, close_allowed: true, close_after: canonical.close_after };
-          const h = { ...historyRow(match, record, sid), won: draw ? null : team === winner, draw,
-            score: `${score[team]}-${score[team === 1 ? 2 : 1]}`, rr_delta: row.rr.delta,
-            delta: ratingLib.arrowsFor(row.rr.delta), placement: Boolean(row.rr.placing || row.rr.placed) };
-          canonical.history[sid] = h;
-          plan.histories.push({ index: add(historyKey(sid), 'list'), value: JSON.stringify(h) });
-          if (!draw) {
-            const index = add(ratingKey(sid), 'string');
-            plan.rank_checks.push({ index, expected: row.before.revision || 0 });
-            plan.writes.push({ index, value: JSON.stringify(clean) });
-            plan.board.push({ index: boardIndex, member: sid, value: ratingLib.isPlacing(clean) ? false : boardScore(clean) });
-          }
-        }
-        canonical.careers = creditMatch(match, { played: true, dryRun: true, now: match.final_ended_at });
-        const rosterIndex = add(rosterKey(), 'hash');
-        for (const [sid, rec] of Object.entries(canonical.careers)) {
-          const rating = canonical.ratings[sid];
-          Object.assign(rec, { rated: rating.matches || 0, wins: rating.wins || 0, losses: rating.losses || 0,
-            mmr: Math.round(rating.rating || 0), progress: rating.progress || 0, result_revision: now });
-          plan.hashes.push({ index: rosterIndex, field: sid, value: JSON.stringify(rec) });
-        }
-        const saved = await require('./result-commit.cjs').commit(store, keys, plan);
-        await acceptCommitted(match, saved);
-        return { ok: true, match_id: id, data_collected: true, close_allowed: true };
-      });
-      resultSaves.set(id, save);
-      try { return await save; } finally { resultSaves.delete(id); }
+      return await commitPlayedResult(match,{ids,side,winner,draw,score,total,limit,host,id,mergedRows});
     } catch (err) {
       if (String(err.message).includes('result rank conflict')) {
         for (const p of matches.get(id)?.players || []) { ratingLoaded.delete(p.player_id); ratings.delete(p.player_id); }
@@ -7204,7 +7346,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         const calculated = settleMatch(match, winner, { calculate: true });
         for (const row of calculated) row.after.revision = (row.before.revision || 0) + 1;
         const receipt = {
-          analytics_context: analyticsContext(match),
+          mode:mode.id, analytics_context: analyticsContext(match),
           version: settlementLib.VERSION, matchId: match.id, host:match.host,host_epoch:match.host_epoch||0, at: Date.now(), winner, score, limit,
           inputs: { players: everyone(match), teams: match.teams, mm: match.mm, stats: match.stats, rounds: match.rounds,
                     kills: match.kills, left: match.left },
@@ -7218,7 +7360,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         let committed;
         try {
           committed = await settlementLib.commit(store,
-            [settlementKey(match.id), boardKey(), liveMatchKey(match.id), liveIndexKey(), ...calculated.map(r => ratingKey(r.steamId)), `${prefix || 'hub:'}analytics:outbox`,authorityKey(match.id)],
+            [settlementKey(match.id), boardKey(), liveMatchKey(match.id), liveIndexKey(), ...calculated.map(r => ratingKey(r.steamId)), `${socialPrefix}analytics:outbox`,authorityKey(match.id)],
             receipt, updates);
         } catch (error) {
           if (!error.conflict || attempt === 2) throw error;
@@ -7992,6 +8134,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
                                     early_seconds: TK_EARLY_SECONDS },
                      } });
     send(clientId, stats());
+    if (competitionGuard) send(clientId,{type:'ranked_ban',ban:banOf(account.player_id)||banOf(account.game_steam_id)||null});
     if (isQueued(account.player_id)) {
       send(clientId, { type: 'queued', position: queuePosition(account.player_id),
                        size: queuedPlayers() });
@@ -8187,7 +8330,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     // Ratings before the queue, never after: the matchmaker sorts on them the instant the unit
     // lands, and a default 1500/RD350 standing in for a player we have actually measured would
     // put them in the wrong match.
-    try { await loadRatings(members); await Promise.all(members.map(drainRatingWrites)); await Promise.all(members.map(loadBan)); }
+    try { if(duel)await Promise.all(members.map(async id=>recentDuels.set(id,await readHistory(id)))); await loadRatings(members); await Promise.all(members.map(drainRatingWrites)); await Promise.all(members.map(loadBan)); }
     catch {
       return sendJson(res, 503, { ok: false, error: 'Could not load your rank. Please try again.' });
     }
@@ -8686,7 +8829,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     try { await Promise.all([...new Set([account.player_id,account.game_steam_id])].map(loadBan)); }
     catch { sendJson(res,503,{ok:false,error:'Account status is temporarily unavailable. Try again shortly.'});return true; }
     const ban = banOf(account.player_id) || banOf(account.game_steam_id);
-    const supportAccess=['/api/tournament','/api/tournament/support','/api/messages','/api/messages/thread','/api/messages/send','/api/messages/read'].includes(pathname);
+    const supportAccess=['/api/tournament','/api/tournament/support','/api/messages','/api/messages/thread','/api/messages/send','/api/messages/read'].includes(pathname)
+      || Boolean(competitionGuard && (pathname==='/api/live'||/^\/api\/(friends|party)(\/|$)/.test(pathname)));
     if (ban && !supportAccess) {
       sendJson(res, 403, { ok: false, error: 'banned', reason: ban.reason || '',
                            until: ban.until || 0 });
@@ -8701,6 +8845,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         }
       } catch {sendJson(res,503,{ok:false,error:'Account verification is temporarily unavailable.'});return true;}
     }
+    if(pathname==='/api/match/concede'&&method==='POST'){
+      const result=await concedeMatch(account,await readJsonBody(req));
+      sendJson(res,result.ok?200:result.unavailable?503:409,result);return true;
+    }
     if(pathname.startsWith('/api/messages')) {
       res.setHeader('cache-control','no-store, private');
       const read=pathname==='/api/messages'||pathname==='/api/messages/thread';
@@ -8710,13 +8858,13 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         let result;
         if(pathname==='/api/messages'){
           result=await messages.inbox(account.player_id);
-          if(ban&&result.ok){result.threads=result.threads.filter(t=>t.target==='admin');result.unread=result.threads.reduce((n,t)=>n+t.unread,0);}
+          if(ban&&!competitionGuard&&result.ok){result.threads=result.threads.filter(t=>t.target==='admin');result.unread=result.threads.reduce((n,t)=>n+t.unread,0);}
         }else if(pathname==='/api/messages/thread'){
-          if(ban&&url.searchParams.get('target')!=='admin'){sendJson(res,403,{ok:false,error:'banned'});return true;}
+          if(ban&&!competitionGuard&&url.searchParams.get('target')!=='admin'){sendJson(res,403,{ok:false,error:'banned'});return true;}
           result=await messages.thread(account.player_id,url.searchParams.get('target')||'',url.searchParams.get('before'));
         }
         else {const body=await readJsonBody(req);
-          if(ban&&body.target!=='admin'){sendJson(res,403,{ok:false,error:'banned'});return true;}
+          if(ban&&!competitionGuard&&body.target!=='admin'){sendJson(res,403,{ok:false,error:'banned'});return true;}
           if(pathname.endsWith('/send'))result=await messages.send(account.player_id,body);
           else if(pathname.endsWith('/read'))result=await messages.markRead(account.player_id,body.target,body.through_seq);
           else {result=await messages.block(account.player_id,body.target,body.blocked!==false);if(result.ok&&body.blocked!==false){for(const map of [friends,reqIn,reqOut]){setOf(map,account.player_id).delete(body.target);setOf(map,body.target).delete(account.player_id);}friendsChanged(account.player_id,body.target);}}
@@ -8978,6 +9126,12 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     return result?.then ? result.then(identity.wire) : identity.wire(result);
   };
   return {
+    mode: mode.id,
+    activity:()=>[...new Set([...queueOf.keys(),...inMatch.keys()])].map(id=>({player_id:id,
+      game_steam_id:identity.gameFor(matches.get(inMatch.get(id)),id)||gameOfPlayer(id)})),
+    async publicRank(id){const r=await loadRating(id);return {...progressLib.publicProgress(r,{top:isReaper(id,r.progress)}),
+      matches:r.matches,wins:r.wins,losses:r.losses};},
+    concedeMatch,
     correctCheaterMatches:receipt=>restitution.project(receipt),
     correctionJobs:()=>restitution.statuses(),
     route,

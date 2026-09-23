@@ -12,6 +12,19 @@ const fixture = () => ({matchId:'match-one',at:Date.now(),winner:1,score:{1:7,2:
   publicMatch:{id:'match-one',map:'Hospital',created:Date.now()-600000,ended:Date.now(),outcome:'played',players:[{steam_id:sid,persona:'A',team:1}]},
   board:[{steam_id:sid,kills:8,deaths:null,reported:true}],rows:[{steamId:sid,won:true,before:{rating:1500,rd:80,progress:1000},after:{rating:1512,rd:76,progress:1023},delta:12,rr:{delta:23,factors:{base:23,convergence:1}},valuation:{score:1,weight:1,breakdown:{measured:false,coverage:{}}}}]});
 
+test('ranked BB1 uses frozen starting side and initial host, with private human review flags',async()=>{
+ const r=fixture();r.mode='BB1';r.publicMatch.map='Paintball';r.publicMatch.host='76561198000000002';
+ r.publicMatch.sides={1:'defend',2:'attack'};
+ r.analytics_context={mode:'BB1',balance:{initial_host:sid,starting_sides:{1:'attack',2:'defend'},host_changed:true}};
+ r.repeat_review=[sid,'outsider',sid];
+ const p=api.projectReceipt(r);assert.equal(p.test_match,false);assert.equal(p.players[0].starting_side,'attack');
+ assert.equal(p.host,sid);assert.deepEqual(p.repeat_review,[sid]);assert.equal(p.balance.host_changed,true);
+ const m=require('../analytics-metrics.cjs').contribution(p);assert.equal(m.host_wins,1);assert.equal(m.attack_wins,1);
+ const service=api.create();try{await service.project(r);assert.equal((await service.query('matches',{mode:'BB1'})).rows.length,1);
+  assert.equal((await service.query('matches',{mode:'BB5'})).rows.length,0);
+ }finally{await service.close();}
+});
+
 test('release cutoff acknowledges old desktop outboxes without restoring their diagnostics', async () => {
   const now=Date.now(),cutover=now-1000;
   const service=api.create({now:()=>now,resetAt:cutover});

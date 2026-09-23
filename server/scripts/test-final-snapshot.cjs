@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const live = require('../live.cjs');
 
-function fixture(t, count = 4) {
+function fixture(t, count = 4, modeId = 'BB5') {
   let fail = false, commits = 0, lastPlan;
   const receipts = new Map();
   const store = async args => {
@@ -24,10 +24,10 @@ function fixture(t, count = 4) {
     }
     return 'OK';
   };
-  const L = live.create({ upstashCmd: store });
+  const L = live.create({ upstashCmd: store, modeId });
   const ids = Array.from({ length: count }, (_, i) => String(76561198000000001n + BigInt(i)));
   const teams = { 1: ids.filter((_, i) => i % 2 === 0), 2: ids.filter((_, i) => i % 2) };
-  const match = { id: '0123456789abcdef', state: 'live', host: ids[0], created: Date.now(),
+  const match = { mode:modeId, id: '0123456789abcdef', state: 'live', host: ids[0], created: Date.now(),
     players: ids.map(steam_id => ({ steam_id, connected: true, accepted: true })),
     teams, assigned_teams: structuredClone(teams), start_ready_verified: true, expected_score_limit: 7, expected_max_rounds: 12,
     combat_end: { epoch: 'test-epoch', seq: 1, complete: false },
@@ -39,6 +39,28 @@ function fixture(t, count = 4) {
     rows: ids.map((id, i) => `${id}|k=3;d=2;sp=10;t=${i%2};s=${i%2 ? 2 : 7};a=false`).join(',') + ',' };
   return { L, match, fields, fail: value => { fail = value; }, commits: () => commits, plan: () => lastPlan, store };
 }
+
+test('BB1 concession settles once with its actual score and no invented round',async t=>{
+  const f=fixture(t,2,'BB1');f.match.map='Paintball';f.match.score={1:0,2:0};
+  const loser=f.match.players[0].player_id;
+  const result=await f.L.concedeMatch({player_id:loser,game_steam_id:loser},{match_id:f.match.id});
+  assert.equal(result.ok,true);
+  const r=f.plan().receipt;
+  assert.equal(r.mode,'BB1');assert.equal(r.winner,2);assert.deepEqual(r.score,{1:0,2:0});
+  assert.equal(r.terminal.reason,'concede');assert.equal(r.publicMatch.round_details.length,0);
+  assert.equal(r.history[loser].outcome,'played');assert.equal(r.history[loser].won,false);
+  assert.equal((await f.L.concedeMatch({player_id:loser,game_steam_id:loser},{match_id:f.match.id})).ok,true);
+  assert.equal(f.commits(),1);
+});
+
+test('BB1 concession rejects outsiders, wrong game identities and BB5',async t=>{
+  for(const mode of ['BB5','BB1']){
+    const f=fixture(t,2,mode),id=f.match.players[0].player_id;
+    assert.equal((await f.L.concedeMatch({player_id:id,game_steam_id:'76561198000000099'},{match_id:f.match.id})).ok,false);
+    if(mode==='BB5')assert.equal((await f.L.concedeMatch({player_id:id,game_steam_id:id},{match_id:f.match.id})).ok,false);
+    assert.equal(f.commits(),0);
+  }
+});
 
 test('final receipt contains effective analytical rules and a durable export reference', async t => {
   const {L,match,fields,plan}=fixture(t);

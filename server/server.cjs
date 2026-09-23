@@ -168,15 +168,16 @@ function readCatalogue() {
  * a catalogue edited in place takes effect without a restart. An UNREADABLE catalogue returns
  * null, which opens the queue rather than closing it: a broken file must not lock the world out.
  */
-let requiredCache = { at: 0, value: null };
-function requiredVersions() {
+const requiredCache = new Map();
+function requiredVersions(modeId = liveModule.GATED_MODE_ID) {
   const now = Date.now();
-  if (requiredCache.value && now - requiredCache.at < 10_000) return requiredCache.value;
+  const cached = requiredCache.get(modeId);
+  if (cached?.value && now - cached.at < 10_000) return cached.value;
   let value = null;
   try {
     const catalogue = readCatalogue();
     const modes = Array.isArray(catalogue.gamemodes) ? catalogue.gamemodes : [];
-    const entry = modes.find((m) => m && m.id === liveModule.GATED_MODE_ID);
+    const entry = modes.find((m) => m && m.id === modeId);
     value = {
       hub: String((catalogue.hub && catalogue.hub.version) || ''),
       // AS SERVED, not as stored. readCatalogue() is the file on disk and never carries the
@@ -187,7 +188,7 @@ function requiredVersions() {
   } catch {
     value = null;
   }
-  requiredCache = { at: now, value };
+  requiredCache.set(modeId, { at: now, value });
   return value;
 }
 
@@ -443,7 +444,7 @@ function renderGamemodeRows(catalogue) {
       // row), and for the same reason: nothing else on a card says which one the ladder uses.
       // It is read from live.cjs rather than typed, so the site and the queue gate can never
       // disagree about which mode that is.
-      const ranked = String(mode.id || '') === liveModule.GATED_MODE_ID;
+      const ranked = ['BB5','BB1'].includes(String(mode.id || ''));
       return [
         `          <li class="mode${ranked ? ' ranked' : ''}">`,
         '            <div class="mode-top">',
@@ -1249,14 +1250,14 @@ function restoredLegacyCandidate(entry) {
 }
 
 /** The ranked mode rules the hub actually bakes into its pak, with the served override merged in. */
-function effectiveRankedRules() {
+function effectiveRankedRules(modeId = liveModule.GATED_MODE_ID) {
   // Railway deploys from server/, so the source manifest may not be present.
   // This is also the catalogue that clients use to build the actual game pak.
-  const served = expectedCompetitiveRules();
+  const served = expectedCompetitiveRules(modeId);
   if (served) return served;
   let base = {};
   try {
-    const id = String(liveModule.GATED_MODE_ID || 'BB5');
+    const id = String(modeId || 'BB5');
     const manifestPath = path.join(__dirname, '..', 'gamemodes', id.toLowerCase(), 'manifest.json');
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     if (manifest && manifest.rules && typeof manifest.rules === 'object' &&
@@ -1265,7 +1266,7 @@ function effectiveRankedRules() {
     return { ...base, ...((override && override[id]) || {}) };
   } catch {
     const override = rulesOverride();
-    return { ...((override && override[liveModule.GATED_MODE_ID]) || {}) };
+    return { ...((override && override[modeId]) || {}) };
   }
 }
 
@@ -1357,7 +1358,7 @@ async function authoriseRankedReport(req, res, finalMatchId) {
   if((authorised.epoch||0)!==Number(match[2]||0)) {
     sendJson(res,401,{ok:false,error:'Superseded host authority.'});return null;
   }
-  return { service, authorised };
+  return { service: service.forMode ? service.forMode(authorised.mode) : service, authorised };
 }
 
 async function handleHostMigration(req,res) {
@@ -1627,20 +1628,20 @@ function admin() {
 // The live competitive service (presence, queue, match formation). Built lazily for the
 // same reason as auth(): it closes over helpers defined above it.
 let liveRouter = null;
-function expectedCompetitiveRules() {
+function expectedCompetitiveRules(modeId = liveModule.GATED_MODE_ID) {
   try {
     const catalogue = JSON.parse(fs.readFileSync(CATALOGUE_JSON_PATH, 'utf8'));
-    const entry = catalogue.gamemodes.find(e => e.id === liveModule.GATED_MODE_ID);
+    const entry = catalogue.gamemodes.find(e => e.id === modeId);
     const rules = { ...entry.rules, ...(rulesOverride()?.[entry.id] || {}) };
     if (![rules.score_limit, rules.max_rounds].every(n => Number.isInteger(n) && n > 0)) return null;
     return rules;
   } catch { return null; }
 }
-function live() {
+function live(modeId) {
   if (!liveRouter) {
     const persistentStore = process.env.UPSTASH_REDIS_REST_URL &&
       process.env.UPSTASH_REDIS_REST_TOKEN ? upstashCmd : null;
-    liveRouter = liveModule.create({
+    liveRouter = require('./ranked-service.cjs').create({
       analytics: analytics(),
       tournament: tournament(),
       accountDirectory: accountDirectory(),
@@ -1669,7 +1670,7 @@ function live() {
       profileOf: (steamId) => auth().profileFor(steamId),
     });
   }
-  return liveRouter;
+  return modeId === undefined ? liveRouter : liveRouter.forMode(modeId);
 }
 
 async function router(req, res) {

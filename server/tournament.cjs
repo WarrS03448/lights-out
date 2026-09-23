@@ -48,7 +48,7 @@ return {redis.call('HVALS',KEYS[1]),redis.call('HVALS',KEYS[2]),redis.call('GET'
 function matchEntry(receipt,includeCandidates=false){
  includeCandidates=includeCandidates===true;
  const m=receipt?.publicMatch||receipt?.full,id=receipt?.matchId||receipt?.match_id;
- if(!m||receipt.voided||!receipt.data_collected||m.outcome!=='played'||m.size!==10||
+ if(!m||(receipt.mode||m.mode||'BB5')!=='BB5'||receipt.voided||!receipt.data_collected||m.outcome!=='played'||m.size!==10||
     !Number.isSafeInteger(m.started)||!Number.isSafeInteger(m.ended)||m.ended<EVENT.start_at||(!includeCandidates&&(m.started<EVENT.start_at||m.ended>=EVENT.end_at))||m.ended<m.started||
     typeof id!=='string'||!/^[A-Za-z0-9_.:-]{1,80}$/.test(id)||m.players?.length!==10||receipt.rows?.length!==10)return null;
  const people=new Map(m.players.map(p=>[p.player_id,p]));

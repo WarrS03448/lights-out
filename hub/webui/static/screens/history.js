@@ -19,10 +19,23 @@
   // periodic stats push must not silently reset what the user is looking at) but never leaves JS.
   var activeFilter = "all";
 
-  window.HubUI.registerScreen("history", { render: render });
+  var renderedKey = null, renderedAccount = null;
+  function account(state) { var a=state.auth||{};return JSON.stringify([a.signed_in,a.player_id||a.steam_id||""]); }
+  function key(state) { return JSON.stringify([state.history,state.auth,state.lang]); }
+  window.HubUI.registerScreen("history", { render: render, preserveOverlay: function(overlay,state) {
+    return renderedKey===key(state)&&!!(state.history||{}).open_id&&overlay.dataset.historyDetail===(state.history||{}).open_id;
+  }, update: function(root,state,ctx) {
+    if(renderedKey===key(state))return true;
+    if(renderedAccount!==account(state)||root._historyLang!==state.lang||!root.querySelector('.ranked-history-modes'))return false;
+    var draft=document.createElement('div');render(draft,state,ctx,root);
+    ctx.ui.patchRankedChildren(root,draft);return true;
+  } });
   window.HubUI.renderMatchHistory = render;
 
   function render(root, state, ctx) {
+    var liveRoot=arguments[3];root._historyLang=state.lang;
+    if(renderedAccount!==account(state)){activeFilter="all";renderedAccount=account(state);}
+    renderedKey=key(state);
     var ui = ctx.ui, call = ctx.call, el = ui.el, esc = ui.esc;
     var h = (state && state.history) || {};
     var auth = (state && state.auth) || {};
@@ -106,6 +119,12 @@
       head.appendChild(titles);
 
       var controls = el("div", "hist-controls");
+      var modeTabs=ui.tabs([
+        { id: "all", label: hs("filter_all") },
+        { id: "BB5", label: "5v5" },
+        { id: "BB1", label: "1v1" }
+      ], h.mode || "all", function(id){call("history_mode",id);});
+      modeTabs.classList.add("ranked-history-modes");controls.appendChild(modeTabs);
       controls.appendChild(ui.tabs([
         { id: "all", label: hs("filter_all") },
         { id: "played", label: hs("filter_played") },
@@ -253,6 +272,7 @@
         children: children,
         onClose: function () { ui.clearRoundSelection("history"); call("close_match"); }
       });
+      overlay.dataset.historyDetail=h.open_id;
       overlay.classList.add("md-overlay");
       var dialog = overlay.querySelector(".ui-modal");
       if (dialog) { dialog.setAttribute("tabindex", "-1"); setTimeout(function () { dialog.focus(); }, 0); }
@@ -492,6 +512,7 @@
       cell.appendChild(art);
       var text = el("div", "hist-map-text");
       text.appendChild(el("div", "hist-map-name", r.map || hs("no_map")));
+      text.appendChild(el("div", "hist-map-meta", r.mode==="BB1"?"1v1 Bodybomb":"5v5 Bodybomb"));
       var meta = mapMeta(r);
       if (meta) { text.appendChild(el("div", "hist-map-meta", meta)); }
       cell.appendChild(text);
@@ -606,5 +627,6 @@
     }
 
     draw();
+    if(liveRoot)root=liveRoot;
   }
 })();

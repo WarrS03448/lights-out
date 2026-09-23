@@ -705,7 +705,7 @@ class Session:
         """
         app = getattr(self.panel, "app", None)
         installed = ((getattr(app, "state", None) or {}).get("installed") or {})
-        return COMPETITIVE_MODE_ID in installed
+        return getattr(self, "ranked_mode", COMPETITIVE_MODE_ID) in installed
 
     # ---------------------------------------------------------------- the version gate
     def update_needed(self):
@@ -736,15 +736,15 @@ class Session:
             return None                      # nothing to compare against: let the server answer
         info = catalogue.get("hub") or {}
         want_hub = str(info.get("version") or "")
-        entry = catalogue_mod.entry_by_id(catalogue, COMPETITIVE_MODE_ID) or {}
+        entry = catalogue_mod.entry_by_id(catalogue, getattr(self, "ranked_mode", COMPETITIVE_MODE_ID)) or {}
         want_mode = str(entry.get("version") or "")
         installed = ((getattr(app, "state", None) or {}).get("installed") or {})
-        have_mode = str((installed.get(COMPETITIVE_MODE_ID) or {}).get("version") or "")
+        have_mode = str((installed.get(getattr(self, "ranked_mode", COMPETITIVE_MODE_ID)) or {}).get("version") or "")
 
         hub_stale = bool(want_hub) and catalogue_mod.version_newer(want_hub, HUB_VERSION)
         # An UNINSTALLED gamemode is not "out of date" here: `gamemode_installed` is the test for
         # that, and calling it an update would send the player to the wrong button.
-        installed_info = installed.get(COMPETITIVE_MODE_ID) or {}
+        installed_info = installed.get(getattr(self, "ranked_mode", COMPETITIVE_MODE_ID)) or {}
         newer = bool(want_mode and have_mode) and catalogue_mod.version_newer(want_mode, have_mode)
 
         # THE SAME VERSION BUILT WITH DIFFERENT RULES IS A DIFFERENT PAK, and until 2026-09-17 this
@@ -1014,7 +1014,7 @@ class MockSession(Session):
         if not game or not self.map or not token:
             return False
         try:
-            ready = lobbypak_mod.prepare(game, "BB5", self.map, log=None,
+            ready = lobbypak_mod.prepare(game, getattr(self, "ranked_mode", "BB5"), self.map, log=None,
                                  host_id=player_identity.native_id(self.host),
                                  token=token, role="join", report_token=self.migration_token)
             self.pak_done = bool(ready)
@@ -1056,7 +1056,7 @@ class MockSession(Session):
             # copies into the lobby's searchable `Name` attribute. Without it the host advertises
             # nothing a joiner could ask for by name, and autojoin degrades to manual silently.
             self.host_level = lobbypak_mod.prepare(
-                game, HOST_GAMEMODE_ID, self.map,
+                game, getattr(self, "ranked_mode", HOST_GAMEMODE_ID), self.map,
                 host_id=player_identity.native_id(self.host),
                 token=self._match_token(), report_token=self.report_token)
             self.host_pak_done = bool(self.host_level)
@@ -2715,10 +2715,16 @@ class LiveSession(MockSession):
     live = True
     stats_ready = False
     stats_queued = 0
+    ranked_mode = "BB5"
+    board_mode = "BB5"
+    history_mode = "all"
 
     def __init__(self, panel):
         super().__init__(panel)
         self.client = None
+        self.ranked_ranks = {}
+        self._ranked_events = {}
+        self.ranked_ban = None
         self.parent_token = ""
         self._proof_epoch = 0
         self._pending_game_account = None
@@ -2739,6 +2745,11 @@ class LiveSession(MockSession):
         self._rejoin_deadline = 0.0      # monotonic; 0.0 means nothing is being waited for
 
     def _clear_account_state(self):
+        self.ranked_ranks = {}
+        self._ranked_events = {}
+        self.ranked_mode = self.board_mode = "BB5"
+        self.history_mode = "all"
+        self.ranked_ban = None
         self._account_epoch += 1
         self._signin_epoch += 1
         self._cancel_signin = True
@@ -2763,6 +2774,63 @@ class LiveSession(MockSession):
         self.party_error = ""
         self._queue_ticking = self._accept_ticking = False
         self.reset_match()
+
+    def select_ranked_mode(self, mode, *, restore=False):
+        if mode not in ("BB5", "BB1") or mode == self.ranked_mode:
+            return
+        if not restore and self.phase not in ("idle", "signed_out", "game_unavailable"):
+            return
+        self.ranked_mode = mode
+        if self.client:
+            self.client.ranked_mode = mode
+            cancel = getattr(self.client, "cancel_pending_queue", None)
+            if callable(cancel):
+                cancel()
+        self.penalty_until = self.penalty_count = 0
+        self.penalty_next = NO_SHOW_BAN_SECONDS
+        self.penalty_reason = self.error = ""
+        self.ranked_ban = None
+        self._penalty_gen += 1
+        self.stats_ready = False
+        for kind, cached in self._ranked_events.get(mode, {}).items():
+            event = dict(cached)
+            if kind == "penalty":
+                event["seconds"] = max(0, int(event.get("_expires", 0) - time.time()))
+            if kind != "hello":
+                self.on_live_event(event)
+            else:
+                self.ladder = event.get("ladder") or self.ladder
+                self.penalties = event.get("penalties") or self.penalties
+        if mode not in self.ranked_ranks and self.me:
+            for key in ("level", "rank", "rank_name", "division", "rr", "bdr", "matches", "wins", "losses"):
+                self.me[key] = None
+            self.me["placing"] = True
+        self._changed()
+
+    def select_board_mode(self, mode):
+        if mode not in ("BB5", "BB1") or mode == self.board_mode:
+            return
+        self.board_mode = mode
+        self.board_rows = ()
+        self.board_you = None
+        self.board_available = self.board_loading = False
+        self.board_error = ""
+        self.refresh_leaderboard()
+
+    def select_history_mode(self, mode):
+        if mode in ("all", "BB5", "BB1"):
+            self.history_mode = mode
+            self._changed()
+
+    def concede(self):
+        if self.ranked_mode != "BB1" or self.phase != "live" or not self.client:
+            return
+        match_id, client = self.match_id, self.client
+        def result(status, body):
+            if match_id == self.match_id and status != 200:
+                self.error = str((body or {}).get("error") or "")
+                self._changed()
+        self._action(lambda: client.concede(match_id), result)
 
     # ---------------------------------------------------------------- connection
     def _revoke_login(self, token):
@@ -3074,6 +3142,7 @@ class LiveSession(MockSession):
             versions=self._versions, network_config=self._network_config)
         self.client = client
         self.client.player_id = (self.me or {}).get("player_id")
+        self.client.ranked_mode = self.ranked_mode
         self.client.start()
 
     def _network_config(self):
@@ -3093,8 +3162,9 @@ class LiveSession(MockSession):
         and why it goes on every request rather than just the join."""
         app = getattr(self.panel, "app", None)
         installed = ((getattr(app, "state", None) or {}).get("installed") or {})
-        entry = installed.get(COMPETITIVE_MODE_ID) or {}
-        return {"hub": HUB_VERSION, "mode": str(entry.get("version") or "")}
+        entry = installed.get(self.ranked_mode) or {}
+        return {"hub": HUB_VERSION, "mode": str(entry.get("version") or ""),
+                **{mid: str((installed.get(mid) or {}).get("version") or "") for mid in ("BB5", "BB1")}}
 
     def _disconnect(self):
         self.account_link.cancel(notify=False)
@@ -3688,6 +3758,33 @@ class LiveSession(MockSession):
     def on_live_event(self, event):
         event = player_identity.normalize(event)
         kind = event.get("type")
+        if not hasattr(self, "_ranked_events"):
+            self._ranked_events = {}
+            self.ranked_ranks = {}
+            self.ranked_mode = "BB5"
+        mode = event.get("mode") or "BB5"
+        shared = kind in ("message_update", "friend_update", "friend_request", "party_update", "party_invites", "party_invite", "network_status")
+        if not shared:
+            if mode not in ("BB5", "BB1"):
+                return
+            if kind in ("hello", "rating", "penalty", "stats", "ranked_ban"):
+                cached = dict(event)
+                if kind == "penalty":
+                    cached["_expires"] = time.time() + int(event.get("seconds") or 0)
+                self._ranked_events.setdefault(mode, {})[kind] = cached
+                if kind == "rating":
+                    self.ranked_ranks[mode] = dict(event)
+            if mode != self.ranked_mode:
+                if kind in ("match_found", "match_ready", "match_connecting", "match_live") and self.phase in ("idle", "signed_out", "game_unavailable"):
+                    self.select_ranked_mode(mode, restore=True)
+                else:
+                    if kind == "rating":
+                        self._changed()
+                    return
+        if kind == "ranked_ban":
+            self.ranked_ban = event.get("ban")
+            self._changed()
+            return
         if (kind in ("match_result", "match_over", "match_cancelled") and self.match_id
                 and event.get("match_id") and event["match_id"] != self.match_id):
             # A leaver's old game can finish after they have entered another one.
@@ -4206,7 +4303,7 @@ class LiveSession(MockSession):
                 placed_rank = str(you.get("rank_name"))
                 if you.get("division") is not None:
                     placed_rank += " %d" % _int_or(you.get("division"))
-            self.result = {"won": won, "score": (ours, theirs),
+            self.result = {"won": won, "score": ((ours, theirs) if event.get("score") is not None else None),
                            "delta": _int_or(delta), "voided": False,
                            "rr_delta": None if rr_delta is None else _int_or(rr_delta, None),
                            "placing": bool(you.get("placing")),
@@ -4579,7 +4676,11 @@ class LiveSession(MockSession):
             return
         self.board_loading = True
         self._changed()
-        self._action(self.client.leaderboard, self._board_result)
+        mode = self.board_mode
+        def result(status, body):
+            if self.board_mode == mode:
+                self._board_result(status, body)
+        self._action(lambda: self.client.leaderboard(mode=mode), result)
 
     def _board_result(self, status, body):
         self.board_loading = False
@@ -5519,8 +5620,10 @@ class CompetitivePanel:
     def map_pool(self):
         """The ranked map pool: the gamemode's maps (from the catalogue when it lists them),
         minus COMPETITIVE_EXCLUDED_MAPS."""
+        if getattr(self.session, "ranked_mode", COMPETITIVE_MODE_ID) == "BB1":
+            return ["Paintball"]
         for e in ((self.app.catalogue or {}).get("gamemodes") or []):
-            if e.get("id") == COMPETITIVE_MODE_ID:
+            if e.get("id") == getattr(self.session, "ranked_mode", COMPETITIVE_MODE_ID):
                 maps = e.get("maps") or (e.get("manifest") or {}).get("maps")
                 if isinstance(maps, list) and len(maps) >= 3:
                     pool = competitive_pool([str(m) for m in maps])
@@ -5529,7 +5632,7 @@ class CompetitivePanel:
         return competitive_pool(DEFAULT_MAPS)
 
     def gamemode_installed(self) -> bool:
-        return COMPETITIVE_MODE_ID in (self.app.state.get("installed") or {})
+        return getattr(self.session, "ranked_mode", COMPETITIVE_MODE_ID) in (self.app.state.get("installed") or {})
 
     # ---------------------------------------------------------------- frame
     def _build(self):
@@ -5828,7 +5931,7 @@ class CompetitivePanel:
                  font=self.f_sub).pack(pady=(0, 6))
         tk.Label(inner, text=t("comp_gate_body"), bg=WHITE, fg=GREY, wraplength=520,
                  justify="center").pack(pady=(0, 14))
-        listed = any(e.get("id") == COMPETITIVE_MODE_ID
+        listed = any(e.get("id") == getattr(self.session, "ranked_mode", COMPETITIVE_MODE_ID)
                      for e in ((self.app.catalogue or {}).get("gamemodes") or []))
         if not listed:
             tk.Label(inner, text=t("comp_gate_waiting"), bg=WHITE, fg=GREY).pack()
@@ -5839,7 +5942,7 @@ class CompetitivePanel:
     def _install_gamemode(self):
         if self.app.busy:
             return
-        self.app._apply(set(self.app.state.get("installed") or {}) | {COMPETITIVE_MODE_ID})
+        self.app._apply(set(self.app.state.get("installed") or {}) | {getattr(self.session, "ranked_mode", COMPETITIVE_MODE_ID)})
 
     # ------------------------------------------------- signed out
     def _draw_signed_out(self):

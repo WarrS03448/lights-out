@@ -65,7 +65,7 @@ GAMEMODES_STRINGS = {
         "done_installed": "Installed.",
         "done_updated": "Updated.",
         "done_uninstalled": "Removed.",
-        "footer": "Only ranked Bodybomb 5v5 matches affect your rank.",
+        "footer": "5v5 and 1v1 ranks are separate. Only ranked matches affect RR.",
     },
     "de": {
         "heading": "Spielmodi",
@@ -99,7 +99,7 @@ GAMEMODES_STRINGS = {
         "done_installed": "Installiert.",
         "done_updated": "Aktualisiert.",
         "done_uninstalled": "Entfernt.",
-        "footer": "Nur gewertete Bodybomb-5v5-Matches beeinflussen deinen Rang.",
+        "footer": "5v5- und 1v1-Ränge sind getrennt. Nur Ranglistenspiele beeinflussen RR.",
     },
     "es": {
         "heading": "Modos de juego",
@@ -133,7 +133,7 @@ GAMEMODES_STRINGS = {
         "done_installed": "Instalado.",
         "done_updated": "Actualizado.",
         "done_uninstalled": "Eliminado.",
-        "footer": "Solo las partidas clasificatorias de Bodybomb 5v5 afectan a tu rango.",
+        "footer": "Los rangos de 5v5 y 1v1 son independientes. Solo las partidas clasificatorias afectan al RR.",
     },
     "fr": {
         "heading": "Modes de jeu",
@@ -167,7 +167,7 @@ GAMEMODES_STRINGS = {
         "done_installed": "Installé.",
         "done_updated": "Mis à jour.",
         "done_uninstalled": "Supprimé.",
-        "footer": "Seuls les matchs classés de Bodybomb 5v5 affectent ton rang.",
+        "footer": "Les rangs 5v5 et 1v1 sont séparés. Seuls les matchs classés affectent les RR.",
     },
     "pt": {
         "heading": "Modos de jogo",
@@ -201,7 +201,7 @@ GAMEMODES_STRINGS = {
         "done_installed": "Instalado.",
         "done_updated": "Atualizado.",
         "done_uninstalled": "Removido.",
-        "footer": "Apenas as partidas classificatórias de Bodybomb 5v5 afetam o teu rank.",
+        "footer": "Os ranks de 5v5 e 1v1 são separados. Só partidas ranqueadas afetam o RR.",
     },
     "ru": {
         "heading": "Режимы игры",
@@ -235,7 +235,7 @@ GAMEMODES_STRINGS = {
         "done_installed": "Установлено.",
         "done_updated": "Обновлено.",
         "done_uninstalled": "Удалено.",
-        "footer": "На ваш ранг влияют только рейтинговые матчи Bodybomb 5 на 5.",
+        "footer": "Ранги 5v5 и 1v1 независимы. На RR влияют только рейтинговые матчи.",
     },
     "zh": {
         "heading": "游戏模式",
@@ -269,7 +269,7 @@ GAMEMODES_STRINGS = {
         "done_installed": "已安装。",
         "done_updated": "已更新。",
         "done_uninstalled": "已移除。",
-        "footer": "只有 Bodybomb 5v5 排位赛会影响你的段位。",
+        "footer": "5v5 和 1v1 段位互相独立。只有排位赛会影响 RR。",
     },
 }
 
@@ -366,7 +366,7 @@ def _mode(entry: dict, panel, installed: dict, ready: bool, running: bool, busy:
     mode_id = entry.get("id")
     is_installed = mode_id in installed
     orphan = bool(entry.get("_orphan"))
-    ranked = (mode_id == COMPETITIVE_MODE_ID)
+    ranked = (mode_id in ("BB5", "BB1"))
     cat_version = str(entry.get("version", "") or "")
     have_version = str((installed.get(mode_id) or {}).get("version", "") or "") if is_installed else ""
     update_available = bool(is_installed and

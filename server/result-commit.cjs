@@ -13,6 +13,13 @@ local live = redis.call('GET', KEYS[p.live])
 if live and cjson.decode(live).void_pending and cjson.decode(p.receipt_json).voided ~= true then
   return redis.error_reply('saved void decision takes precedence')
 end
+if live and cjson.decode(live).terminal and cjson.decode(p.receipt_json).voided ~= true then
+  local decided=cjson.decode(live).terminal
+  local result=cjson.decode(p.receipt_json).terminal
+  if not result or result.reason~=decided.reason or result.loser~=decided.loser or result.at~=decided.at then
+    return redis.error_reply('saved duel decision takes precedence')
+  end
+end
 if p.authority then
   local raw=redis.call('GET',KEYS[p.authority])
   if raw then
@@ -25,6 +32,9 @@ for _, r in ipairs(p.rank_checks or {}) do
   local revision = 0
   if current then revision = tonumber(cjson.decode(current).revision) or 0 end
   if revision ~= r.expected then return redis.error_reply('result rank conflict') end
+end
+for _, check in ipairs(p.string_checks or {}) do
+  if redis.call('GET',KEYS[check.index]) ~= check.expected then return redis.error_reply('result state conflict') end
 end
 local histories = {}
 for i, h in ipairs(p.histories) do

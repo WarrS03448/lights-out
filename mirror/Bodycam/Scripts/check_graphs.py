@@ -193,7 +193,7 @@ def check(name, js):
 def main():
     which = sys.argv[1] if len(sys.argv) > 1 else "dom"
     # chlobby lives in lobby_graphs.py; everything else follows the <name>_graphs.py convention
-    m = importlib.import_module("lobby_graphs" if which == "chlobby" else f"{which}_graphs")
+    m = importlib.import_module("lobby_graphs" if which == "chlobby" else "bb5_graphs" if which == "bb1" else f"{which}_graphs")
     graphs = {}
     if which == "dom":
         graphs = {"point_events": m.point_events(), "point_onrep_ownerteam": m.point_onrep_ownerteam(),
@@ -212,7 +212,7 @@ def main():
                   "chjoin_events": m.chjoin_events(), "chjoin_logic": m.chjoin_logic(),
                   # the stranger-join test class - never shipped, never travels-by-config
                   "chtjoin_events": m.chtjoin_events(), "chtjoin_logic": m.chtjoin_logic()}
-    elif which == "bb5":
+    elif which in ("bb5", "bb1"):
         # bb5's gm_logic() is where the probes live, so this is the graph that matters here: the
         # match-world callback probe fans three LATENT sends out of a Sequence, and an exec pin left
         # off one of them would compile perfectly and simply never ask (see team_bit_probe).
@@ -233,6 +233,9 @@ def main():
         graphs = {"flag_logic": m.flag_logic(), "base_logic": m.base_logic(), "gm_logic": m.gm_logic(),
                   "gm_findplayerstart": m.gm_findplayerstart(), "gm_chooseplayerstart": m.gm_chooseplayerstart()}
         for f in m.GM_FUNCTIONS: graphs["fn_" + f] = m.GM_FN_BODIES[f]()
+    if which == "bb1":
+        import bodybomb_variant
+        graphs = {name: bodybomb_variant.graph(js, "BB1") for name, js in graphs.items()}
     bad = 0
     import os
     if os.environ.get("UPDATE_FROZEN"):
@@ -241,7 +244,7 @@ def main():
                 print(f'    "{name}": "{hashlib.sha256(js.encode()).hexdigest()[:16]}",')
         sys.exit(0)
     for name, js in sorted(graphs.items()):
-        want = FROZEN.get(name)
+        want = FROZEN.get(name) if which != "bb1" else None
         if want:
             got = hashlib.sha256(js.encode()).hexdigest()[:16]
             if got != want:

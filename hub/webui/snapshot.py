@@ -268,6 +268,6 @@ def _gamemode_installed(panel) -> bool:
         app = getattr(panel, "app", None)
         installed = (getattr(app, "state", {}) or {}).get("installed") or {}
         from ..competitive import COMPETITIVE_MODE_ID
-        return COMPETITIVE_MODE_ID in installed
+        return getattr(getattr(panel, "session", None), "ranked_mode", COMPETITIVE_MODE_ID) in installed
     except Exception:            # noqa: BLE001 — never let the snapshot crash the push
         return False

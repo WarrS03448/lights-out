@@ -375,7 +375,7 @@ async function main() {
       assert.doesNotMatch(css, /\.status-dot/);
     });
 
-    await test('only the ranked mode carries the ranked tell, and it is read from live.cjs', async () => {
+    await test('both ranked modes carry the ranked tell and casual modes do not', async () => {
       // The card wears what the app's own gamemode screen wears: a solid RANKED tag beside the
       // name and an accent top edge, with every other card left grey. It is derived from
       // live.cjs's GATED_MODE_ID rather than typed, so the mode the site calls ranked is the one
@@ -384,8 +384,9 @@ async function main() {
       const cards = body.match(/<li class="mode[^"]*">[\s\S]*?<\/li>\s*(?=<li class="mode|<\/ul>)/g) || [];
       assert.equal(cards.length, catalogue.gamemodes.length, 'one card per catalogue mode');
       const tagged = cards.filter((card) => card.includes('class="mode-tag"'));
-      assert.equal(tagged.length, 1, 'exactly one card should be tagged ranked');
-      assert.ok(tagged[0].includes('<li class="mode ranked">'), 'the tagged card gets the accent edge');
+      const rankedEntries=catalogue.gamemodes.filter(m=>['BB5','BB1'].includes(m.id));
+      assert.equal(tagged.length, rankedEntries.length, 'each ranked catalogue mode should be tagged');
+      assert.ok(tagged.every(card=>card.includes('<li class="mode ranked">')), 'ranked cards get the accent edge');
       // Same split the card does: "Bodybomb 5v5" is a "5v5" badge beside the name "Bodybomb".
       const rankedTitle = String(rankedEntry.title || '');
       const rankedFormat = (rankedTitle.match(/\s*(\d+\s*v\s*\d+)\s*$/i) || [])[1];
@@ -397,7 +398,7 @@ async function main() {
         `the ranked tag belongs to ${liveModule.GATED_MODE_ID}, not to another mode`,
       );
       for (const card of cards) {
-        if (card === tagged[0]) continue;
+        if (tagged.includes(card)) continue;
         assert.ok(!card.includes('mode ranked'), 'an unranked mode keeps the grey edge');
       }
     });

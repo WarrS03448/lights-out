@@ -12,13 +12,41 @@ _VALUES = {
  "zh": ["消息", "未读", "暂无消息。", "选择对话或给好友发消息。", "输入消息…", "发送", "刷新", "更早的消息", "屏蔽玩家", "取消屏蔽", "Lights Out 管理员", "来自 Lights Out 的官方消息。活动问题请使用锦标赛支持。", "只有互为好友才能发送消息。", "这些账号之间的消息已被屏蔽。", "发送过于频繁，请稍等一分钟。", "此收件箱已达到对话数量上限。", "消息暂不可用。草稿已保留，请重试。", "登录后查看消息。", "给好友发消息", "每个对话保留最近 500 条消息。", "你"],
 }
 STRINGS = {code: dict(zip(_KEYS, values, strict=True)) for code, values in _VALUES.items()}
+_REFUNDS = {
+    "en": "{amount} RR refunded in {mode} after a cheating ban for {cheaters}.",
+    "de": "{amount} RR in {mode} nach einer Cheating-Sperre für {cheaters} erstattet.",
+    "es": "Se devolvieron {amount} RR en {mode} tras la expulsión por trampas de {cheaters}.",
+    "fr": "{amount} RR remboursés en {mode} après le bannissement pour triche de {cheaters}.",
+    "pt": "{amount} RR devolvidos em {mode} após o banimento por trapaça de {cheaters}.",
+    "ru": "Возвращено {amount} RR в {mode} после блокировки за читы: {cheaters}.",
+    "zh": "因 {cheaters} 作弊被封禁，你在 {mode} 中获退 {amount} RR。",
+}
+for _code, _text in _REFUNDS.items():
+    STRINGS[_code]["rr_refund"] = _text
+
+
+def _refund_text(context, fallback):
+    if not isinstance(context, dict) or context.get("type") != "rr_refund":
+        return fallback
+    mode, amount, names = context.get("mode"), context.get("amount"), context.get("cheaters")
+    if mode not in ("BB1", "BB5") or type(amount) is not int or amount <= 0 or not isinstance(names, list) or not names or not all(isinstance(n, str) for n in names):
+        return fallback
+    return _REFUNDS.get(i18n.get_language(), _REFUNDS["en"]).format(
+        amount=amount, mode="1v1 Bodybomb" if mode == "BB1" else "5v5 Bodybomb", cheaters=", ".join(names))
+
+
+def _localize(data, rows_key, context_key, text_key):
+    if not isinstance(data, dict):
+        return data
+    return {**data, rows_key: [{**row, text_key: _refund_text(row.get(context_key), row.get(text_key, ""))}
+                              for row in data.get(rows_key, [])]}
 
 @register_snapshot("messages")
 def snapshot(session, panel):
     return {"messages": {"signed_in": bool(getattr(session, "me", None)),
         "identity": (getattr(session, "me", None) or {}).get("player_id") or (getattr(session, "me", None) or {}).get("steam_id") or "",
-        "data": getattr(session, "messages_data", None), "target": getattr(session, "messages_target", ""),
-        "thread": getattr(session, "messages_thread", None), "loading": getattr(session, "messages_loading", False),
+        "data": _localize(getattr(session, "messages_data", None), "threads", "last_context", "last_text"), "target": getattr(session, "messages_target", ""),
+        "thread": _localize(getattr(session, "messages_thread", None), "messages", "context", "text"), "loading": getattr(session, "messages_loading", False),
         "thread_loading": getattr(session, "messages_thread_loading", False), "sending": getattr(session, "messages_sending", False),
         "error": getattr(session, "messages_error", ""), "seq": getattr(session, "messages_send_seq", 0),
         "sent": getattr(session, "messages_sent", None),

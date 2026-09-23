@@ -328,6 +328,7 @@ def snapshot(session, panel) -> dict:
     available = rows is not None
     return {
         "leaderboard": {
+            "mode": getattr(session, "board_mode", "BB5"),
             "available": bool(available),
             "rows": rows or [],
             "you": you,
@@ -341,4 +342,5 @@ def snapshot(session, panel) -> dict:
 
 register_verbs("leaderboard", {
     "leaderboard_refresh": lambda panel: panel.post(panel.session.refresh_leaderboard),
+    "leaderboard_mode": lambda panel, mode: panel.post(lambda: panel.session.select_board_mode(str(mode))),
 })

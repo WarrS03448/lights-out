@@ -11,6 +11,7 @@ core (hub/webui/snapshot.py); this file only adds the competitive-specific slice
 from . import register_snapshot, register_verbs
 from ...competitive import COMPETITIVE_MODE_ID
 from ...activity import files_busy
+from ...ranked_modes import strings as mode_strings
 from ...competitive import (MAX_PARTY, mask_party_code, VOTE_NEEDED, NO_SHOW_ELO,
                             NO_SHOW_BAN_SECONDS, format_duration, outdated_line, TIMED_STAGES)
 
@@ -396,7 +397,8 @@ def live_snapshot(session) -> dict:
         "reconnect_waiting": [dict(row) for row in getattr(session, "reconnect_waiting", [])],
         "host": {"name": host.get("name") or "", "ping": host.get("ping"), "estimated": bool(host.get("ping_estimated"))},
         "vote": v,
-        "can_vote": getattr(session, "phase", "") == "live",
+        "can_vote": getattr(session, "phase", "") == "live" and getattr(session, "ranked_mode", "BB5") == "BB5",
+        "can_concede": getattr(session, "phase", "") == "live" and getattr(session, "ranked_mode", "BB5") == "BB1",
         # host-gated join (additive), same fields as the connect slice: in `live` everyone has
         # connected so host_ready is already true, but the JS still reads is_host to decide whether
         # to show the host's Relaunch or the joiner's Relaunch + Join.
@@ -420,7 +422,7 @@ def result_snapshot(session) -> dict:
     return {
         "won": r.get("won"),
         "voided": bool(r.get("voided")),
-        "score": score,
+        "score": score if r.get("score") is not None else None,
         "delta": int(r.get("delta") or 0),
         # The RR the match moved (None from a service that does not send it), and the placement
         # states that move none. `delta` above is an arrow count and is not printed as a number.
@@ -443,7 +445,7 @@ def _mode_listed(panel) -> bool:
     """Is the ranked gamemode in the catalogue this hub has loaded? False also when the catalogue
     has not arrived yet, which is what the gate's "waiting" line is for."""
     catalogue = getattr(getattr(panel, "app", None), "catalogue", None) or {}
-    return any(e.get("id") == COMPETITIVE_MODE_ID
+    return any(e.get("id") == getattr(getattr(panel, "session", None), "ranked_mode", COMPETITIVE_MODE_ID)
                for e in (catalogue.get("gamemodes") or []))
 
 
@@ -451,6 +453,9 @@ def comp_snapshot(session, panel) -> dict:
     """The find-match / queue / accept state the hero renders from, plus the live match path
     (lobby / connecting / live / result) when the session has moved into it."""
     banned_left = session.banned_left()
+    ranked_ban = getattr(session, "ranked_ban", None)
+    if ranked_ban and ranked_ban.get("until") and ranked_ban["until"] <= __import__("time").time() * 1000:
+        ranked_ban = None
     # Behind the release the service is publishing? The queue is shut until this is None
     # (hub/competitive.py Session.update_needed, and server/live.cjs enforces it for real).
     # A match ALREADY UNDER WAY is never gated by it, here or on the server, so this only ever
@@ -505,7 +510,10 @@ def comp_snapshot(session, panel) -> dict:
         # and opened Competitive first could queue for a mode they did not own. The JS puts the
         # install button in Find match's place from this flag; can_find kills it either way.
         "installed": bool(session.gamemode_installed()),
-        "mode_id": COMPETITIVE_MODE_ID,
+        "mode_id": getattr(session, "ranked_mode", COMPETITIVE_MODE_ID),
+        "mode_selectable": getattr(session, "phase", "") in ("idle", "signed_out", "game_unavailable"),
+        "ranked_ban": ranked_ban,
+        "mode_strings": mode_strings(),
         # Does the catalogue still describe the mode? The gate's Install button builds the pak
         # from catalogue entries, and ops.apply drops any id the catalogue does not list - so
         # offering the button before the list has arrived would run an install that installs
@@ -513,7 +521,8 @@ def comp_snapshot(session, panel) -> dict:
         "mode_listed": _mode_listed(panel),
         "can_find": (session.is_party_leader() and session.gamemode_installed()
                      and not files_busy(panel)
-                     and not banned_left and not outdated),
+                     and not banned_left and not outdated and not ranked_ban
+                     and (getattr(session, "ranked_mode", "BB5") != "BB1" or session.party_size() <= 1)),
         # None, or {what, hub, have_hub, mode, have_mode} plus the finished sentence. The JS
         # renders the sentence rather than assembling one, so the hub, the Tk window and a
         # refusal that came back from the service all say the same thing.
@@ -627,6 +636,8 @@ register_verbs("competitive", {
     "cancel_sign_in":   lambda panel: panel.post(panel.session.cancel_sign_in),
     # matchmaking
     "find_match":       lambda panel: panel.post(panel.session.find_match),
+    "select_ranked_mode": lambda panel, mode: panel.post(lambda: panel.session.select_ranked_mode(str(mode))),
+    "concede_match": lambda panel: panel.post(panel.session.concede),
     "cancel_search":    lambda panel: panel.post(panel.session.cancel_queue),   # the verb it maps to
     "accept":           lambda panel: panel.post(panel.session.accept),
     # match flow: lobby (coin flip -> side/first-ban choice -> map veto), connect, live, result.

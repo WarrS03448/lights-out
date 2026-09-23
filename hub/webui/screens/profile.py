@@ -63,7 +63,7 @@ PROFILE_STRINGS = {
         "profile_recent_matches": "Recent matches",
         "profile_view_all": "View all",
         "profile_no_matches": "No ranked matches yet",
-        "profile_no_matches_body": "Play a ranked Bodybomb 5v5 match to start your record.",
+        "profile_no_matches_body": "Play ranked Bodybomb 5v5 or 1v1 to start your record.",
         "profile_stat_matches": "Matches",
         "profile_stat_played": "Played",
         "profile_stat_wins": "Wins",
@@ -71,7 +71,7 @@ PROFILE_STRINGS = {
         "profile_stat_winrate": "Win rate",
         "profile_stat_topmap": "Top map",
         "profile_stat_cancelled": "Cancelled",
-        "profile_ranked_only": "Ranked Bodybomb 5v5 only. Unranked community modes do not affect RR.",
+        "profile_ranked_only": "5v5 and 1v1 ranks are separate. Only ranked matches affect RR.",
         "profile_refresh": "Refresh",
         "profile_loading": "Loading…",
         "profile_form_win": "Win",
@@ -105,7 +105,7 @@ PROFILE_STRINGS = {
         "profile_recent_matches": "Letzte Spiele",
         "profile_view_all": "Alle anzeigen",
         "profile_no_matches": "Noch keine gewerteten Spiele",
-        "profile_no_matches_body": "Spiele ein gewertetes Bodybomb 5v5, um deine Bilanz zu starten.",
+        "profile_no_matches_body": "Spiele Bodybomb 5v5 oder 1v1 mit Rangwertung, um deinen Verlauf zu beginnen.",
         "profile_stat_matches": "Spiele",
         "profile_stat_played": "Gespielt",
         "profile_stat_wins": "Siege",
@@ -113,7 +113,7 @@ PROFILE_STRINGS = {
         "profile_stat_winrate": "Siegquote",
         "profile_stat_topmap": "Top-Karte",
         "profile_stat_cancelled": "Abgebrochen",
-        "profile_ranked_only": "Nur gewertetes Bodybomb 5v5. Ungewertete Community-Modi beeinflussen die RR nicht.",
+        "profile_ranked_only": "5v5- und 1v1-Ränge sind getrennt. Nur Ranglistenspiele beeinflussen RR.",
         "profile_refresh": "Aktualisieren",
         "profile_loading": "Wird geladen…",
         "profile_form_win": "Sieg",
@@ -147,7 +147,7 @@ PROFILE_STRINGS = {
         "profile_recent_matches": "Partidas recientes",
         "profile_view_all": "Ver todo",
         "profile_no_matches": "Aún no hay partidas clasificatorias",
-        "profile_no_matches_body": "Juega un Bodybomb 5v5 clasificatorio para empezar tu historial.",
+        "profile_no_matches_body": "Juega Bodybomb competitivo 5v5 o 1v1 para iniciar tu historial.",
         "profile_stat_matches": "Partidas",
         "profile_stat_played": "Jugadas",
         "profile_stat_wins": "Victorias",
@@ -155,7 +155,7 @@ PROFILE_STRINGS = {
         "profile_stat_winrate": "% de victorias",
         "profile_stat_topmap": "Mapa top",
         "profile_stat_cancelled": "Canceladas",
-        "profile_ranked_only": "Solo Bodybomb 5v5 clasificatorio. Los modos comunitarios sin clasificar no afectan al RR.",
+        "profile_ranked_only": "Los rangos de 5v5 y 1v1 son independientes. Solo las partidas clasificatorias afectan al RR.",
         "profile_refresh": "Actualizar",
         "profile_loading": "Cargando…",
         "profile_form_win": "Victoria",
@@ -189,7 +189,7 @@ PROFILE_STRINGS = {
         "profile_recent_matches": "Parties récentes",
         "profile_view_all": "Tout voir",
         "profile_no_matches": "Aucune partie classée",
-        "profile_no_matches_body": "Joue un Bodybomb 5v5 classé pour démarrer ton historique.",
+        "profile_no_matches_body": "Joue à Bodybomb classé en 5v5 ou 1v1 pour commencer ton historique.",
         "profile_stat_matches": "Parties",
         "profile_stat_played": "Jouées",
         "profile_stat_wins": "Victoires",
@@ -197,7 +197,7 @@ PROFILE_STRINGS = {
         "profile_stat_winrate": "% de victoires",
         "profile_stat_topmap": "Carte favorite",
         "profile_stat_cancelled": "Annulées",
-        "profile_ranked_only": "Bodybomb 5v5 classé uniquement. Les modes communautaires non classés n'affectent pas le RR.",
+        "profile_ranked_only": "Les rangs 5v5 et 1v1 sont séparés. Seuls les matchs classés affectent les RR.",
         "profile_refresh": "Actualiser",
         "profile_loading": "Chargement…",
         "profile_form_win": "Victoire",
@@ -231,7 +231,7 @@ PROFILE_STRINGS = {
         "profile_recent_matches": "Partidas recentes",
         "profile_view_all": "Ver tudo",
         "profile_no_matches": "Ainda sem partidas ranqueadas",
-        "profile_no_matches_body": "Jogue um Bodybomb 5v5 ranqueado para começar o seu histórico.",
+        "profile_no_matches_body": "Jogue Bodybomb ranqueado 5v5 ou 1v1 para iniciar seu histórico.",
         "profile_stat_matches": "Partidas",
         "profile_stat_played": "Jogadas",
         "profile_stat_wins": "Vitórias",
@@ -239,7 +239,7 @@ PROFILE_STRINGS = {
         "profile_stat_winrate": "% de vitórias",
         "profile_stat_topmap": "Mapa favorito",
         "profile_stat_cancelled": "Canceladas",
-        "profile_ranked_only": "Apenas Bodybomb 5v5 ranqueado. Modos comunitários não ranqueados não afetam o RR.",
+        "profile_ranked_only": "Os ranks de 5v5 e 1v1 são separados. Só partidas ranqueadas afetam o RR.",
         "profile_refresh": "Atualizar",
         "profile_loading": "A carregar…",
         "profile_form_win": "Vitória",
@@ -273,7 +273,7 @@ PROFILE_STRINGS = {
         "profile_recent_matches": "Недавние матчи",
         "profile_view_all": "Показать все",
         "profile_no_matches": "Рейтинговых матчей пока нет",
-        "profile_no_matches_body": "Сыграйте рейтинговый Bodybomb 5v5, чтобы начать историю.",
+        "profile_no_matches_body": "Сыграй рейтинговый матч Bodybomb 5v5 или 1v1, чтобы начать историю.",
         "profile_stat_matches": "Матчи",
         "profile_stat_played": "Сыграно",
         "profile_stat_wins": "Победы",
@@ -281,7 +281,7 @@ PROFILE_STRINGS = {
         "profile_stat_winrate": "Процент побед",
         "profile_stat_topmap": "Топ-карта",
         "profile_stat_cancelled": "Отменено",
-        "profile_ranked_only": "Только рейтинговый Bodybomb 5v5. Нерейтинговые режимы сообщества не влияют на RR.",
+        "profile_ranked_only": "Ранги 5v5 и 1v1 независимы. На RR влияют только рейтинговые матчи.",
         "profile_refresh": "Обновить",
         "profile_loading": "Загрузка…",
         "profile_form_win": "Победа",
@@ -315,7 +315,7 @@ PROFILE_STRINGS = {
         "profile_recent_matches": "最近对局",
         "profile_view_all": "查看全部",
         "profile_no_matches": "暂无排位对局",
-        "profile_no_matches_body": "打一场排位 Bodybomb 5v5 来开始你的战绩。",
+        "profile_no_matches_body": "参加 Bodybomb 5v5 或 1v1 排位赛，开始你的比赛记录。",
         "profile_stat_matches": "对局",
         "profile_stat_played": "已进行",
         "profile_stat_wins": "胜场",
@@ -323,7 +323,7 @@ PROFILE_STRINGS = {
         "profile_stat_winrate": "胜率",
         "profile_stat_topmap": "常用地图",
         "profile_stat_cancelled": "已取消",
-        "profile_ranked_only": "仅排位 Bodybomb 5v5。非排位社区模式不影响 RR。",
+        "profile_ranked_only": "5v5 和 1v1 段位互相独立。只有排位赛会影响 RR。",
         "profile_refresh": "刷新",
         "profile_loading": "加载中…",
         "profile_form_win": "胜利",
@@ -374,6 +374,7 @@ def _recent(rows, limit=5) -> list:
         out.append({
             "id": str(row.get("id") or ""),
             "map": str(row.get("map") or ""),
+            "mode": row.get("mode") or "BB5",
             "won": row.get("won"),                    # True / False / None — never coerced
             "cancelled": cancelled,
             "cheater_reverted": bool(row.get("cheater_reverted")),
@@ -395,6 +396,9 @@ def profile_snapshot(session, panel) -> dict:
     me = getattr(session, "me", None) or {}
     signed_in = bool(getattr(session, "me", None))
     history = getattr(session, "history", None)
+    mode = getattr(session, "history_mode", "all")
+    if history is not None and mode != "all":
+        history = [r for r in history if (r.get("mode") or "BB5") == mode]
 
     stats = profile_stats(history)
     # ``maps`` comes back as a list of (name, count) tuples; normalise to JSON-friendly objects so
@@ -405,6 +409,9 @@ def profile_snapshot(session, panel) -> dict:
 
     return {
         "profile": {
+            "ranked_ranks": getattr(session, "ranked_ranks", {}),
+            "ranked_mode": getattr(session, "ranked_mode", "BB5"),
+            "history_mode": mode,
             "signed_in": signed_in,
             # identity — real, straight from the signed-in account
             "persona": me.get("name") or "",

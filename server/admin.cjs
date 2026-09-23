@@ -170,6 +170,7 @@ const PLAYERS_JS = `
   COLUMNS.forEach(function (c) { byKey[c.key] = c; });
 
   var state = {
+    mode: 'BB5',
     q: new URLSearchParams(location.search).get('q') || '',
     player_id: new URLSearchParams(location.search).get('player_id') || '',
     sort: 'last_seen',
@@ -298,6 +299,7 @@ const PLAYERS_JS = `
   /* One account, one decision. Every one of these is a POST the SERVER rules on - the page asks
    * the question and reports the answer, and nothing here decides what is allowed. */
   function act(payload, done) {
+    payload.mode=state.mode;
     return fetch('/admin/action', {
       method: 'POST',
       credentials: 'same-origin',
@@ -523,9 +525,10 @@ const PLAYERS_JS = `
   }
 
   // ---------------------------------------------------------------- the server
+  document.getElementById('ranked-mode').addEventListener('change',function(){state.mode=this.value;state.rows=[];load();});
   var pending = null;
   function load() {
-    var url = '/admin/players/data?q=' + encodeURIComponent(state.q)
+    var url = '/admin/players/data?mode='+encodeURIComponent(state.mode)+'&q=' + encodeURIComponent(state.q)
       + '&player_id=' + encodeURIComponent(state.player_id)
       + '&sort=' + encodeURIComponent(state.sort)
       + '&dir=' + encodeURIComponent(state.dir);
@@ -1085,6 +1088,7 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics,
       <div class="bar">
         <input id="q" type="search" autocomplete="off" spellcheck="false"
                placeholder="Search name, player ID, account ID or Steam ID">
+        <select id="ranked-mode" aria-label="Ranked mode"><option value="BB5">5v5 Bodybomb</option><option value="BB1">1v1 Bodybomb (Paintball)</option></select>
         <select id="presets" title="Column sets"></select>
         <button class="btn" id="save" title="Save the columns and sort into this set">Saved</button>
         <button class="btn" id="newpreset" title="Save these columns as a new set">New</button>
@@ -1259,7 +1263,9 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics,
     }
 
     if (pathname === '/admin/players/data' && method === 'GET') {
-      const data = await live().adminPlayers(me.steam_id, {
+      let selected;
+      try{selected=require('./ranked-modes.cjs').modeOf(url.searchParams.get('mode')||'BB5').id;}catch{json(res,400,{ok:false,error:'Unknown ranked mode'});return true;}
+      const data = await live(selected).adminPlayers(me.steam_id, {
         player_id: url.searchParams.get('player_id') || '',
         q: url.searchParams.get('q') || '',
         sort: url.searchParams.get('sort') || '',
@@ -1302,22 +1308,25 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics,
       if (!ask) { json(res, 400, { ok: false, error: 'that is not json' }); return true; }
       const what = String(ask.action || '');
       const on = { steam_id: String(ask.steam_id || '') };
+      let selected;
+      try{selected=require('./ranked-modes.cjs').modeOf(ask.mode).id;}catch{json(res,400,{ok:false,error:'Unknown ranked mode'});return true;}
+      const competition=live(selected);
       let out;
       if (what === 'ban_cheater') {
-        out = await live().banAccount(me.steam_id,{...on,category:'cheating',reason:String(ask.reason||''),operation_id:String(ask.operation_id||'')});
+        out = await competition.banAccount(me.steam_id,{...on,category:'cheating',reason:String(ask.reason||''),operation_id:String(ask.operation_id||'')});
       } else if (what === 'ban') {
-        out = await live().banAccount(me.steam_id, {
+        out = await competition.banAccount(me.steam_id, {
           ...on, days: Number(ask.days) || 0,
           reason: String(ask.reason || '').slice(0, 200) || 'admin console',
         });
       } else if (what === 'unban') {
-        out = await live().unbanAccount(me.steam_id, on);
+        out = await competition.unbanAccount(me.steam_id, on);
       } else if (what === 'reset') {
-        out = await live().resetRank(me.steam_id, on);
+        out = await competition.resetRank(me.steam_id, on);
       } else if (what === 'elo') {
-        out = await live().setElo(me.steam_id, { ...on, rating: ask.rating });
+        out = await competition.setElo(me.steam_id, { ...on, rating: ask.rating });
       } else if (what === 'rank') {
-        out = await live().setRank(me.steam_id, {
+        out = await competition.setRank(me.steam_id, {
           ...on, rank: ask.rank, division: ask.division, progress: ask.progress,
         });
       } else {

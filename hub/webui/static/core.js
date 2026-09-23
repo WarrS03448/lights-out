@@ -80,6 +80,7 @@
   // ---------------------------------------------------------------- screen registry
   var screens = {};                              // view name -> { render(root, state, ctx) }
   var renderedScreen = null;
+  var renderedInputAccount = null;
   HubUI._screens = screens;
   HubUI.registerScreen = function (name, module) {
     if (!name || !module || typeof module.render !== "function") {
@@ -205,7 +206,10 @@
     // re-renders even though nothing they touched changed). Capture focused inputs' values +
     // selection by id, rebuild, then restore, so typing survives. Generalized from app.js's
     // join-code handling so every screen's inputs are protected.
-    var saved = captureInputs();
+    var auth = state.auth || {};
+    var inputAccount = JSON.stringify([!!auth.signed_in, auth.player_id || auth.steam_id || ""]);
+    var saved = inputAccount === renderedInputAccount ? captureInputs() : [];
+    renderedInputAccount = inputAccount;
     clearOverlays();
     renderScreen();
     renderOverlays();
@@ -227,7 +231,9 @@
   // So the rule is the same one #app follows: what a render draws, the next render clears.
   function clearOverlays() {
     var open = document.querySelectorAll("body > .ui-overlay");
+    var screen=state&&screens[state.view];
     for (var i = 0; i < open.length; i++) {
+      if(screen&&typeof screen.preserveOverlay==="function"&&screen.preserveOverlay(open[i],state))continue;
       if (open[i].parentNode) { open[i].parentNode.removeChild(open[i]); }
     }
   }
