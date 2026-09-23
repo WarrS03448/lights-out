@@ -21,8 +21,8 @@
   var app = document.getElementById("app");
   var navEl = document.getElementById("nav");
   var statusEl = document.getElementById("serverstatus");
-  var queuedEl = document.getElementById("statqueued");
-  var liveEl = document.getElementById("statlive");
+  var registeredEl = document.getElementById("statregistered");
+  var tournamentEl = document.getElementById("stattournament");
 
   // Nav is delegated: one listener on the container survives renderNav's innerHTML rewrites. A
   // click on an item switches the active screen via set_view; the re-emitted snapshot re-renders.
@@ -337,27 +337,13 @@
   }
 
   function renderStatus() {
-    // Online, searching, live games, registered players. All clear when the
-    // stream drops. The registration inventory can independently be unavailable;
-    // a dash preserves the label without claiming an unknown total is zero.
-    //
-    // `topbar_offline` AND NOT `comp_live_lost`, which is the sentence this used to show: the
-    // bar is a row on one line whose width is what sets FIT_W, and "Lost the connection to the
-    // competitive service. Reconnecting…" is three times the width of the count it replaces -
-    // enough, in Russian, to push the window buttons off the edge of the smallest window. The
-    // full sentence is not lost: the session sets it as `error` at the same moment
-    // (competitive.py), and the competitive screen draws it where there is room for it.
+    // Registration totals replace the activity counts. Update the existing
+    // labels in place; unknown totals use a dash and disconnect hides both.
     var st = state.status || {};
     var ok = st.connected;
     statusEl.className = "status-dot " + (ok ? "ok" : "bad");
-    statusEl.innerHTML = '<span class="dot"></span><span>' +
-      esc(ok ? t("comp_online", { n: st.online || 0 }) : t("topbar_offline")) + "</span>";
-    if (queuedEl) {
-      queuedEl.textContent = ok ? t("topbar_queued", { n: st.queued || 0 }) : "";
-    }
-    if (liveEl) {
-      liveEl.textContent = ok ? t("topbar_live", { n: st.live_matches || 0 }) : "";
-    }
+    registeredEl.textContent = ok ? t("topbar_registered", { n: st.players_registered == null ? "—" : st.players_registered }) : t("topbar_offline");
+    tournamentEl.textContent = ok ? t("topbar_tournament", { n: st.tournament_registered == null ? "—" : st.tournament_registered }) : "";
   }
 
   // ---------------------------------------------------------------- app self-update strip

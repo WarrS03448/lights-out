@@ -630,6 +630,8 @@ class Session:
     tournament_loading = False
     tournament_error = ""
     tournament_received = 0.0
+    tournament_polled = None
+    tournament_registered = None
     tournament_ticket_seq = 0
     messages_data = None
     messages_loading = False
@@ -2747,6 +2749,7 @@ class LiveSession(MockSession):
                   "friend_requests_out friend_code friend_code_hidden friends_error friends_loading "
                   "party_invites invite_error invite_sent board_rows board_you board_available board_loading "
                   "board_error tournament_data tournament_loading tournament_error tournament_received "
+                  "tournament_polled tournament_registered players_registered "
                   "messages_data messages_loading messages_target messages_thread messages_thread_loading "
                   "messages_error messages_sending messages_pending messages_sent "
                   "match_detail_id match_detail match_detail_loading match_detail_error "
@@ -3097,6 +3100,9 @@ class LiveSession(MockSession):
         self.account_link.cancel(notify=False)
         self._account_epoch += 1
         self.stats_ready = False
+        self.players_registered = self.tournament_registered = None
+        self.tournament_polled = None
+        self.tournament_loading = False
         if self.client is not None:
             self.client.stop()
             self.client = None
@@ -3162,6 +3168,8 @@ class LiveSession(MockSession):
         self.connected = bool(ok)
         if not ok:
             self.stats_ready = False
+            self.tournament_registered = None
+            self.tournament_polled = None
         if not ok and self.phase == "queued":
             # the server no longer knows we are queued; do not pretend we still are. A match
             # phase ("found"/"ready"/"connecting") is NOT dropped here: the server keeps the
@@ -3789,6 +3797,12 @@ class LiveSession(MockSession):
             self.players_registered = (registered if type(registered) is int
                                        and 0 <= registered < 2**53 else None)
             self.stats_ready = True
+            # The header is visible on every screen. Reuse the existing event
+            # endpoint on the stats heartbeat, without one request per broadcast.
+            if (self.connected and hasattr(self.client, "tournament")
+                    and (self.tournament_polled is None
+                         or time.monotonic() - self.tournament_polled >= 15)):
+                self.refresh_tournament()
         elif kind == "queued":
             if getattr(self, "_cancel_queue_pending", False):
                 return  # the serialized leave follows the in-flight join; do not resurrect it
@@ -4502,8 +4516,19 @@ class LiveSession(MockSession):
         if not self.client or not self.me or self.tournament_loading:
             return
         self.tournament_loading = True
+        self.tournament_polled = time.monotonic()
+        polled = self.tournament_polled
         self._changed()
-        self._action(self.client.tournament, self._tournament_result)
+        def result(status, body):
+            # A response started before a stream loss cannot make the header
+            # look fresh on reconnect. Finish it before starting another GET.
+            if self.tournament_polled != polled:
+                self.tournament_loading = False
+                if self.connected:
+                    self.refresh_tournament()
+                return
+            self._tournament_result(status, body)
+        self._action(self.client.tournament, result)
 
     def _tournament_result(self, status, body):
         self.tournament_loading = False
@@ -4511,8 +4536,12 @@ class LiveSession(MockSession):
             self.tournament_data = body
             self.tournament_received = time.monotonic()
             self.tournament_error = ""
+            registered = body.get("entrant_count")
+            self.tournament_registered = (registered if type(registered) is int
+                                          and 0 <= registered < 2**53 else None)
         else:
             self.tournament_error = "unavailable"
+            self.tournament_registered = None
         self._changed()
 
     def register_tournament(self):
@@ -5235,12 +5264,12 @@ class CompetitivePanel:
     # ---------------------------------------------------------------- flicker guard
     # The values that move every tick or on every `stats` broadcast, and so must NOT force a
     # rebuild: they are updated in place through _live_labels instead.
-    _SIG_LIVE = ("online", "live_matches", "players_registered", "queue_size", "queue_seconds", "accept_left",
-                 "connect_left")
+    _SIG_LIVE = ("online", "live_matches", "players_registered", "tournament_registered",
+                 "queue_size", "queue_seconds", "accept_left", "connect_left")
     # Attributes that never reach the body (they belong to the header-less history view, or are
     # plumbing), so they must not drag the body into a needless rebuild.
     _SIG_SKIP = ("panel", "client", "history", "history_error", "history_loading",
-                 "history_stale", "history_seq", "stats_queued", "stats_ready")
+                 "history_stale", "history_seq", "stats_queued", "stats_ready", "tournament_polled")
 
     def _sig_value(self, val):
         """A hashable, order-stable stand-in for one attribute, so signatures compare cleanly."""

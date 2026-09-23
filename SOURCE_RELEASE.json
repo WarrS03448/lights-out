@@ -1,6 +1,6 @@
 {
-  "release": "2.5.0",
-  "date": "2026-09-21",
+  "release": "2.6.6",
+  "date": "2026-09-23",
   "scope": "Original client, server, gamemode generators, editor helper, packaging code and tests",
   "source_export_changes": [
     "Add MIT license, upstream notices, public documentation and test workflow",
@@ -16,16 +16,17 @@
     "Include email accounts, privacy disclosures, verified game identity, host migration and reconnect grace for 2.3.88; omit private test deployment tooling and settings",
     "Add verified Settings account linking and highlighted website account links in 2.3.89",
     "Integrate verified account identity and profile counts into Players, Overview and Analytics, with exact profile drilldowns and no account credentials in console data",
-    "Include seven distinct participant votes to void matches, authenticated durable voting, Bodycam cleanup and the MATCH VOIDED result screen in 2.5.0"
+    "Include seven distinct participant votes to void matches, authenticated durable voting, Bodycam cleanup and the MATCH VOIDED result screen in 2.5.0",
+    "Show registered Lights Out users and tournament registrations in the client header, with refresh and reconnect handling, in 2.6.6"
   ],
   "gamemode_packs": [
     {
-      "path": "packs/BB5-1.0.28.zip",
-      "sha256": "7891a9b49edcda712e8a03bf09dd0213ca94afe3cd5afb961c5bf85f91e9ba0f"
+      "path": "server/public/packs/CTF-1.0.4.zip",
+      "sha256": "e0ef3843e4daa9ea9d4e4f092bfdd3b4ec937173692e2c5dece1343c12fd6f60"
     },
     {
-      "path": "packs/CTF-1.0.4.zip",
-      "sha256": "e0ef3843e4daa9ea9d4e4f092bfdd3b4ec937173692e2c5dece1343c12fd6f60"
+      "path": "server/public/packs/BB5-1.0.29.zip",
+      "sha256": "3c1aca5d2d8a02471f547dde8ca98e078fd0b7b5292e54c24ac88e2e9587e3cf"
     }
   ]
 }

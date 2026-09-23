@@ -69,10 +69,12 @@ const server=http.createServer((req,res)=>{
  await page.evaluate(()=>{window.supportPicker=document.querySelector('#tournament-category');window.supportForm=document.querySelector('.tournament-support-form');});
  for(let i=0;i<12;i++){
    state.tournament.data.server_now+=300;
+   state.status.connected=true;state.status.players_registered=200+i;state.status.tournament_registered=20+i;
    if(i===6){state.tournament.data.tickets=[{status:'open',at:event.start_at,message:'A newly received support update',replies:[]}];state.tournament.loading=true;}
    if(i===8)state.tournament.loading=false;
    await page.evaluate(s=>window.__hub.onState(s),state);await page.clock.runFor(50);
    assert(await page.evaluate(()=>supportPicker.isConnected&&supportPicker.matches(':open')&&document.activeElement===supportPicker&&supportForm===document.querySelector('.tournament-support-form')),'snapshot refresh closed the support dropdown');
+   assert.equal(await page.locator('#stattournament').textContent(),`${20+i} registered for tournament`);
  }
  assert((await page.locator('.tournament-ticket').textContent()).includes('A newly received support update'),'support data still updates while the dropdown is open');
  await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');

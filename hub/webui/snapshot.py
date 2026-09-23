@@ -19,6 +19,8 @@ Everything here is pure and pywebview-free, so it is tested headless against a L
 driven by the fake live client (tests/test_hub.py), exactly like the existing
 `test_live_session_*` tests but asserting on the dict instead of Tk widgets.
 """
+import time
+
 from .. import i18n
 from . import screens as screens_pkg
 
@@ -155,13 +157,15 @@ def _auth(session) -> dict:
 
 
 def _status(session, panel) -> dict:
-    """Shared chrome slice: live counts, registration inventory and ranked installation.
+    """Shared chrome: registration totals, connection and ranked installation.
 
-    `online`, `queued` and `live_matches` all come off the SAME `stats` broadcast, so the three
-    figures in the top bar are always the same moment - a count of people online taken now next
-    to a count of matches taken a minute ago is how you get "4 online, 9 live games".
-    Registration inventory is refreshed independently by the server; None means unavailable.
+    The account inventory arrives on stats; event registrations use the existing
+    tournament endpoint. Missing, failed or stale totals remain unknown.
     """
+    received = getattr(session, "tournament_received", 0.0)
+    tournament_registered = getattr(session, "tournament_registered", None)
+    if not received or time.monotonic() - received >= 30:
+        tournament_registered = None
     return {
         "connected": bool(getattr(session, "connected", True)
                           and getattr(session, "stats_ready", False)),
@@ -171,6 +175,7 @@ def _status(session, panel) -> dict:
         "queued": int(getattr(session, "stats_queued", 0) or 0),
         "live_matches": int(getattr(session, "live_matches", 0) or 0),
         "players_registered": getattr(session, "players_registered", None),
+        "tournament_registered": tournament_registered,
         "locked_in": session.locked_in(),
         # Whether the ranked gamemode is installed (the Tk tab gates on this). The web UI
         # only needs to know; it does not draw the gate screen in Phase 1.

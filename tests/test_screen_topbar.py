@@ -1,27 +1,12 @@
 #!/usr/bin/env python3.12
-"""Headless tests for the TOP BAR'S THREE COUNTS.
+"""Run: python -m pytest tests/test_screen_topbar.py
 
-Sam, 2026-09-16: "move the count of online players to the right of bug report. to the right of
-count of online players put the count of players in queue and to the right of that put the count
-of live games."
-
-So the bar now reads: the eight nav items, then how many are online, how many are searching, how
-many matches are in flight, then the window buttons. Three things have to hold for that to be
-true, and each has a test here:
-
-  * THE THREE FIGURES ARE ONE MOMENT. They come off a single `stats` broadcast (server/live.cjs
-    stats()), so they are read off the session together and shipped in one snapshot slice. A
-    count of people taken now next to a count of matches taken a minute ago is how you get
-    "4 online, 9 live games", and nothing on screen would say which half was stale.
-  * THEY GO DARK TOGETHER. One broadcast means one failure: when the stream drops, all three
-    freeze. The dot says so and the other two are emptied, rather than leaving yesterday's
-    numbers up looking current.
-  * THE BAR STILL FITS. It is the widest thing in the app now, and the window buttons are drawn
-    by the page at its right end (static/titlebar.js) - so a bar that overflows does not scroll,
-    it pushes Close off the edge of the window. core.js FIT_W is what stops that, and the two
-    bounds it lives between are asserted rather than trusted.
-
-Run directly (``.venv/Scripts/python tests/test_screen_topbar.py``) or import the functions.
+The header shows Lights Out and tournament registration totals. Account totals
+arrive on the stats stream; event totals refresh through the existing endpoint
+on every screen. Unknown, stale and disconnected totals must not look like zero.
+The older service activity fields remain available to their existing consumers.
+Browser coverage in test_registered_topbar_browser.cjs checks actual rendering,
+translations, repeated changes and window bounds.
 """
 import os
 import re
@@ -105,6 +90,89 @@ def test_missing_or_invalid_registered_total_clears_last_known_value():
     assert _status(panel)["players_registered"] is None
 
 
+def test_tournament_count_refreshes_without_visiting_event_screen():
+    from unittest.mock import patch
+    from tests.test_screen_bugreport import _panel as action_panel
+    panel, s = action_panel()
+    panel.view = "competitive"
+    replies = iter([11, 12, 0])
+    s.client.tournament = lambda: (200, {"ok": True, "entrant_count": next(replies)})
+    with patch("hub.competitive.time.monotonic", return_value=100) as clock:
+        s.on_live_event({"type": "stats", "players_registered": 51})
+        assert _status(panel)["tournament_registered"] == 11
+        for moment in (101, 105, 114):
+            clock.return_value = moment
+            s.on_live_event({"type": "stats", "players_registered": 52})
+            assert _status(panel)["tournament_registered"] == 11
+        clock.return_value = 115
+        s.on_live_event({"type": "stats"})
+        assert _status(panel)["tournament_registered"] == 12
+        clock.return_value = 130
+        s.on_live_event({"type": "stats"})
+        assert _status(panel)["tournament_registered"] == 0
+
+
+def test_tournament_unknown_failure_and_staleness_never_claim_zero():
+    from unittest.mock import patch
+    panel, s = _panel()
+    assert _status(panel)["tournament_registered"] is None
+    with patch("hub.competitive.time.monotonic", return_value=100) as clock:
+        for value in (None, -1, True, "11", 1.5, 2**53):
+            s._tournament_result(200, {"ok": True, "entrant_count": 11})
+            s._tournament_result(200, {"ok": True, "entrant_count": value})
+            assert _status(panel)["tournament_registered"] is None
+        s._tournament_result(200, {"ok": True, "entrant_count": 11})
+        s._tournament_result(503, {})
+        assert _status(panel)["tournament_registered"] is None
+        s._tournament_result(200, {"ok": True, "entrant_count": 11})
+        clock.return_value = 131
+        assert _status(panel)["tournament_registered"] is None
+
+
+def test_registration_counts_clear_on_disconnect_and_account_change():
+    panel, s = _panel()
+    s.on_live_event({"type": "stats", "players_registered": 51})
+    s._tournament_result(200, {"ok": True, "entrant_count": 11})
+    s._disconnect()
+    assert _status(panel)["players_registered"] is None
+    assert _status(panel)["tournament_registered"] is None
+    s._clear_account_state()
+    assert s.tournament_polled is None
+
+
+def test_reconnect_refreshes_tournament_before_restoring_its_count():
+    from unittest.mock import patch
+    from tests.test_screen_bugreport import _panel as action_panel
+    panel, s = action_panel()
+    replies = iter([11, 12])
+    s.client.tournament = lambda: (200, {"ok": True, "entrant_count": next(replies)})
+    with patch("hub.competitive.time.monotonic", return_value=100):
+        s.on_live_event({"type": "stats"})
+        assert _status(panel)["tournament_registered"] == 11
+        s._on_live_status(False, "lost")
+        s._on_live_status(True, "")
+        assert _status(panel)["tournament_registered"] is None
+        s.on_live_event({"type": "stats"})
+        assert _status(panel)["tournament_registered"] == 12
+
+
+def test_tournament_response_started_before_stream_loss_cannot_restore_count():
+    from tests.test_screen_bugreport import _panel as action_panel
+    panel, s = action_panel()
+    pending = []
+    s.client.tournament = lambda: None
+    s._action = lambda call, on_result=None: pending.append(on_result)
+    s.on_live_event({"type": "stats"})
+    s._on_live_status(False, "lost")
+    s._on_live_status(True, "")
+    s.on_live_event({"type": "stats"})
+    pending.pop(0)(200, {"ok": True, "entrant_count": 11})
+    assert _status(panel)["tournament_registered"] is None
+    assert len(pending) == 1, "retry the event GET after the old request finishes"
+    pending.pop(0)(200, {"ok": True, "entrant_count": 12})
+    assert _status(panel)["tournament_registered"] == 12
+
+
 def test_the_slice_is_json_and_never_carries_a_none():
     """The page does `st.online || 0`, which turns null into 0 - but a null would mean the hub
     forgot to ask, and a 0 means the server said nobody. They must not look the same here."""
@@ -163,13 +231,12 @@ def test_the_counts_sit_to_the_right_of_the_nav():
     assert 'id="serverstatus"' in stats_block
 
 
-def test_online_then_queue_then_live_in_that_order():
+def test_registration_counts_replace_activity_counts():
     """The order is the ask, left to right."""
     html = _static("index.html")
     block = html[html.index('id="topstats"'):html.index("</header>")]
-    order = [m for m in re.findall(r'id="(serverstatus|statqueued|statlive|statregistered)"', block)]
-    assert order == ["serverstatus", "statqueued", "statlive"], order
-    assert 'id="statregistered"' not in html
+    order = re.findall(r'id="(statqueued|statlive|statregistered|stattournament)"', block)
+    assert order == ["statregistered", "stattournament"], order
 
 
 def test_the_nav_is_still_the_last_word_before_the_counts():
@@ -180,12 +247,12 @@ def test_the_nav_is_still_the_last_word_before_the_counts():
 
 
 def test_a_dropped_stream_empties_the_two_counts():
-    """All three freeze together, so all three have to stop claiming to be current together."""
+    """Replace the first total with connection status and hide the event total."""
     fn = _render_status()
     assert 't("topbar_offline")' in fn, "the dot no longer says the connection is gone"
     assert 't("comp_live_lost")' not in fn, \
         "the long sentence is back in the bar, and it does not fit (see FIT_W below)"
-    for var in ("queuedEl", "liveEl"):
+    for var in ("tournamentEl",):
         assert re.search(re.escape(var) + r'\.textContent = ok \? t\(', fn), \
             "%s is not gated on the connection: a stale count would stay on screen" % var
         assert re.search(re.escape(var) + r'\.textContent = ok \? t\([^;]*: "";', fn), \
@@ -193,10 +260,10 @@ def test_a_dropped_stream_empties_the_two_counts():
 
 
 def test_the_counts_come_from_the_shared_status_slice():
-    """One slice, so the page cannot draw two of them from one moment and one from another."""
+    """The header uses the validated registration totals in the shared slice."""
     fn = _render_status()
     assert fn.count("state.status") == 1, "renderStatus reads the status slice more than once"
-    for key in ("st.online", "st.queued", "st.live_matches"):
+    for key in ("st.players_registered", "st.tournament_registered"):
         assert key in fn, key
 
 
@@ -230,7 +297,7 @@ def test_the_bar_fits_the_smallest_window_it_can_be_given():
 def test_every_language_names_the_two_new_counts():
     """A missing string here is the raw key on screen, in the chrome every screen shows."""
     for code in i18n.CODES:
-        for key in ("comp_online", "topbar_queued", "topbar_live", "topbar_registered"):
+        for key in ("topbar_registered", "topbar_tournament"):
             value = i18n.tr(code, key)
             assert value != key, (code, key)
             assert "{n}" in value, (code, key, value)
@@ -239,10 +306,9 @@ def test_every_language_names_the_two_new_counts():
 
 
 def test_the_labels_say_what_they_count():
-    """Three bare numbers in a row is a puzzle. Each carries its own word - and the words are
-    the short form on purpose, because the bar is what sets FIT_W above."""
-    assert i18n.tr("en", "topbar_queued").format(n=137) == "137 in queue"
-    assert i18n.tr("en", "topbar_live").format(n=42) == "42 live games"
+    """Each total identifies which registration it counts."""
+    assert i18n.tr("en", "topbar_registered").format(n=137) == "137 registered in Lights Out"
+    assert i18n.tr("en", "topbar_tournament").format(n=42) == "42 registered for tournament"
 
 
 def test_signin_never_exposes_preview_queue_counts():
@@ -308,6 +374,11 @@ def test_disconnected_client_cannot_deliver_pending_stats():
 
 
 _TESTS = [
+    test_reconnect_refreshes_tournament_before_restoring_its_count,
+    test_tournament_response_started_before_stream_loss_cannot_restore_count,
+    test_tournament_count_refreshes_without_visiting_event_screen,
+    test_tournament_unknown_failure_and_staleness_never_claim_zero,
+    test_registration_counts_clear_on_disconnect_and_account_change,
     test_registered_total_is_server_supplied_and_changes_with_stats,
     test_missing_or_invalid_registered_total_clears_last_known_value,
     test_disconnected_client_cannot_deliver_pending_stats,
@@ -321,7 +392,7 @@ _TESTS = [
     test_the_queue_figure_is_everyone_searching_not_our_own_place,
     test_a_count_that_moves_does_not_rebuild_the_tk_body,
     test_the_counts_sit_to_the_right_of_the_nav,
-    test_online_then_queue_then_live_in_that_order,
+    test_registration_counts_replace_activity_counts,
     test_the_nav_is_still_the_last_word_before_the_counts,
     test_a_dropped_stream_empties_the_two_counts,
     test_the_counts_come_from_the_shared_status_slice,

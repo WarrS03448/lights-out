@@ -40,16 +40,11 @@
       <div class="brand-wrap">
         <nav id="nav" class="nav"></nav>
         <button id="messages-toggle" type="button" hidden><svg viewBox="0 0 24 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="m3 4 9 7 9-7"/></svg><span id="messages-unread" hidden></span></button>
-        <!-- The four service counts, immediately to the right of the nav's last item (Bug
-             report): how many are online, how many are searching, how many matches are in
-             flight, and registered players. They sit HERE because the
-             window buttons live now (titlebar.js appends .wincontrols to #topbar) - a figure
-             pressed up against Close is a figure nobody reads. Filled by core.js
-             renderStatus from the one `status` slice. -->
+        <!-- Registration totals after navigation, before the window controls.
+             core.js updates these labels in place from the shared status slice. -->
         <div class="topstats" id="topstats">
-          <div class="status-dot" id="serverstatus"></div>
-          <span class="topstat" id="statqueued"></span>
-          <span class="topstat" id="statlive"></span>
+          <div class="status-dot" id="serverstatus"><span class="dot"></span><span id="statregistered"></span></div>
+          <span class="topstat" id="stattournament"></span>
         </div>
       </div>
     </header>
