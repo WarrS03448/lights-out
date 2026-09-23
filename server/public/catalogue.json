@@ -1,11 +1,11 @@
 {
   "catalogue_version": 1,
   "hub": {
-    "version": "2.6.6",
-    "download_url": "https://play.lightsoutranked.com/hub/LightsOut-Setup-2.6.6.exe",
+    "version": "2.6.7",
+    "download_url": "https://play.lightsoutranked.com/hub/LightsOut-Setup-2.6.7.exe",
     "page_url": "https://lightsoutranked.com/",
-    "sha256": "87a10a5512ba0d94d3fc37a36ee7c273f4e883fb867f9b4fd9e8a789691d7f72",
-    "size": 24082840,
+    "sha256": "9084f44968476a94af04b0247b43c7a1e30f9b756f0425db9c210e7ccfcefd46",
+    "size": 24088232,
     "kind": "inno-setup"
   },
   "gamemodes": [

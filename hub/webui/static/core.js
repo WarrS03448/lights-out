@@ -44,9 +44,9 @@
   // Find Match and its readiness note without scrolling.
   //
   // Keep the measured scale ceiling: 800px minimum / 0.7 = 1142 logical px.
-  // The four counts stay together; whole nav items wrap as needed and the header
-  // grows to contain them. Seven-language browser checks cover 800–1400px with
-  // large counts, loaded webfonts and the real window controls.
+  // Navigation stays on one row. Smaller windows use tighter header spacing and
+  // stacked registration totals (ui.css), including the longest translations.
+  // Browser checks cover loaded webfonts and the real window controls.
   //
   // DOWN ONLY (the Math.min with 1). Zooming past 1 would shrink the LOGICAL viewport below the
   // physical one, and the screens' width breakpoints (@media (max-width: 900px) and friends) are

@@ -25,6 +25,10 @@ let state = snapshots.en;
 const mime = {'.js':'text/javascript', '.css':'text/css', '.html':'text/html', '.woff2':'font/woff2', '.svg':'image/svg+xml'};
 const server = http.createServer((req,res) => {
   const url = new URL(req.url, 'http://localhost');
+  if (url.pathname.startsWith('/verb/')) {
+    res.writeHead(200, {'content-type':'application/json'});
+    res.end('{}'); return;
+  }
   if (url.pathname.startsWith('/window/')) {
     res.writeHead(200, {'content-type':'application/json'});
     res.end(JSON.stringify({maximized:false})); return;
@@ -57,20 +61,25 @@ const server = http.createServer((req,res) => {
       await render(snapshot);
       assert.equal(await page.locator('#statregistered').textContent(),snapshot.strings.topbar_registered.replace('{n}','1234567'));
       assert.equal(await page.locator('#stattournament').textContent(),snapshot.strings.topbar_tournament.replace('{n}','1234'));
-      for(const width of [1400,1200,800]) {
-        await page.setViewportSize({width,height:760});
+      for(const [width,height] of [[1600,850],[1401,760],[1400,760],[1200,760],[893,560],[800,560]]) {
+        await page.setViewportSize({width,height});
+        await page.evaluate(async()=>{await document.fonts.ready;await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);});
         const bounds=await page.evaluate(()=>{
           const box=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return {x:r.x,right:r.right,y:r.y,bottom:r.bottom};};
-          return {registered:box('#statregistered'),tournament:box('#stattournament'),controls:box('.wincontrols'),bar:box('#topbar'),nav:[...document.querySelectorAll('.navitem')].map(e=>{const r=e.getBoundingClientRect();return {x:r.x,right:r.right,y:r.y,bottom:r.bottom};})};
+          return {registered:box('#statregistered'),tournament:box('#stattournament'),mail:box('#messages-toggle'),controls:box('.wincontrols'),bar:box('#topbar'),nav:[...document.querySelectorAll('.navitem')].map(e=>{const r=e.getBoundingClientRect();return {x:r.x,right:r.right,y:r.y,bottom:r.bottom};})};
         });
-        assert(bounds.registered.right<=bounds.tournament.x,`${lang}/${width}: counts overlap each other`);
+        assert(bounds.registered.right<=bounds.tournament.x || bounds.registered.bottom<=bounds.tournament.y+1,`${lang}/${width}: counts overlap each other`);
+        assert(bounds.nav.at(-1).right<=bounds.mail.x,`${lang}/${width}: navigation overlaps messages`);
+        assert(bounds.mail.right<=Math.min(bounds.registered.x,bounds.tournament.x),`${lang}/${width}: messages overlap counts`);
+        assert(bounds.registered.right<=bounds.controls.x,`${lang}/${width}: Lights Out count overlaps controls`);
         assert(bounds.tournament.right<=bounds.controls.x,`${lang}/${width}: counts overlap controls`);
         assert(bounds.registered.x>=0,`${lang}/${width}: registration count clipped`);
         assert(bounds.controls.right<=width+1,`${lang}/${width}: window controls clipped`);
+        assert(bounds.nav.every(item=>Math.abs(item.y-bounds.nav[0].y)<1),`${lang}/${width}: Tournament or another navigation item wrapped onto a second row`);
         for(const item of bounds.nav)assert(item.y>=bounds.bar.y && item.bottom<=bounds.bar.bottom+1,`${lang}/${width}: navigation clipped vertically`);
       }
     }
-    await render(snapshots.en);await page.setViewportSize({width:1400,height:850});
+    await render(snapshots.en);await page.setViewportSize({width:800,height:560});
     await page.evaluate(()=>{window.registeredLabel=document.querySelector('#statregistered');window.tournamentLabel=document.querySelector('#stattournament');});
     for(let i=0;i<12;i++) {
       const next=structuredClone(snapshots.en);
@@ -79,7 +88,14 @@ const server = http.createServer((req,res) => {
       assert.equal(await page.locator('#statregistered').textContent(),`${200+i} registered in Lights Out`);
       assert.equal(await page.locator('#stattournament').textContent(),`${20+i} registered for tournament`);
       assert(await page.evaluate(()=>registeredLabel===document.querySelector('#statregistered')&&tournamentLabel===document.querySelector('#stattournament')),'refresh replaced registration labels');
+      assert(await page.evaluate(()=>{const items=[...document.querySelectorAll('.navitem')];return items.every(item=>Math.abs(item.getBoundingClientRect().y-items[0].getBoundingClientRect().y)<1);}), 'live refresh wrapped navigation');
     }
+    const tournamentClick=page.waitForRequest(req=>req.url().endsWith('/verb/set_view'));
+    await page.locator('.navitem[data-view="tournament"]').click();
+    assert.deepEqual((await tournamentClick).postDataJSON(),['tournament']);
+    const minimizeClick=page.waitForRequest(req=>req.url().endsWith('/window/minimize'));
+    await page.locator('[data-win="minimize"]').click();
+    await minimizeClick;
     for(const [registered,tournament] of [[0,0],[null,12],[51,null],[null,null]]) {
       const next=structuredClone(snapshots.en);
       next.status.players_registered=registered;next.status.tournament_registered=tournament;
@@ -93,8 +109,10 @@ const server = http.createServer((req,res) => {
     assert.equal(await page.locator('#stattournament').textContent(),'');
     await render({...snapshots.en,status:{...snapshots.en.status,players_registered:51,tournament_registered:12}});
     fs.mkdirSync(path.join(root,'build'),{recursive:true});
+    await page.screenshot({path:path.join(root,'build/client-topbar-minimum.png')});
+    await page.setViewportSize({width:893,height:560});
     await page.screenshot({path:path.join(root,'build/client-topbar.png')});
     assert.deepEqual(errors,[]);
-    console.log('Top bar: both registration totals, repeated updates, zero/unknown/offline states, seven languages and three window sizes passed.');
+    console.log('Top bar: single-row navigation, accessible Tournament/window buttons, both registration totals, repeated updates, zero/unknown/offline states, seven languages and six window sizes passed.');
   } finally {await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});

@@ -57,20 +57,14 @@ body {
   background: var(--ground);
   border-bottom: 1px solid var(--line-2);
 }
-/* Nav, then the counts. The gap used to hold the wordmark off the nav and was sized for that;
- * with the counts in its place it is the nav's own item spacing, so the readout reads as the
- * row's continuation rather than as a second group.
- *
- * min-width: 0 so that THIS is what yields when the bar is wider than the window - a nav item
- * wrapping is survivable, the window buttons being pushed off the edge is not (titlebar.css
- * .wincontrols). Whole nav items wrap on narrow windows; the header grows with them. */
+/* Navigation stays on one row, including Tournament. Smaller windows compact the
+ * spacing and stack the two registration totals within the same header below. */
 .brand-wrap { display: flex; flex: 1; align-items: center; gap: var(--sp-5); min-width: 0; }
 .nav {
   display: flex;
-  flex-wrap: wrap;
-  min-width: 0;
-  /* Preserve horizontal spacing, with a compact gap between wrapped nav rows. */
-  gap: 4px var(--sp-4);
+  flex: none;
+  flex-wrap: nowrap;
+  gap: var(--sp-4);
   font-family: var(--font-display);
   font-weight: 500;
   font-size: 12px;
@@ -81,8 +75,7 @@ body {
 .nav .navitem { padding-bottom: 3px; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
 .nav .navitem:hover { color: #fff; }
 .nav .navitem.active { color: #fff; border-bottom-color: var(--accent); }
-/* The service counts, in the bar just right of the nav. A thin rule separates them from the
- * last nav item so they read as a readout. The counts stay on one line while the nav can wrap. */
+/* Registration totals after navigation, separated by the existing thin rule. */
 .topstats {
   display: flex;
   align-items: center;
@@ -96,6 +89,13 @@ body {
 /* Emptied while the stream is down (core.js renderStatus), and an empty span must not leave a
  * gap the eye reads as a missing number. */
 .topstat:empty { display: none; }
+@media (max-width: 1400px) {
+  .brand-wrap { gap: var(--sp-3); }
+  .nav { gap: var(--sp-2); }
+  .topstats { flex-direction: column; align-items: flex-start; gap: 0; }
+  /* Align the second total with the first total's text, after the status dot. */
+  .topstats .topstat { margin-left: calc(8px + var(--sp-2)); }
+}
 .status-dot { display: flex; align-items: center; gap: var(--sp-2); font-size: 12px; color: var(--muted); }
 .status-dot .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .status-dot.ok .dot { background: var(--green); }

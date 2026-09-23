@@ -274,10 +274,10 @@ def test_the_bar_fits_the_smallest_window_it_can_be_given():
     (ui.css `zoom: var(--ui-scale)`, core.js applyScale). FIT_W is the layout width that zoom
     delivers, and it lives between two bounds that this asserts rather than trusts:
 
-      * at least as wide as the bar NEEDS. Measured with the webfont loaded, in every language:
-        en 1080, de 1102, fr 1105, es 1131, pt 1133, zh 850, ru 1185. 1133 covers six of the
-        seven; Russian has the longest nav there is and still wraps at the smallest window,
-        which is what it did before the counts were added too.
+      * at least as wide as the screens need. The header now compacts its spacing and stacks
+        the registration totals in smaller windows. The loaded-font browser regression in
+        test_registered_topbar_browser.cjs verifies single-row navigation in all seven
+        languages, including Russian, with large totals and visible window controls.
       * no wider than the smallest window divided by the zoom's floor. Past that the zoom stops
         and the bar is CLIPPED instead of scaled, which takes the close button off the edge.
     """
@@ -285,7 +285,7 @@ def test_the_bar_fits_the_smallest_window_it_can_be_given():
     core = _static("core.js")
     fit_w = int(re.search(r"var FIT_W = (\d+)", core).group(1))
     min_scale = float(re.search(r"var MIN_SCALE = ([\d.]+)", core).group(1))
-    assert fit_w >= 1133, "FIT_W no longer covers the bar six of the seven languages need"
+    assert fit_w >= 1133, "FIT_W no longer covers the screens' measured layout width"
     ceiling = WindowControl.MIN_W / min_scale
     assert fit_w <= ceiling, (
         "FIT_W %d is past %d: at the %dpx minimum window the zoom would clamp at %s and the "
