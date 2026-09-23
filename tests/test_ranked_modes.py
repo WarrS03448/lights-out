@@ -4,6 +4,21 @@ from tests.test_screen_bugreport import _panel
 from hub.live import LiveClient
 
 
+def test_one_person_party_blocks_duel_button_and_direct_find_action():
+    from hub.webui.screens.competitive import comp_snapshot
+    from hub.ranked_modes import strings
+    panel, session = _panel()
+    session.ranked_mode = 'BB1'
+    session.gamemode_installed = lambda: True
+    session.update_needed = lambda: None
+    session.party = {'code': 'ABCDEF', 'leader_id': session.me['steam_id'], 'members': [session.me]}
+    assert not comp_snapshot(session, panel)['can_find']
+    session.find_match()
+    assert session.phase == 'idle' and session.error == strings()['solo_only']
+    session.party = None
+    assert comp_snapshot(session, panel)['can_find']
+
+
 def test_selected_mode_stamps_requests_and_both_installed_versions():
     client = LiveClient('token', versions=lambda: {'BB5': '1.0.29', 'BB1': '1.0.0'})
     client.ranked_mode = 'BB1'

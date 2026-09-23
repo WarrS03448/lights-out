@@ -522,7 +522,7 @@ def comp_snapshot(session, panel) -> dict:
         "can_find": (session.is_party_leader() and session.gamemode_installed()
                      and not files_busy(panel)
                      and not banned_left and not outdated and not ranked_ban
-                     and (getattr(session, "ranked_mode", "BB5") != "BB1" or session.party_size() <= 1)),
+                     and (getattr(session, "ranked_mode", "BB5") != "BB1" or not session.party)),
         # None, or {what, hub, have_hub, mode, have_mode} plus the finished sentence. The JS
         # renders the sentence rather than assembling one, so the hub, the Tk window and a
         # refusal that came back from the service all say the same thing.

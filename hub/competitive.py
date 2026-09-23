@@ -43,7 +43,7 @@ from . import paths
 from . import sounds as sounds_mod
 from . import state as state_mod
 from .i18n import t
-from .ranked_modes import name as ranked_name
+from .ranked_modes import name as ranked_name, strings as ranked_strings
 from . import catalogue as catalogue_mod
 from .version import HUB_VERSION
 from .theme import (WHITE, BLACK, GREY, LINE, PANEL, PANEL_LINE, ACCENT, ACCENT_DARK,
@@ -1916,6 +1916,10 @@ class MockSession(Session):
             self.error = t("comp_browser_required")
             self._changed()
             return
+        if getattr(self, "ranked_mode", COMPETITIVE_MODE_ID) == "BB1" and self.party:
+            self.error = ranked_strings()["solo_only"]
+            self._changed()
+            return
         if not self.is_party_leader():
             return
         # BODYCAM HAS TO BE CLOSED TO QUEUE. The hub opens the game itself when the match is
@@ -3371,6 +3375,11 @@ class LiveSession(MockSession):
             self.penalty_count = int(body.get("count") or self.penalty_count)
             self.penalty_next = int(body.get("next_seconds") or self.penalty_next)
             self.error = t("comp_queue_banned", time=format_clock(seconds))
+            self._changed()
+            return
+        if body.get("solo_only"):
+            self.phase = "idle"
+            self.error = ranked_strings()["solo_only"]
             self._changed()
             return
         if status in self.RETRY_STATUSES and attempt < len(self.JOIN_RETRY_DELAYS):

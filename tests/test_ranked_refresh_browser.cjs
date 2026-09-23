@@ -88,9 +88,14 @@ state.settings.network={region:'NA',cross_region:false,status:'ready',locked:fal
   assert.equal(await page.locator('body > .ui-overlay').count(),0);
   state.view='competitive';state.comp.phase='idle';state.comp.installed=true;state.comp.mode_id='BB1';
   state.comp.ranked_ban={reason:'test'};state.comp.mode_strings={banned:'Ranked restriction',solo_only:'Solo players only'};
-  state.party.size=2;await page.evaluate(s=>__hub.onState(s),state);
+  state.party.size=1;state.party.in_party=true;state.comp.can_find=false;await page.evaluate(s=>__hub.onState(s),state);
   assert.ok((await page.locator('.hero-action').textContent()).includes('Solo players only'));
   assert.ok((await page.locator('.hero-action').textContent()).includes('Ranked restriction'));
+  assert.equal(await page.locator('.hero-action .btn-find').isDisabled(),true);
+  state.comp.ranked_ban=null;state.party.in_party=false;state.comp.can_find=true;
+  await page.evaluate(s=>__hub.onState(s),state);
+  assert.equal(await page.locator('.hero-action .btn-find').isEnabled(),true);
+  assert.equal((await page.locator('.hero-action').textContent()).includes('Solo players only'),false);
   state.auth={signed_in:false,phase:'signed_out',account_step:'login',account_busy:false};state.comp.error='';
   await page.evaluate(s=>__hub.onState(s),state);
   const email=page.locator('.account-form input[name="email"]');await email.fill('draft@example.test');

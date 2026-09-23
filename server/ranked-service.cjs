@@ -4,11 +4,13 @@ const live=require('./live.cjs'),identity=require('./player-identity.cjs'),modes
 function create(options){
   const sharedNetworkRegistry=new (require('./network.cjs').Registry)();
   const engines=new Map();let recovered=false;
-  const guard={canEnter(mode,ids,games){
+  const guard={
+    inParty(id){return engines.get('BB5')._internals.partyOf.has(id);},
+    canChangeParty(ids){return !engines.get('BB1').activity().some(a=>ids.includes(a.player_id));},
+    canEnter(mode,ids,games){
     if(!recovered)return false;
     if(mode==='BB1'){
-      const I=engines.get('BB5')._internals;
-      if(ids.some(id=>I.parties.get(I.partyOf.get(id))?.members.length>1))return false;
+      if(ids.some(id=>guard.inParty(id)))return false;
     }
     for(const [other,engine]of engines){
       if(other===mode)continue;

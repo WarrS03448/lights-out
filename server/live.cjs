@@ -7833,6 +7833,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       return sendJson(res, 200, { ok: true, code: existing });
     }
     if (inMatch.has(account.player_id)) return sendJson(res,409,{ok:false,error:'Finish your match before changing parties.'});
+    if(competitionGuard?.canChangeParty?.([account.player_id])===false)
+      return sendJson(res,409,{ok:false,error:'Leave the 1v1 queue or finish your match before joining a party.'});
     cancelQueuedFor([account.player_id]);
     const code = freshPartyCode();
     parties.set(code, { code, leaderId: account.player_id, members: [account.player_id], created: Date.now() });
@@ -7863,6 +7865,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if ([steamId,...party.members].some(id => inMatch.has(id))) {
       return {status:409,body:{ok:false,error:'Finish your match before changing parties.'}};
     }
+    if(competitionGuard?.canChangeParty?.([steamId,...party.members])===false)
+      return {status:409,body:{ok:false,error:'Leave the 1v1 queue or finish your match before joining a party.'}};
     cancelQueuedFor([steamId,...party.members]);
     // A join is also a switch: leave whatever party you were in first, so partyOf stays 1:1.
     const prev = partyOf.get(steamId);
@@ -8260,6 +8264,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const intent = {};
     queueIntents.set(account.player_id,intent);
     try {
+    if(duel&&(partyOf.has(account.player_id)||competitionGuard?.inParty?.(account.player_id)))
+      return sendJson(res,409,{ok:false,solo_only:true,error:'Leave your party before entering the 1v1 queue.'});
     if (inMatch.has(account.player_id)) {
       return sendJson(res, 409, { ok: false, error: 'You are already in a match.' });
     }
@@ -8381,6 +8387,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         error:'Every member of a mixed-region party must allow cross-region matchmaking in Settings.'});
     }
 
+    if(duel&&(partyOf.has(account.player_id)||competitionGuard?.inParty?.(account.player_id)))
+      return sendJson(res,409,{ok:false,solo_only:true,error:'Leave your party before entering the 1v1 queue.'});
     const queuedUnit = queueOf.get(account.player_id);
     if (queuedUnit && (queuedUnit.code !== code || queuedUnit.members.length !== members.length
         || members.some(id=>queueOf.get(id)!==queuedUnit))) {

@@ -837,12 +837,12 @@
         box.appendChild(el("div", "hero-ready",
                            comp.mode_listed ? t("comp_gate_body", {mode: installMode}) : t("comp_gate_waiting")));
         if (comp.ranked_ban) { box.appendChild(el("div", "hero-error", (comp.mode_strings||{}).banned)); }
-        if (comp.mode_id === "BB1" && party.size > 1) { box.appendChild(el("div", "hero-error", (comp.mode_strings||{}).solo_only)); }
+        if (comp.mode_id === "BB1" && party.in_party) { box.appendChild(el("div", "hero-error", (comp.mode_strings||{}).solo_only)); }
         if (comp.error) { box.appendChild(el("div", "hero-error", comp.error)); }
         return box;
       }
       if (comp.ranked_ban) { box.appendChild(el("div", "hero-error", (comp.mode_strings||{}).banned)); }
-      if (comp.mode_id === "BB1" && party.size > 1) { box.appendChild(el("div", "hero-error", (comp.mode_strings||{}).solo_only)); }
+      if (comp.mode_id === "BB1" && party.in_party) { box.appendChild(el("div", "hero-error", (comp.mode_strings||{}).solo_only)); }
       var isLeader = comp.is_leader;
       if (isLeader) {
         var find = btn("btn-find", t("comp_find_match"), function () { call("find_match"); });

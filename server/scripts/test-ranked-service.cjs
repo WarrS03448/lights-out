@@ -3,8 +3,38 @@ const {test}=require('node:test');const assert=require('node:assert/strict');
 process.env.NODE_ENV='test';process.env.COMP_NETWORK_TEST_BYPASS='1';
 const ranked=require('../ranked-service.cjs');
 const A='76561198000000001',B='76561198000000002';
-function make(){return ranked.create({prefix:'dual-test:',whoami:async()=>({steam_id:A}),bearer:()=> 'token',
-  sendJson:(res,status,body)=>Object.assign(res,{status,body}),badRequest(){},readBody:async()=>Buffer.from('{}')});}
+function make(options={}){return ranked.create({prefix:'dual-test:',whoami:async token=>({steam_id:token}),bearer:req=>req.token||A,
+  sendJson:(res,status,body)=>Object.assign(res,{status,body}),badRequest(){},readBody:async req=>Buffer.from(JSON.stringify(req.body||{})),...options});}
+async function request(s,id,path,mode='BB1',body={}){
+ const res={};await s.route({token:id,body,headers:{'x-ranked-mode':mode}},res,'POST',path,new URL('http://test'+path));return res;
+}
+
+test('one-person party blocks BB1 through the API until the player leaves it',async t=>{
+ const s=make();t.after(()=>s.shutdown());
+ assert.equal((await request(s,A,'/api/party/create')).status,200);
+ const denied=await request(s,A,'/api/queue/join');assert.equal(denied.status,409);assert.equal(denied.body.solo_only,true);
+ assert.equal(s.forMode('BB1')._internals.queueOf.has(A),false);
+ await request(s,A,'/api/party/leave');assert.equal((await request(s,A,'/api/queue/join')).status,200);
+});
+
+test('queued BB1 player cannot create, join or accept an invite into a party',async t=>{
+ const s=make();t.after(()=>s.shutdown());const I=s.forMode('BB5')._internals;
+ const party=await request(s,B,'/api/party/create');assert.equal((await request(s,A,'/api/queue/join')).status,200);
+ assert.equal((await request(s,A,'/api/party/create')).status,409);
+ assert.equal((await request(s,A,'/api/party/join','BB1',{code:party.body.code})).status,409);
+ I.partyInvites.set(A,new Map([[B,{code:party.body.code,expires:Date.now()+60000}]]));
+ assert.equal(I.acceptPartyInvite(A,{from:B}).ok,false);
+ assert.equal(I.partyOf.has(A),false);assert(s.forMode('BB1')._internals.queueOf.has(A));
+ await request(s,A,'/api/queue/leave');assert.equal(I.acceptPartyInvite(A,{from:B}).ok,true);
+});
+
+test('creating a party while BB1 admission waits cannot race into the queue',async t=>{
+ let checks=0,release,entered;const waiting=new Promise(resolve=>entered=resolve),hold=new Promise(resolve=>release=resolve);
+ const s=make({whoami:async token=>{if(++checks===2){entered();await hold;}return {steam_id:token};}});t.after(()=>s.shutdown());
+ const joining=request(s,A,'/api/queue/join');await waiting;
+ assert.equal((await request(s,A,'/api/party/create')).status,200);release();
+ assert.equal((await joining).status,409);assert.equal(s.forMode('BB1')._internals.queueOf.has(A),false);
+});
 test('one account cannot queue both ladders and can switch after cancelling',async t=>{
   const s=make();t.after(()=>s.shutdown());await s._internals.ensureRecovery();
   const a=s.forMode('BB5')._internals,b=s.forMode('BB1')._internals;
