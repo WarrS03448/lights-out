@@ -37,6 +37,23 @@ state.settings.network={region:'NA',cross_region:false,status:'ready',locked:fal
     }
    }
   }
+  state.comp.installed=true;state.comp.phase='queued';state.comp.mode_selectable=false;
+  for(const [lang,strings] of Object.entries(fixture.languages)){
+   state.lang=lang;state.strings=strings;
+   for(const mode of ['BB1','BB5']){
+    state.comp.mode_id=mode;
+    for(let n=0;n<3;n++){
+     state.comp.queue.seconds=10+n;state.comp.queue.size=3+n;
+     await page.evaluate(s=>__hub.onState(s),state);
+     const text=await page.locator('.search-meta').textContent();
+     assert(text.includes(mode==='BB1'?'Bodybomb 1v1':'Bodybomb 5v5'),lang+' '+mode+' '+text);
+     assert(text.includes(mode==='BB1'?'2':'10'),lang+' '+mode+' '+text);
+     assert(!text.includes(mode==='BB1'?'5v5':'1v1'),lang+' '+mode+' '+text);
+     assert.equal(await page.locator('.search-head .timer').textContent(),'0:'+(10+n));
+    }
+   }
+  }
+  state.comp.phase='idle';state.comp.mode_selectable=true;
   state.lang='en';state.strings=fixture.languages.en;state.comp.installed=true;state.comp.mode_id='BB1';
   await page.evaluate(s=>__hub.onState(s),state);
   for(const width of [800,1050,1440]){

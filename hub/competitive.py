@@ -6301,7 +6301,8 @@ class CompetitivePanel:
         # the queue clock ticks every second; keep it moving without a rebuild (bug 1 + bug 2)
         self._live(clock, lambda: clock.config(
             text=f"{self.session.queue_seconds // 60}:{self.session.queue_seconds % 60:02d}"))
-        tk.Label(inner, text=t("comp_queue_mode"), bg=WHITE, fg=GREY).pack()
+        queue_key = "comp_queue_mode_duel" if getattr(self.session, "ranked_mode", COMPETITIVE_MODE_ID) == "BB1" else "comp_queue_mode"
+        tk.Label(inner, text=t(queue_key), bg=WHITE, fg=GREY).pack()
         if self.session.queue_position:
             pos = tk.Label(inner, text=t("comp_queue_position", n=self.session.queue_position,
                                          m=max(self.session.queue_size, self.session.queue_position)),

@@ -397,6 +397,7 @@ STRINGS = {
         "comp_searching": "Searching for a match",
         "comp_search_keep_closed": "Keep Bodycam closed while searching for a match.",
         "comp_queue_mode": "Bodybomb 5v5 · 10 players",
+        "comp_queue_mode_duel": "Bodybomb 1v1 · 2 players",
         "comp_cancel": "Cancel",
         "comp_found_title": "Match found",
         # The match-found cue can be silenced; a streamer should not be made to
@@ -830,6 +831,7 @@ STRINGS = {
         "comp_searching": "Suche nach einem Match",
         "comp_search_keep_closed": "Lass Bodycam während der Matchsuche geschlossen.",
         "comp_queue_mode": "Bodybomb 5v5 · 10 Spieler",
+        "comp_queue_mode_duel": "Bodybomb 1v1 · 2 Spieler",
         "comp_cancel": "Abbrechen",
         "comp_found_title": "Match gefunden",
         # The match-found cue can be silenced; a streamer should not be made to
@@ -1261,6 +1263,7 @@ STRINGS = {
         "comp_searching": "Buscando partida",
         "comp_search_keep_closed": "Mantén Bodycam cerrado mientras buscas partida.",
         "comp_queue_mode": "Bodybomb 5v5 · 10 jugadores",
+        "comp_queue_mode_duel": "Bodybomb 1v1 · 2 jugadores",
         "comp_cancel": "Cancelar",
         "comp_found_title": "Partida encontrada",
         # The match-found cue can be silenced; a streamer should not be made to
@@ -1692,6 +1695,7 @@ STRINGS = {
         "comp_searching": "Recherche d'un match",
         "comp_search_keep_closed": "Garde Bodycam fermé pendant la recherche d'un match.",
         "comp_queue_mode": "Bodybomb 5v5 · 10 joueurs",
+        "comp_queue_mode_duel": "Bodybomb 1v1 · 2 joueurs",
         "comp_cancel": "Annuler",
         "comp_found_title": "Match trouvé",
         # The match-found cue can be silenced; a streamer should not be made to
@@ -2123,6 +2127,7 @@ STRINGS = {
         "comp_searching": "Procurando uma partida",
         "comp_search_keep_closed": "Mantenha o Bodycam fechado enquanto procura uma partida.",
         "comp_queue_mode": "Bodybomb 5v5 · 10 jogadores",
+        "comp_queue_mode_duel": "Bodybomb 1v1 · 2 jogadores",
         "comp_cancel": "Cancelar",
         "comp_found_title": "Partida encontrada",
         # The match-found cue can be silenced; a streamer should not be made to
@@ -2554,6 +2559,7 @@ STRINGS = {
         "comp_searching": "Поиск матча",
         "comp_search_keep_closed": "Не открывайте Bodycam во время поиска матча.",
         "comp_queue_mode": "Bodybomb 5v5 · 10 игроков",
+        "comp_queue_mode_duel": "Bodybomb 1v1 · 2 игрока",
         "comp_cancel": "Отмена",
         "comp_found_title": "Матч найден",
         # The match-found cue can be silenced; a streamer should not be made to
@@ -2985,6 +2991,7 @@ STRINGS = {
         "comp_searching": "正在寻找比赛",
         "comp_search_keep_closed": "寻找比赛时，请保持 Bodycam 关闭。",
         "comp_queue_mode": "Bodybomb 5v5 · 10 名玩家",
+        "comp_queue_mode_duel": "Bodybomb 1v1 · 2 名玩家",
         "comp_cancel": "取消",
         "comp_found_title": "找到比赛",
         # The match-found cue can be silenced; a streamer should not be made to

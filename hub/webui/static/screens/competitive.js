@@ -925,7 +925,7 @@
       box.appendChild(bar);
       box.appendChild(el("div", "search-reminder", t("comp_search_keep_closed")));
       var meta = el("div", "search-meta");
-      meta.appendChild(el("span", "", t("comp_queue_mode")));
+      meta.appendChild(el("span", "", t(comp.mode_id === "BB1" ? "comp_queue_mode_duel" : "comp_queue_mode")));
       if (comp.party_size > 1) {
         meta.appendChild(el("span", "", t("comp_party_queue_note", { n: comp.party_size })));
       }
