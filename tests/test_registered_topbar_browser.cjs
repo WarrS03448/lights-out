@@ -21,7 +21,9 @@ for lang in i18n.CODES:
     result[lang] = state_snapshot(session, panel)
 print(json.dumps(result))
 `], {cwd:root, encoding:'utf8', maxBuffer:8*1024*1024}));
-let state = snapshots.en;
+// Deliver a changed snapshot after all screen/overlay scripts have loaded, so
+// startup fetch timing cannot leave the message control out of the layout test.
+let state = {...snapshots.en,status:{...snapshots.en.status,players_registered:0}};
 const mime = {'.js':'text/javascript', '.css':'text/css', '.html':'text/html', '.woff2':'font/woff2', '.svg':'image/svg+xml'};
 const server = http.createServer((req,res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -54,6 +56,8 @@ const server = http.createServer((req,res) => {
     await page.locator('#stattournament').waitFor();
     await page.evaluate(()=>document.fonts.ready);
     async function render(next) {state=structuredClone(next);await page.evaluate(s=>window.__hub.onState(s),state);}
+    await render(snapshots.en);
+    await page.locator('#messages-toggle').waitFor({state:'visible'});
     assert.equal(await page.locator('#statqueued, #statlive').count(),0);
     assert.equal(await page.locator('#statregistered').textContent(),'1234567 registered in Lights Out');
     assert.equal(await page.locator('#stattournament').textContent(),'1234 registered for tournament');
@@ -61,20 +65,21 @@ const server = http.createServer((req,res) => {
       await render(snapshot);
       assert.equal(await page.locator('#statregistered').textContent(),snapshot.strings.topbar_registered.replace('{n}','1234567'));
       assert.equal(await page.locator('#stattournament').textContent(),snapshot.strings.topbar_tournament.replace('{n}','1234'));
-      for(const [width,height] of [[1600,850],[1401,760],[1400,760],[1200,760],[893,560],[800,560]]) {
+      for(const [width,height] of [[1600,850],[1401,760],[1400,760],[1200,760],[1135,760],[893,560],[815,560],[805,560],[800,560]]) {
         await page.setViewportSize({width,height});
         await page.evaluate(async()=>{await document.fonts.ready;await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);});
         const bounds=await page.evaluate(()=>{
           const box=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return {x:r.x,right:r.right,y:r.y,bottom:r.bottom};};
           return {registered:box('#statregistered'),tournament:box('#stattournament'),mail:box('#messages-toggle'),controls:box('.wincontrols'),bar:box('#topbar'),nav:[...document.querySelectorAll('.navitem')].map(e=>{const r=e.getBoundingClientRect();return {x:r.x,right:r.right,y:r.y,bottom:r.bottom};})};
         });
-        assert(bounds.registered.right<=bounds.tournament.x || bounds.registered.bottom<=bounds.tournament.y+1,`${lang}/${width}: counts overlap each other`);
+        assert(Math.abs(bounds.registered.y-bounds.tournament.y)<1,`${lang}/${width}: registration totals stack instead of staying side by side`);
+        assert(bounds.registered.right<=bounds.tournament.x,`${lang}/${width}: counts overlap each other`);
         assert(bounds.nav.at(-1).right<=bounds.mail.x,`${lang}/${width}: navigation overlaps messages`);
         assert(bounds.mail.right<=Math.min(bounds.registered.x,bounds.tournament.x),`${lang}/${width}: messages overlap counts`);
         assert(bounds.registered.right<=bounds.controls.x,`${lang}/${width}: Lights Out count overlaps controls`);
         assert(bounds.tournament.right<=bounds.controls.x,`${lang}/${width}: counts overlap controls`);
         assert(bounds.registered.x>=0,`${lang}/${width}: registration count clipped`);
-        assert(bounds.controls.right<=width+1,`${lang}/${width}: window controls clipped`);
+        assert(bounds.controls.right<=width+1,`${lang}/${width}: window controls clipped at ${bounds.controls.right}px`);
         assert(bounds.nav.every(item=>Math.abs(item.y-bounds.nav[0].y)<1),`${lang}/${width}: Tournament or another navigation item wrapped onto a second row`);
         for(const item of bounds.nav)assert(item.y>=bounds.bar.y && item.bottom<=bounds.bar.bottom+1,`${lang}/${width}: navigation clipped vertically`);
       }
@@ -88,6 +93,7 @@ const server = http.createServer((req,res) => {
       assert.equal(await page.locator('#statregistered').textContent(),`${200+i} registered in Lights Out`);
       assert.equal(await page.locator('#stattournament').textContent(),`${20+i} registered for tournament`);
       assert(await page.evaluate(()=>registeredLabel===document.querySelector('#statregistered')&&tournamentLabel===document.querySelector('#stattournament')),'refresh replaced registration labels');
+      assert(await page.evaluate(()=>{const r=document.querySelector('#statregistered').getBoundingClientRect();const t=document.querySelector('#stattournament').getBoundingClientRect();return Math.abs(r.y-t.y)<1 && r.right<=t.x;}), 'live refresh stacked or overlapped registration totals');
       assert(await page.evaluate(()=>{const items=[...document.querySelectorAll('.navitem')];return items.every(item=>Math.abs(item.getBoundingClientRect().y-items[0].getBoundingClientRect().y)<1);}), 'live refresh wrapped navigation');
     }
     const tournamentClick=page.waitForRequest(req=>req.url().endsWith('/verb/set_view'));
@@ -113,6 +119,6 @@ const server = http.createServer((req,res) => {
     await page.setViewportSize({width:893,height:560});
     await page.screenshot({path:path.join(root,'build/client-topbar.png')});
     assert.deepEqual(errors,[]);
-    console.log('Top bar: single-row navigation, accessible Tournament/window buttons, both registration totals, repeated updates, zero/unknown/offline states, seven languages and six window sizes passed.');
+    console.log('Top bar: single-row navigation and side-by-side totals, accessible Tournament/window buttons, repeated updates, zero/unknown/offline states, seven languages and nine window sizes passed.');
   } finally {await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});

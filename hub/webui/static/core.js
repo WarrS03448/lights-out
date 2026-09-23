@@ -44,8 +44,8 @@
   // Find Match and its readiness note without scrolling.
   //
   // Keep the measured scale ceiling: 800px minimum / 0.7 = 1142 logical px.
-  // Navigation stays on one row. Smaller windows use tighter header spacing and
-  // stacked registration totals (ui.css), including the longest translations.
+  // Navigation and registration totals stay on one row. Smaller windows use
+  // compact header spacing (ui.css), including the longest translations.
   // Browser checks cover loaded webfonts and the real window controls.
   //
   // DOWN ONLY (the Math.min with 1). Zooming past 1 would shrink the LOGICAL viewport below the

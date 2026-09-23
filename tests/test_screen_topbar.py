@@ -274,8 +274,8 @@ def test_the_bar_fits_the_smallest_window_it_can_be_given():
     (ui.css `zoom: var(--ui-scale)`, core.js applyScale). FIT_W is the layout width that zoom
     delivers, and it lives between two bounds that this asserts rather than trusts:
 
-      * at least as wide as the screens need. The header now compacts its spacing and stacks
-        the registration totals in smaller windows. The loaded-font browser regression in
+      * at least as wide as the screens need. The header compacts its spacing while keeping
+        registration totals side by side. The loaded-font browser regression in
         test_registered_topbar_browser.cjs verifies single-row navigation in all seven
         languages, including Russian, with large totals and visible window controls.
       * no wider than the smallest window divided by the zoom's floor. Past that the zoom stops

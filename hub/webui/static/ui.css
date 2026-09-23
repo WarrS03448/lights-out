@@ -57,8 +57,8 @@ body {
   background: var(--ground);
   border-bottom: 1px solid var(--line-2);
 }
-/* Navigation stays on one row, including Tournament. Smaller windows compact the
- * spacing and stack the two registration totals within the same header below. */
+/* Navigation and both registration totals stay on one row. Smaller windows use
+ * compact spacing without wrapping, stacking or hiding any labels. */
 .brand-wrap { display: flex; flex: 1; align-items: center; gap: var(--sp-5); min-width: 0; }
 .nav {
   display: flex;
@@ -78,6 +78,8 @@ body {
 /* Registration totals after navigation, separated by the existing thin rule. */
 .topstats {
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--sp-3);
   flex: none;
@@ -90,11 +92,11 @@ body {
  * gap the eye reads as a missing number. */
 .topstat:empty { display: none; }
 @media (max-width: 1400px) {
-  .brand-wrap { gap: var(--sp-3); }
-  .nav { gap: var(--sp-2); }
-  .topstats { flex-direction: column; align-items: flex-start; gap: 0; }
-  /* Align the second total with the first total's text, after the status dot. */
-  .topstats .topstat { margin-left: calc(8px + var(--sp-2)); }
+  #topbar { padding-left: var(--sp-3); }
+  .brand-wrap { gap: var(--sp-1); }
+  .nav { gap: var(--sp-2); letter-spacing: 0; }
+  .topstats { gap: var(--sp-2); padding-left: var(--sp-2); }
+  .topstats .status-dot, .topstats .topstat { font-size: 11px; }
 }
 .status-dot { display: flex; align-items: center; gap: var(--sp-2); font-size: 12px; color: var(--muted); }
 .status-dot .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
