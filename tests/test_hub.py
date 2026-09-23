@@ -5317,10 +5317,10 @@ def test_a_missing_pack_is_worded_as_an_install_not_an_update():
     from hub import i18n
     i18n.set_language("en")
     mine = {"what": "mode", "missing_mode": True, "need_hub": "1.0.0", "need_mode": "1.0.7"}
-    assert C.outdated_line(mine) == i18n.t("comp_gate_body")
+    assert C.outdated_line(mine) == i18n.t("comp_gate_body", mode="Bodybomb 5v5")
     # somebody ELSE in the party is missing it: "install Bodybomb 5v5" is about the wrong person
     theirs = dict(mine, who="76561198000000002")
-    assert C.outdated_line(theirs) != i18n.t("comp_gate_body")
+    assert C.outdated_line(theirs) != i18n.t("comp_gate_body", mode="Bodybomb 5v5")
     # an ordinary out-of-date pack is still worded as an update
     assert "1.0.7" in C.outdated_line({"what": "mode", "need_mode": "1.0.7"})
 
@@ -5357,7 +5357,7 @@ def test_a_party_mates_version_is_not_worded_as_yours():
 
     # every wording has a party twin, including the ABSENT-pack one
     assert "Wario" in C.party_outdated_line({"what": "mode", "missing_mode": True}, "Wario")
-    assert C.party_outdated_line({"what": "mode", "missing_mode": True}, "Wario")         != i18n.t("comp_gate_body")
+    assert C.party_outdated_line({"what": "mode", "missing_mode": True}, "Wario")         != i18n.t("comp_gate_body", mode="Bodybomb 5v5")
     both = C.party_outdated_line({"what": "both", "need_hub": "2.3.38", "need_mode": "1.0.14"},
                                  "Wario")
     assert "2.3.38" in both and "1.0.14" in both

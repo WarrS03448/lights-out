@@ -43,6 +43,7 @@ from . import paths
 from . import sounds as sounds_mod
 from . import state as state_mod
 from .i18n import t
+from .ranked_modes import name as ranked_name
 from . import catalogue as catalogue_mod
 from .version import HUB_VERSION
 from .theme import (WHITE, BLACK, GREY, LINE, PANEL, PANEL_LINE, ACCENT, ACCENT_DARK,
@@ -284,7 +285,7 @@ def format_clock(seconds) -> str:
     return "%d:%02d" % (seconds // 60, seconds % 60)
 
 
-def outdated_line(stale) -> str:
+def outdated_line(stale, mode_id=COMPETITIVE_MODE_ID) -> str:
     """The one sentence that explains a queue shut by a version, wherever it is shown.
 
     `stale` is an `update_needed()` dict, or the server's own 426 body - they carry the same
@@ -298,7 +299,7 @@ def outdated_line(stale) -> str:
     # about SOMEBODY ELSE in the party, and "install Bodybomb 5v5" read by a leader who already
     # has it is a sentence about the wrong person.
     if stale.get("missing_mode") and not stale.get("who"):
-        return t("comp_gate_body")
+        return t("comp_gate_body", mode=ranked_name(mode_id))
     what = str(stale.get("what") or "hub")
     # SAME VERSION, DIFFERENT RULES. "Update it to 1.0.15" read by somebody who already has 1.0.15
     # is a sentence that makes the hub look broken, and it is the exact case a rules override
@@ -1937,7 +1938,7 @@ class MockSession(Session):
         # (the gate screen replaces the button) - the web UI's hero did, which is the bug.
         # Live only: the preview exists to be clicked through with nothing installed.
         if getattr(self, "live", False) and not self.gamemode_installed():
-            self.error = t("comp_gate_body")
+            self.error = t("comp_gate_body", mode=ranked_name(getattr(self, "ranked_mode", COMPETITIVE_MODE_ID)))
             self._changed()
             return
         # Behind the release the service is publishing: the join would be refused anyway, so say
@@ -1945,7 +1946,7 @@ class MockSession(Session):
         # idle screen's card has already said this; the button being disabled is the same test.
         stale = self.update_needed()
         if stale:
-            self.error = outdated_line(stale)
+            self.error = outdated_line(stale, getattr(self, "ranked_mode", COMPETITIVE_MODE_ID))
             self._changed()
             return
         self.reset_match()
@@ -3344,7 +3345,7 @@ class LiveSession(MockSession):
             who = str(body.get("who") or "")
             self.error = (party_outdated_line(body, self.party_member_name(who))
                           if who and who != (self.me or {}).get("steam_id")
-                          else outdated_line(body))
+                          else outdated_line(body, getattr(self, "ranked_mode", COMPETITIVE_MODE_ID)))
             self._changed()
             return
         if status == 403 and body.get("banned"):
@@ -5927,16 +5928,16 @@ class CompetitivePanel:
     # ------------------------------------------------- gate: gamemode not installed
     def _draw_gate(self):
         inner = self._centre()
-        tk.Label(inner, text=t("comp_gate_title"), bg=WHITE, fg=BLACK,
+        tk.Label(inner, text=t("comp_gate_title", mode=ranked_name(getattr(self.session, "ranked_mode", COMPETITIVE_MODE_ID))), bg=WHITE, fg=BLACK,
                  font=self.f_sub).pack(pady=(0, 6))
-        tk.Label(inner, text=t("comp_gate_body"), bg=WHITE, fg=GREY, wraplength=520,
+        tk.Label(inner, text=t("comp_gate_body", mode=ranked_name(getattr(self.session, "ranked_mode", COMPETITIVE_MODE_ID))), bg=WHITE, fg=GREY, wraplength=520,
                  justify="center").pack(pady=(0, 14))
         listed = any(e.get("id") == getattr(self.session, "ranked_mode", COMPETITIVE_MODE_ID)
                      for e in ((self.app.catalogue or {}).get("gamemodes") or []))
         if not listed:
             tk.Label(inner, text=t("comp_gate_waiting"), bg=WHITE, fg=GREY).pack()
             return
-        self._button(inner, t("comp_gate_install"), self._install_gamemode, primary=True,
+        self._button(inner, t("comp_gate_install", mode=ranked_name(getattr(self.session, "ranked_mode", COMPETITIVE_MODE_ID))), self._install_gamemode, primary=True,
                      state="disabled" if self.app.busy else "normal").pack()
 
     def _install_gamemode(self):

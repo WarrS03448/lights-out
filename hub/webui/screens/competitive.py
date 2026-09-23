@@ -526,7 +526,7 @@ def comp_snapshot(session, panel) -> dict:
         # None, or {what, hub, have_hub, mode, have_mode} plus the finished sentence. The JS
         # renders the sentence rather than assembling one, so the hub, the Tk window and a
         # refusal that came back from the service all say the same thing.
-        "outdated": (dict(outdated, line=outdated_line(outdated))
+        "outdated": (dict(outdated, line=outdated_line(outdated, getattr(session, "ranked_mode", COMPETITIVE_MODE_ID)))
                      if outdated else None),
         "party_size": session.party_size(),
         "queue": {

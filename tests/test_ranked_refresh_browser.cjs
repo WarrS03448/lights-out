@@ -2,8 +2,9 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {execFileSync}=require('node:child_process'),{chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');
-const state=JSON.parse(execFileSync(process.env.HUB_TEST_PYTHON||'python',['-c',
- 'import json; from tests.test_hub import _web_panel; from hub.webui.snapshot import state_snapshot; p,s=_web_panel(); print(json.dumps(state_snapshot(s,p)))'],{cwd:root,encoding:'utf8'}));
+const fixture=JSON.parse(execFileSync(process.env.HUB_TEST_PYTHON||'python',['-c',
+ 'import json; from tests.test_hub import _web_panel; from hub.webui.snapshot import state_snapshot,strings_for; from hub.i18n import CODES; p,s=_web_panel(); print(json.dumps(dict(state=state_snapshot(s,p),languages={lang:strings_for(lang) for lang in CODES})))'],{cwd:root,encoding:'utf8'}));
+const state=fixture.state;
 state.view='competitive';state.update=null;state.gamemode_update=null;
 state.auth.signed_in=true;state.auth.player_id='00000000-0000-4000-8000-000000000010';
 state.comp.phase='idle';state.comp.installed=true;state.comp.mode_id='BB1';state.comp.mode_selectable=true;
@@ -22,6 +23,22 @@ state.settings.network={region:'NA',cross_region:false,status:'ready',locked:fal
    return fs.existsSync(file)?route.fulfill({path:file}):route.fulfill({status:404,body:''});
   });
   await page.goto('http://hub.test/');await page.waitForSelector('#comp-network-region');
+  state.comp.installed=false;state.comp.mode_listed=true;
+  for(const [lang,strings] of Object.entries(fixture.languages)){
+   state.lang=lang;state.strings=strings;
+   for(const mode of ['BB1','BB5']){
+    state.comp.mode_id=mode;
+    for(let n=0;n<3;n++){
+     state.comp.queue_seconds++;await page.evaluate(s=>__hub.onState(s),state);
+     const expected=mode==='BB1'?'Bodybomb 1v1':'Bodybomb 5v5',other=mode==='BB1'?'Bodybomb 5v5':'Bodybomb 1v1';
+     for(const selector of ['.hero-action .btn-find','.hero-action .hero-ready']){
+      const text=await page.locator(selector).textContent();assert(text.includes(expected),lang+' '+mode+' '+text);assert(!text.includes(other));
+     }
+    }
+   }
+  }
+  state.lang='en';state.strings=fixture.languages.en;state.comp.installed=true;state.comp.mode_id='BB1';
+  await page.evaluate(s=>__hub.onState(s),state);
   for(const width of [800,1050,1440]){
    await page.setViewportSize({width,height:720});
    const picker=page.locator('#comp-network-region');await picker.focus();await picker.press('Alt+ArrowDown');

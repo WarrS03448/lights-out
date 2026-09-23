@@ -1,6 +1,10 @@
 """Shared client copy for the two independent Bodybomb ladders."""
 from . import i18n
 
+
+def name(mode_id):
+    return "Bodybomb 1v1" if mode_id == "BB1" else "Bodybomb 5v5"
+
 _COPY = {
     "en": ("Concede", "Concede this match? You will receive a loss and your opponent a win.", "Solo queue only. Leave your party to enter 1v1.", "This ranked mode is unavailable while your ban is active."),
     "de": ("Aufgeben", "Dieses Match aufgeben? Du erhältst eine Niederlage und dein Gegner einen Sieg.", "Nur Solo-Suche. Verlasse deine Gruppe für 1v1.", "Dieser Ranglistenmodus ist während deiner Sperre nicht verfügbar."),

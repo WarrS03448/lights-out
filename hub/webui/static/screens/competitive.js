@@ -825,8 +825,9 @@
       // button takes Find match's PLACE - the same shape, because it is the one thing to press
       // here - and comp.can_find is false besides.
       if (!comp.installed) {
+        var installMode = comp.mode_id === "BB1" ? "Bodybomb 1v1" : "Bodybomb 5v5";
         if (comp.mode_listed) {
-          box.appendChild(btn("btn-find", t("comp_gate_install"), function () {
+          box.appendChild(btn("btn-find", t("comp_gate_install", {mode: installMode}), function () {
             call("gamemode_install", comp.mode_id);
             // The progress bar for that job lives on the Gamemodes screen, so go and watch it
             // there rather than leaving this panel sitting still while the pak is rebuilt.
@@ -834,7 +835,7 @@
           }));
         }
         box.appendChild(el("div", "hero-ready",
-                           comp.mode_listed ? t("comp_gate_body") : t("comp_gate_waiting")));
+                           comp.mode_listed ? t("comp_gate_body", {mode: installMode}) : t("comp_gate_waiting")));
         if (comp.ranked_ban) { box.appendChild(el("div", "hero-error", (comp.mode_strings||{}).banned)); }
         if (comp.mode_id === "BB1" && party.size > 1) { box.appendChild(el("div", "hero-error", (comp.mode_strings||{}).solo_only)); }
         if (comp.error) { box.appendChild(el("div", "hero-error", comp.error)); }
