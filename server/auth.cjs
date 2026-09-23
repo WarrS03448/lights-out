@@ -19,7 +19,7 @@
  *     Steam with openid.mode=check_authentication and we look for `is_valid:true`. Without
  *     that step anyone could hand us any SteamID64 they liked.
  *   - `openid.claimed_id` must match Steam's own identity URL shape exactly.
- *   - return_to must match what we sent, or Steam's own check fails.
+ *   - We check the signed return_to against the stored login callback ourselves.
  *   - Link codes are single use and expire; tokens are opaque random bytes.
  *   - The persona name and avatar are a nice-to-have from the Steam Web API and need
  *     STEAM_WEB_API_KEY. Everything works without it; the player is just shown their ID.
@@ -27,52 +27,20 @@
 const crypto = require('crypto');
 const accountsModule = require('./accounts.cjs');
 const ownership = require('./account-ownership.cjs');
-const { createOriginResolver } = require('./public-origin.cjs');
+const { createOriginResolver, requestUsesOrigin } = require('./public-origin.cjs');
+const openid = require('./steam-openid.cjs');
 
-const STEAM_OPENID = 'https://steamcommunity.com/openid/login';
-const CLAIMED_ID_RE = /^https?:\/\/steamcommunity\.com\/openid\/id\/(\d{17})$/;
+const {STEAM_OPENID, CLAIMED_ID_RE, makeStore} = openid;
 
 const LINK_TTL_SECONDS = 15 * 60;          // long enough to find your Steam password
 const TOKEN_TTL_SECONDS = 90 * 24 * 3600;  // 90 days, refreshed on every /api/auth/me
 const PROFILE_TTL_SECONDS = 24 * 3600;     // persona names change; re-fetch daily
 
-/** Fallback store so the whole flow works locally with no Upstash (and in tests). */
-const memory = new Map();
-
-function makeStore(upstashCmd, prefix) {
-  const key = (name) => `${prefix}${name}`;
-
-  return {
-    async set(name, value, ttlSeconds) {
-      const raw = JSON.stringify(value);
-      const stored = await upstashCmd(['SET', key(name), raw, 'EX', String(ttlSeconds)]);
-      if (stored === null) {
-        memory.set(key(name), { raw, expires: Date.now() + ttlSeconds * 1000 });
-      }
-    },
-    async get(name) {
-      const raw = await upstashCmd(['GET', key(name)]);
-      if (raw !== null && raw !== undefined) {
-        try { return JSON.parse(raw); } catch { return null; }
-      }
-      const hit = memory.get(key(name));
-      if (!hit) return null;
-      if (hit.expires < Date.now()) { memory.delete(key(name)); return null; }
-      try { return JSON.parse(hit.raw); } catch { return null; }
-    },
-    async del(name) {
-      await upstashCmd(['DEL', key(name)]);
-      memory.delete(key(name));
-    },
-  };
-}
-
 function randomToken(bytes = 32) {
   return crypto.randomBytes(bytes).toString('base64url');
 }
 
-/** Short, unambiguous, and safe in a URL. Not a secret on its own — it only ever names a
- *  pending sign-in, and the token that comes back is what authenticates. */
+/** A short, unambiguous bearer secret for one desktop sign-in. Never log or share it. */
 function randomCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let out = '';
@@ -82,8 +50,8 @@ function randomCode() {
 }
 
 /**
- * Ask Steam whether the assertion it just sent us is genuine. This is the step that makes
- * the whole thing safe; skipping it would let anyone forge a sign-in.
+ * Ask Steam whether the assertion is genuine. This mandatory provider check rejects
+ * forgeries; callback binding, freshness and one-use checks are enforced separately.
  */
 async function verifyWithSteam(params) {
   const body = new URLSearchParams();
@@ -96,6 +64,7 @@ async function verifyWithSteam(params) {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
+    signal: AbortSignal.timeout(10000),
   });
   if (!response.ok) return false;
   const text = await response.text();
@@ -167,11 +136,13 @@ function create({ upstashCmd, prefix = 'hub:', accountPrefix=prefix, accountStor
   /** 1. The hub asks for a link code and the URL to open. */
   async function handleStart(req, res) {
     const code = randomCode();
-    await store.set(`link:${code}`, { status: 'pending', created: Date.now() }, LINK_TTL_SECONDS);
+    const base=baseUrlOf(req);
+    await store.set(`link:${code}`, { status: 'pending', created: Date.now(),
+      return_to:`${base}/auth/steam/return?code=${encodeURIComponent(code)}` }, LINK_TTL_SECONDS);
     sendJson(res, 200, {
       ok: true,
       code,
-      url: `${baseUrlOf(req)}/auth/steam/start?code=${code}`,
+      url: `${base}/auth/steam/start?code=${code}`,
       expires_in: LINK_TTL_SECONDS,
     });
   }
@@ -185,11 +156,11 @@ function create({ upstashCmd, prefix = 'hub:', accountPrefix=prefix, accountStor
         'Go back to Lights Out and press Sign in with Steam again.');
     }
 
-    const base = baseUrlOf(req);
+    const base = new URL(pending.return_to).origin;
     const params = new URLSearchParams({
       'openid.ns': 'http://specs.openid.net/auth/2.0',
       'openid.mode': 'checkid_setup',
-      'openid.return_to': `${base}/auth/steam/return?code=${encodeURIComponent(code)}`,
+      'openid.return_to': pending.return_to,
       'openid.realm': base,
       'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
       'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
@@ -213,7 +184,9 @@ function create({ upstashCmd, prefix = 'hub:', accountPrefix=prefix, accountStor
       return sendPage(res, 400, 'Sign-in failed', 'Steam did not return a valid account id.');
     }
 
-    const valid = await checkAssertion(url.searchParams);
+    const assertion = requestUsesOrigin(req,pending.return_to) && openid.validate(url.searchParams,pending.return_to);
+    const valid = assertion && await checkAssertion(url.searchParams) &&
+      await store.claim(`link:${code}`,pending.return_to,assertion.nonce);
     if (!valid) {
       // Either a forged assertion or a Steam outage; both mean we must not sign anyone in.
       return sendPage(res, 400, 'Sign-in could not be verified',
@@ -240,12 +213,13 @@ function create({ upstashCmd, prefix = 'hub:', accountPrefix=prefix, accountStor
   async function handlePoll(req, res, url) {
     const code = String(url.searchParams.get('code') || '');
     if (!code) return badRequest(res, 'Missing code.');
-    const pending = await store.get(`link:${code}`);
+    let pending = await store.get(`link:${code}`);
     if (!pending) return sendJson(res, 200, { ok: true, status: 'expired' });
     if(pending.status==='denied')return sendJson(res,200,{ok:false,status:'denied'});
     if (pending.status !== 'ready') return sendJson(res, 200, { ok: true, status: 'pending' });
 
-    await store.del(`link:${code}`);       // single use: the token has taken over
+    pending = await store.takeReady(`link:${code}`);
+    if(!pending)return sendJson(res,200,{ok:true,status:'expired'});
     const identity=await steamIdentity(pending.token);
     if(!identity)return sendJson(res,401,{ok:false,error:'Sign in again. This account association has changed.'});
     const profile = await profileFor(pending.steam_id);

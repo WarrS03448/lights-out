@@ -51,13 +51,14 @@
  *
  * THE ASSERTION IS NEVER TRUSTED AS IT ARRIVES. Every parameter goes back to Steam with
  * openid.mode=check_authentication (auth.cjs verifyWithSteam, reused rather than reimplemented -
- * this is the one step that makes the whole thing safe, and two copies of it is one too many).
+ * alongside local callback, browser-state, freshness and one-use validation).
  *
  * NON-ADMINS ARE TOLD SO, and no session is created. A signed-in stranger sees a refusal, not a
  * blank page that might be a bug and not a login loop.
  */
 const crypto = require('crypto');
-const { createOriginResolver } = require('./public-origin.cjs');
+const { createOriginResolver, requestUsesOrigin } = require('./public-origin.cjs');
+const openid = require('./steam-openid.cjs');
 // The directory's column table, read rather than copied: the console renders these columns and
 // validates a saved preset against them, and a second copy of the list is a list that drifts.
 const { PLAYER_COLUMNS } = require('./live.cjs');
@@ -66,9 +67,10 @@ const { PLAYER_COLUMNS } = require('./live.cjs');
 // nothing keeps its own copy of these names, and that includes this page.
 const ladder = require('./ladder.cjs');
 
-const STEAM_OPENID = 'https://steamcommunity.com/openid/login';
-const CLAIMED_ID_RE = /^https?:\/\/steamcommunity\.com\/openid\/id\/(\d{17})$/;
+const {STEAM_OPENID, CLAIMED_ID_RE} = openid;
 const COOKIE = 'hubadmin';
+const LOGIN_COOKIE = 'hubadmin_login';
+const LOGIN_TTL_SECONDS = 10 * 60;
 // A working day. Long enough not to be re-signing in all afternoon, short enough that a session
 // left on a machine somewhere does not outlive the reason it was created.
 const SESSION_TTL_SECONDS = Math.max(300, Number(process.env.COMP_ADMIN_SESSION_SECONDS) || 8 * 3600);
@@ -716,24 +718,8 @@ const PLAYERS_JS = `
 
 function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics, tournament }) {
   const baseUrlOf = createOriginResolver();
-  const key = (token) => `${prefix}adminsession:${token}`;
-  const store = {
-    async get(k) {
-      if (!upstashCmd) return null;
-      try {
-        const raw = await upstashCmd(['GET', k]);
-        return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : null;
-      } catch { return null; }
-    },
-    async set(k, v, ttl) {
-      if (!upstashCmd) return;
-      try { await upstashCmd(['SET', k, JSON.stringify(v), 'EX', String(ttl)]); } catch { /* ignore */ }
-    },
-    async del(k) {
-      if (!upstashCmd) return;
-      try { await upstashCmd(['DEL', k]); } catch { /* ignore */ }
-    },
-  };
+  const key = (token) => `adminsession:${token}`;
+  const store = openid.makeStore(upstashCmd,prefix);
 
   function send(res, status, html, headers = {}) {
     const body = Buffer.from(html, 'utf8');
@@ -1130,25 +1116,40 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics,
     const base = baseUrlOf(req);
 
     if (pathname === '/admin/login' && method === 'GET') {
+      if(!requestUsesOrigin(req,base)) {
+        res.writeHead(302,{location:base+'/admin/login','cache-control':'no-store','referrer-policy':'no-referrer'});
+        res.end();return true;
+      }
+      const state=crypto.randomBytes(32).toString('hex');
+      const returnTo=`${base}/admin/return?state=${state}`;
+      await store.set('login:'+state,{status:'pending',return_to:returnTo},LOGIN_TTL_SECONDS);
       const params = new URLSearchParams({
         'openid.ns': 'http://specs.openid.net/auth/2.0',
         'openid.mode': 'checkid_setup',
-        'openid.return_to': `${base}/admin/return`,
+        'openid.return_to': returnTo,
         'openid.realm': base,
         'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
         'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
       });
-      res.writeHead(302, { location: `${STEAM_OPENID}?${params}`, 'cache-control': 'no-store' });
+      res.writeHead(302, { location: `${STEAM_OPENID}?${params}`, 'cache-control': 'no-store',
+        'set-cookie':`${LOGIN_COOKIE}=${state}; Path=/admin; HttpOnly; Secure; SameSite=Lax; Max-Age=${LOGIN_TTL_SECONDS}` });
       res.end();
       return true;
     }
 
     if (pathname === '/admin/return' && method === 'GET') {
+      const state=url.searchParams.get('state')||'';
+      const browserState=cookiesOf(req)[LOGIN_COOKIE]||'';
+      const pending=/^[a-f0-9]{64}$/.test(state)&&state===browserState ? await store.get('login:'+state) : null;
+      if(!pending||pending.status!=='pending') {
+        send(res,400,signinPage(base,'Sign-in expired or did not start in this browser. Please try again.'));return true;
+      }
       const claimed = String(url.searchParams.get('openid.claimed_id') || '');
       const m = CLAIMED_ID_RE.exec(claimed);
       if (!m) { send(res, 400, signinPage(base, 'Steam did not return a valid account id.')); return true; }
-      // NEVER trust the assertion as it arrives: this is the step that makes it safe.
-      const valid = await verifyWithSteam(url.searchParams);
+      const assertion=requestUsesOrigin(req,pending.return_to) && openid.validate(url.searchParams,pending.return_to);
+      const valid = assertion && await verifyWithSteam(url.searchParams) &&
+        await store.claim('login:'+state,pending.return_to,assertion.nonce);
       if (!valid) {
         send(res, 400, signinPage(base, 'Steam did not confirm that sign-in. Please try again.'));
         return true;
@@ -1167,7 +1168,8 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics,
         'cache-control': 'no-store',
         // httpOnly: JS can never read it. SameSite=Lax: it does not ride along on a cross-site
         // POST, which is what makes the ban forms below safe without a separate CSRF token.
-        'set-cookie': `${COOKIE}=${token}; Path=/admin; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`,
+        'set-cookie': [`${COOKIE}=${token}; Path=/admin; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`,
+          `${LOGIN_COOKIE}=; Path=/admin; HttpOnly; Secure; SameSite=Lax; Max-Age=0`],
       });
       res.end();
       return true;
@@ -1353,7 +1355,14 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics,
     return false;
   }
 
-  return { route,
+  async function safeRoute(req,res,method,pathname,url) {
+    try {return await route(req,res,method,pathname,url);}
+    catch {
+      if(!pathname.startsWith('/admin'))return false;
+      json(res,503,{ok:false,error:'Admin sign-in is temporarily unavailable.'});return true;
+    }
+  }
+  return { route:safeRoute,
            _internals: { sessionOf, cookiesOf, baseUrlOf, COOKIE, SESSION_TTL_SECONDS,
                          readPrefs, writePrefs, playersPage, prefsKey } };
 }

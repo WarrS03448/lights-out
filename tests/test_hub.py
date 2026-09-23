@@ -1519,70 +1519,36 @@ def test_clean_old_versions_empties_updates_dir():
 
 
 def test_launch_starts_installer_or_legacy_exe():
-    """launch() runs an inno-setup installer detached and silent; any other kind (or none) starts
-    the file as a plain exe. Platform branches are exercised by faking os.name."""
-    from pathlib import PurePosixPath
+    """Both installer and portable updates pass the same trust gate before launch."""
+    import contextlib
+    from unittest.mock import patch
     from hub import update as upd
-    popen_calls, startfile_calls = [], []
+    events = []
 
-    class FakePopen:
-        def __init__(self, argv, **kw):
-            popen_calls.append((argv, kw))
+    @contextlib.contextmanager
+    def locked(path):
+        events.append("locked")
+        yield path
+        events.append("unlocked")
 
-    saved_popen = upd.subprocess.Popen
-    saved_startfile = getattr(upd.os, "startfile", None)
-    saved_name = upd.os.name
-    saved_logs = upd.paths.logs_dir
-    upd.subprocess.Popen = FakePopen
-    upd.os.startfile = lambda path: startfile_calls.append(path)      # POSIX has no os.startfile
-    # faking os.name below would make pathlib build a WindowsPath here on macOS, so pin the log dir
-    upd.paths.logs_dir = lambda: PurePosixPath("/logs")
-    try:
-        # --- inno-setup on Windows: detached, silent, argv[0] is the installer ---
-        upd.os.name = "nt"
-        popen_calls.clear()
-        upd.launch("C:/x/LightsOut-Setup-1.1.0.exe", "inno-setup")
-        argv, kw = popen_calls[-1]
-        assert argv[0] == "C:/x/LightsOut-Setup-1.1.0.exe" and "/VERYSILENT" in argv, (argv, kw)
-        detached = getattr(upd.subprocess, "DETACHED_PROCESS", 0)
-        assert kw.get("creationflags", 0) & detached == detached, kw
-        assert not startfile_calls
+    def verify(path):
+        events.append("verified")
 
-        # --- inno-setup on POSIX: new session, no creationflags ---
-        upd.os.name = "posix"
-        popen_calls.clear()
-        upd.launch("/x/LightsOut-Setup-1.1.0.exe", "inno-setup")
-        argv, kw = popen_calls[-1]
-        assert argv[0] == "/x/LightsOut-Setup-1.1.0.exe" and "/VERYSILENT" in argv, (argv, kw)
-        assert kw.get("start_new_session") is True and "creationflags" not in kw, kw
-        assert not startfile_calls
+    def started(argv, **kwargs):
+        events.append("started")
+        assert events[-3:] == ["locked", "verified", "started"]
+        assert kwargs["close_fds"] is True
 
-        # --- legacy portable exe (kind=None) on Windows: os.startfile ---
-        upd.os.name = "nt"
-        popen_calls.clear(); startfile_calls.clear()
-        upd.launch("C:/x/LightsOut-1.0.9.exe", None)
-        assert startfile_calls == ["C:/x/LightsOut-1.0.9.exe"] and not popen_calls, (startfile_calls, popen_calls)
-
-        # --- legacy portable exe (kind=None) on POSIX: Popen([path]) ---
-        upd.os.name = "posix"
-        popen_calls.clear(); startfile_calls.clear()
-        upd.launch("/x/LightsOut-1.0.9.exe", None)
-        assert popen_calls == [(["/x/LightsOut-1.0.9.exe"], {"close_fds": True})], popen_calls
-        assert not startfile_calls
-
-        # --- an unknown kind takes the legacy path too ---
-        popen_calls.clear()
-        upd.launch("/x/LightsOut-1.0.9.exe", "msi")
-        assert popen_calls == [(["/x/LightsOut-1.0.9.exe"], {"close_fds": True})], popen_calls
-    finally:
-        upd.subprocess.Popen = saved_popen
-        upd.os.name = saved_name
-        upd.paths.logs_dir = saved_logs
-        if saved_startfile is None:
-            del upd.os.startfile
-        else:
-            upd.os.startfile = saved_startfile
-
+    with patch.object(upd.update_trust, "locked_update", locked), \
+         patch.object(upd.update_trust, "verify_update", verify), \
+         patch.object(upd, "Popen", side_effect=started) as launch:
+        for kind in ("inno-setup", None, "legacy"):
+            events.clear()
+            upd.launch("C:/fixture/update.exe", kind)
+            argv = launch.call_args.args[0]
+            assert argv[0] == "C:/fixture/update.exe"
+            assert ("/VERYSILENT" in argv) == (kind == "inno-setup")
+            assert events == ["locked", "verified", "started", "unlocked"]
 
 # ------------------------------------------------------------------ Competitive tab
 def _ranked_app():

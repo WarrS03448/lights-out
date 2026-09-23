@@ -4,10 +4,9 @@ pyooz==0.0.8
 # verdict is per bootloader hash, and a version that has been submitted as a false positive stays clean.
 pyinstaller==6.22.3
 # system-tray icon (close-to-tray); pystray on Windows needs only ctypes, Pillow draws the icon.
-# Pillow pinned like everything else so both build boxes bundle the same DLLs (12.x exists but the
-# box runs 11.x; bump deliberately after testing on the box).
+# Pillow 12.3.0 includes the PSD bounds fix for GHSA-pwv6-vv43-88gr (12.2.0+).
 pystray==0.19.5
-pillow==11.3.0
+pillow==12.3.0
 # Native webview for the UI redesign (docs/ui-redesign-plan.md). Only used with `--webui`; the
 # default Tkinter path never imports it (hub.webui.shell is the only importer). On Windows it
 # renders through the Edge WebView2 runtime (present by default on Win 11) via pythonnet; on

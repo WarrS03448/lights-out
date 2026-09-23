@@ -28,5 +28,15 @@
       "path": "server/public/packs/BB5-1.0.29.zip",
       "sha256": "3c1aca5d2d8a02471f547dde8ca98e078fd0b7b5292e54c24ac88e2e9587e3cf"
     }
-  ]
+  ],
+  "download_record": "docs/releases/2.6.8.json",
+  "build_limits": "docs/release-provenance.md",
+  "intentionally_unavailable": [
+    "server/fair-play.cjs: hosted evidence review",
+    "server/suspicion.cjs: hosted review scoring",
+    "server/cheater-restitution.cjs: hosted result-correction operations",
+    "Live website leaderboard module, routes and page assets",
+    "Private Linux pilot source and packages"
+  ],
+  "working_tree_status": "Unreleased security fixes after the published 2.6.8 snapshot; see docs/security-audit-2026-09-23.md"
 }

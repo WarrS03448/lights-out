@@ -25,4 +25,11 @@ function createOriginResolver(env = process.env) {
   };
 }
 
-module.exports = { createOriginResolver };
+// Bunny supplies the browser hostname separately from Railway's origin Host.
+// This check only restricts redirects/callbacks; it never selects a trusted URL.
+function requestUsesOrigin(req, origin) {
+  const host=new URL(origin).host.toLowerCase();
+  return String(req.headers['x-lightsout-request-host']||req.headers.host||'').toLowerCase()===host;
+}
+
+module.exports = { createOriginResolver, requestUsesOrigin };

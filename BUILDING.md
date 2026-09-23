@@ -61,3 +61,22 @@ included in this repository.
 Known gameplay limit: removal of unauthorized lobby entrants has caused crashes
 for some removed guests in prior private tests. Current source publication does
 not establish that the underlying game behavior has been resolved.
+
+## Download provenance, hosted components and Linux
+
+[Source/download correspondence](docs/release-provenance.md) lists the exact
+v2.6.8 public commit and installer/pack hashes, the hosted-only moderation
+adapters, the website leaderboard omission, and the private Linux pilot's limits.
+The public service is a reduced source distribution: `fair-play.cjs` and
+`suspicion.cjs` report unavailable, and hosted operations in
+`cheater-restitution.cjs` are unavailable while ordinary ban persistence remains.
+These are intentional differences, not missing dependencies to install.
+
+Use `tools/release/source_manifest.py` to record an immutable public commit with
+its committed download hashes or to verify a downloaded file. This is a release
+mapping, not a claim of a byte-for-byte reproducible installer. A third party
+cannot rebuild game-dependent cooked assets from this repository alone.
+
+The patched updater trusts only the official publisher's pinned signing identity
+and a newer signed Lights Out version. Forks must deliberately configure their
+own trust identity in source; a catalogue cannot replace that policy.

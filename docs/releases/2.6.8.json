@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "release": "2.6.8",
+  "source_commit": "123d38ad00eb45f393f4fc132bb86cddfe4db768",
+  "catalogue_path": "server/public/catalogue.json",
+  "claim": "Download hashes recorded in this exact source commit; not a bit-for-bit build attestation.",
+  "artifacts": [
+    {
+      "kind": "windows-installer",
+      "version": "2.6.8",
+      "filename": "LightsOut-Setup-2.6.8.exe",
+      "url": "https://play.lightsoutranked.com/hub/LightsOut-Setup-2.6.8.exe",
+      "sha256": "3b122050f169bb0bab859a6fd92fe05792816e6a127ad73c14d8d02d158694b0",
+      "size": 24083128
+    },
+    {
+      "kind": "CTF",
+      "version": "1.0.4",
+      "filename": "CTF-1.0.4.zip",
+      "url": "https://play.lightsoutranked.com/packs/CTF-1.0.4.zip",
+      "sha256": "e0ef3843e4daa9ea9d4e4f092bfdd3b4ec937173692e2c5dece1343c12fd6f60",
+      "size": 32874
+    },
+    {
+      "kind": "BB5",
+      "version": "1.0.29",
+      "filename": "BB5-1.0.29.zip",
+      "url": "https://play.lightsoutranked.com/packs/BB5-1.0.29.zip",
+      "sha256": "3c1aca5d2d8a02471f547dde8ca98e078fd0b7b5292e54c24ac88e2e9587e3cf",
+      "size": 73321
+    }
+  ]
+}

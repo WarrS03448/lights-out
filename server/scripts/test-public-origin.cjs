@@ -16,10 +16,16 @@ function environment(t, values) {
   }});
 }
 function services() {
-  const auth = authModule.create({upstashCmd:async()=>null,prefix:'origin-test:'+Math.random()+':',
+  const records=new Map();
+  const upstashCmd=async([op,key,value])=>{
+    if(op==='SET'){records.set(key,value);return 'OK';}
+    if(op==='GET')return records.get(key)||null;
+    throw Error('Unexpected command');
+  };
+  const auth = authModule.create({upstashCmd,prefix:'origin-test:'+Math.random()+':',
     sendJson:(res,status,data)=>{res.writeHead(status,{'content-type':'application/json'});res.end(JSON.stringify(data));},
     badRequest:res=>{res.writeHead(400);res.end();}});
-  const admin = adminModule.create({upstashCmd:async()=>null,live:()=>({})});
+  const admin = adminModule.create({upstashCmd,live:()=>({})});
   return {auth,admin};
 }
 async function listen(t) {
@@ -36,7 +42,8 @@ async function listen(t) {
 }
 async function checkCallbacks(t, expected) {
   const base=await listen(t);
-  const headers={host:'lightsout.up.railway.app','x-forwarded-host':'attacker.example, lightsoutranked.com','x-forwarded-proto':'http'};
+  const headers={host:'lightsout.up.railway.app','x-lightsout-request-host':new URL(expected).host,
+    'x-forwarded-host':'attacker.example, lightsoutranked.com','x-forwarded-proto':'http'};
   const start=await(await fetch(base+'/api/auth/start',{headers})).json();
   assert.equal(start.url,expected+'/auth/steam/start?code='+start.code);
   for(const [path,callback] of [['/auth/steam/start?code='+start.code,'/auth/steam/return?code='+start.code],['/admin/login','/admin/return']]) {
@@ -45,7 +52,13 @@ async function checkCallbacks(t, expected) {
     const target=new URL(response.headers.get('location'));
     assert.equal(target.origin,'https://steamcommunity.com');
     assert.equal(target.searchParams.get('openid.realm'),expected);
-    assert.equal(target.searchParams.get('openid.return_to'),expected+callback);
+    const returnTo=new URL(target.searchParams.get('openid.return_to'));
+    if(path==='/admin/login') {
+      assert.equal(returnTo.origin+returnTo.pathname,expected+callback);
+      const state=returnTo.searchParams.get('state');
+      assert.match(state,/^[a-f0-9]{64}$/);
+      assert.equal(response.headers.get('set-cookie'),`hubadmin_login=${state}; Path=/admin; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
+    } else assert.equal(returnTo.href,expected+callback);
     assert.equal(response.headers.get('cache-control'),'no-store');
   }
 }
@@ -56,6 +69,19 @@ test('explicit public callback origin survives proxy Host and forged forwarding 
 test('production callback default remains on the owned website',async t=>{
   environment(t,{NODE_ENV:'production'});
   await checkCallbacks(t,'https://lightsoutranked.com');
+});
+test('an admin login bookmark on an alias redirects before setting browser state',async t=>{
+  environment(t,{HUB_PUBLIC_ORIGIN:'https://lightsoutranked.com'});
+  const base=await listen(t);
+  const alias=await fetch(base+'/admin/login',{redirect:'manual',headers:{host:'lightsout.up.railway.app',
+    'x-lightsout-request-host':'play.lightsoutranked.com'}});
+  assert.equal(alias.status,302);
+  assert.equal(alias.headers.get('location'),'https://lightsoutranked.com/admin/login');
+  assert.equal(alias.headers.get('set-cookie'),null);
+  const canonical=await fetch(base+'/admin/login',{redirect:'manual',headers:{host:'lightsout.up.railway.app',
+    'x-lightsout-request-host':'lightsoutranked.com'}});
+  assert.equal(new URL(canonical.headers.get('location')).origin,'https://steamcommunity.com');
+  assert.match(canonical.headers.get('set-cookie'),/^hubadmin_login=/);
 });
 test('existing canonical account origin also directs Steam callbacks',async t=>{
   environment(t,{HUB_ACCOUNT_ORIGIN:'https://accounts.example.test'});

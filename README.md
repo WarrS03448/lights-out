@@ -16,10 +16,12 @@ required to play.
 
 The official Windows installer is digitally signed by **Samuel Warren**.
 
+See [source/download correspondence and build limits](docs/release-provenance.md) for exact release hashes, omitted hosted components and Linux testing status. Security changes after v2.6.8 remain unreleased until a new release is published.
+
 ## What is included
 
-This public source release corresponds to **Lights Out 2.6.3**,
-**Bodybomb 5v5 1.0.28**, and **Capture the Flag 1.0.4**.
+The latest published source tag corresponds to **Lights Out 2.6.8**,
+**Bodybomb 5v5 1.0.29**, and **Capture the Flag 1.0.4**.
 
 | Folder | Contents |
 | --- | --- |

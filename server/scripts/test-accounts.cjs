@@ -194,8 +194,10 @@ test('only verified allowed Steam sign-ins are registered before the success res
   async function signin(){
     const start=await request('/api/auth/start');
     assert.equal(start.status,200);
-    return fetch(base+'/auth/steam/return?code='+start.body.code+'&openid.claimed_id='+
-      encodeURIComponent('https://steamcommunity.com/openid/id/'+STEAM));
+    const redirect=await fetch(base+'/auth/steam/start?code='+start.body.code,{redirect:'manual'});
+    const returnTo=new URL(redirect.headers.get('location')).searchParams.get('openid.return_to');
+    const callback=require('./openid-fixture.cjs').assertion(returnTo,STEAM);
+    return fetch(base+callback.pathname+callback.search);
   }
   assert.equal((await signin()).status,400);
   assert.equal(await store(['SCARD',prefix+'accounts:registered-steam']),0);

@@ -27,8 +27,10 @@ import re
 import subprocess
 import sys
 import tempfile
+from subprocess import Popen
 
 from . import paths, version
+from . import update_trust
 
 # Both names on purpose: an install that predates the Lights Out rename can still have
 # CommunityHub-<v>.exe sitting beside it, and this is what sweeps it up.
@@ -90,24 +92,19 @@ def installer_command(path: str, log_path: str) -> list:
 
 
 def launch(path: str, kind=None) -> None:
-    """Start the download; the caller quits right after.
+    """Verify every update immediately before execution, including legacy portable files.
 
-    kind == "inno-setup": run the installer silently, detached from this process so it survives
-    the hub quitting (and the installer closing the hub). Anything else: start the file as is
-    (legacy portable exe)."""
-    if kind == INSTALLER_KIND:
-        argv = installer_command(path, str(paths.logs_dir() / "update-install.log"))
-        if os.name == "nt":
-            flags = (getattr(subprocess, "DETACHED_PROCESS", 0)
-                     | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
-            subprocess.Popen(argv, close_fds=True, creationflags=flags)     # noqa: S603
-        else:
-            subprocess.Popen(argv, close_fds=True, start_new_session=True)  # noqa: S603
-        return
-    if os.name == "nt":
-        os.startfile(path)                               # noqa: S606 — the exe we just downloaded
-    else:
-        subprocess.Popen([path], close_fds=True)         # noqa: S603
+    The Windows file handle prevents replacement between verification and process
+    creation. A download hash alone cannot establish trust if the catalogue is compromised.
+    Unsupported platforms and verification failures never fall back to execution.
+    """
+    with update_trust.locked_update(path) as verified_path:
+        update_trust.verify_update(verified_path)
+        argv = (installer_command(verified_path, str(paths.logs_dir() / "update-install.log"))
+                if kind == INSTALLER_KIND else [verified_path])
+        flags = (getattr(subprocess, "DETACHED_PROCESS", 0)
+                 | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+        Popen(argv, close_fds=True, creationflags=flags)  # noqa: S603 — verified, locked file
 
 
 def clean_old_versions() -> list:
