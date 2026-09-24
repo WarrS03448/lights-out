@@ -2194,12 +2194,12 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * never the match. Everything here is fire-and-forget: a store that is slow or missing must
    * never hold up the tick that forms matches.
    */
-  function persistLive(match) {
+  function persistLive(match, snapshotOptions) {
     if (!store) return Promise.resolve();
     const json = JSON.stringify(serialiseMatch(match));
     const pending = (matchWriting.get(match.id) || Promise.resolve()).catch(() => {}).then(async () => {
       const receipt = await settlementLib.snapshot(store,
-        [settlementKey(match.id), liveMatchKey(match.id), liveIndexKey(), authorityKey(match.id)], match.id, json, LIVE_STATE_TTL_SECONDS);
+        [settlementKey(match.id), liveMatchKey(match.id), liveIndexKey(), authorityKey(match.id)], match.id, json, LIVE_STATE_TTL_SECONDS, snapshotOptions);
       if (receipt && receipt.pendingMatch) {
         for (const key of ['timer', 'collectTimer', 'stage_timer', 'ban_timer']) if (match[key]) clearTimeout(match[key]);
         if (receipt.pendingMatch.void_pending) delete match.collecting;
@@ -2428,6 +2428,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * deadline already in the past fires at once, which is the correct answer - that expiry was
    * owed while the container was starting. */
   function rearm(match) {
+    if(match.recovery?.phase==='restoring')return;
     if (match.final_snapshot || match.terminal || match.void_pending) return;
     if (match.collecting && !match.start_ready_verified) {
       const c = match.collecting;
@@ -3109,6 +3110,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       no_show_elo: NO_SHOW_RR,
       no_show_rr: NO_SHOW_RR,
       no_show_seconds: forSteamId ? nextNoShowSeconds(forSteamId) : rungSeconds(1),
+      session_key:require('./recovery.cjs').sessionFor(match),
       ...(forSteamId === match.host ? { report_token: match.reportToken } : {}),
       ...(match.migration_capabilities?.[forSteamId] ? {migration_token:match.migration_capabilities[forSteamId]} : {}),
       host_epoch:match.host_epoch||0,
@@ -3150,7 +3152,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if(!raw) {await persistLive(match);return;}
     const a=identity.parse(raw);
     if(a.closed)throw Error('Match authority ended');
-    if(a.epoch===(match.host_epoch||0) && a.host===match.host)return;
+    if(a.epoch===(match.host_epoch||0) && a.host===match.host &&
+       (a.phase||'playing')===(match.recovery?.phase||'playing')&&
+       (a.recovery_revision||0)===(match.recovery?.revision||0)&&
+       (a.roster_revision||0)===(match.roster_revision||0))return;
     const snapshot=await store(['GET',liveMatchKey(match.id)],{strict:true});
     if(!snapshot)throw Error('Match authority ended');
     const restored=reviveMatch(await combatStorage.unpack(store,identity.parse(snapshot),liveMatchKey(match.id)));
@@ -3158,6 +3163,17 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     for(const key of Object.keys(match))delete match[key];
     Object.assign(match,restored);
     rearm(match);
+    releaseRecoveryDepartures(match);
+  }
+
+  function releaseRecoveryDepartures(match) {
+    for(const p of match.left||[])if(p.disconnect_confirmed&&p.left_state==='live') {
+      revokeJoinPermit(p.player_id);
+      if((!match.terminal||!duel)&&inMatch.get(p.player_id)===match.id) {
+        inMatch.delete(p.player_id);
+        sendTo(p.player_id,{type:'match_over',match_id:match.id,reason:'reconnect_timeout',recovery_excluded:p.recovery_excluded===true});
+      }
+    }
   }
 
   async function authoriseReportFresh(token) {
@@ -3169,15 +3185,80 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     });
   }
 
-  function withReportAuthority(auth,operation) {
+  function withReportAuthority(auth,operation,{allowRestoring=false}={}) {
     return matchOperation(auth.matchId,async()=>{
       const m=matches.get(auth.matchId);
       if(m) {
         await refreshAuthority(m);
         if((m.host!==auth.playerId && identity.gameFor(m,m.host)!==auth.steamId) || (m.host_epoch||0)!==(auth.epoch||0))
           throw Error('Superseded match reporter');
+        if(m.recovery?.phase==='restoring'&&!allowRestoring)throw Error('Recovery has not been verified');
       } else if(!auth.completed)throw Error('Match no longer active');
       return reportScope.run({match:auth.matchId,host:auth.playerId,epoch:auth.epoch||0},operation);
+    });
+  }
+
+  async function recoveryTransition(match,player,token,fields) {
+    const result=await require('./recovery.cjs').execute(store,
+      [authorityKey(match.id),liveMatchKey(match.id),settlementKey(match.id),`${prefix||'hub:'}live:recovery:${match.id}`],
+      {operation:fields.operation,epoch:fields.epoch,session:fields.session,sequence:fields.sequence,
+        checkpoint:fields.checkpoint,penalties:fields.penalties,player,token,now:Date.now(),ttl:LIVE_STATE_TTL_SECONDS});
+    if(result.changed&&result.snapshot) {
+      const restored=reviveMatch(result.snapshot);
+      for(const key of ['timer','collectTimer','stage_timer','ban_timer'])if(match[key])clearTimeout(match[key]);
+      for(const key of Object.keys(match))delete match[key];
+      Object.assign(match,restored);rearm(match);
+      hostPermits.delete(player);
+      releaseRecoveryDepartures(match);
+      for(const p of match.players)sendTo(p.player_id,livePayload(match,p.player_id));
+    }
+    return result;
+  }
+
+  async function syncRecoveryRoster(match) {
+    if(match.recovery?.phase!=='restoring'||!match.recovery.rejoin_until)return;
+    const fields={epoch:match.host_epoch,session:match.session_key};
+    if(!match.recovery.roster)await recoveryTransition(match,match.host,match.reportToken,{...fields,operation:'seal'});
+    const roster=match.recovery.roster;
+    if(roster&&!roster.done) {
+      const saved={};
+      if(!duel)for(const id of roster.excluded)saved[id]=await reconnectPenalty(match,id,{recovery:true});
+      const result=await recoveryTransition(match,match.host,match.reportToken,{...fields,operation:'adjudicated',penalties:saved});
+      if(!result.ok)throw Error('Recovery absences are not saved');
+    }
+    if(match.terminal?.recovery)return finishDuelDecision(match);
+  }
+
+  async function applyRecovery(match,player,token,fields) {
+    await syncRecoveryRoster(match);
+    const result=await recoveryTransition(match,player,token,fields);
+    if(result.ok&&fields.operation==='pulse')await syncRecoveryRoster(match);
+    return {ok:result.ok,error:result.error,recovery:result.recovery,
+      ...(result.ok?{match:livePayload(match,player)}:{})};
+  }
+
+  async function recoveryReport(token,fields) {
+    if(!store||!/^[a-f0-9]{16}$/.test(fields?.match_id||'')||
+       !['checkpoint','pulse','prepared','restored'].includes(fields.operation))return {ok:false,error:'Invalid recovery report'};
+    return matchOperation(fields.match_id,async()=>{
+      const match=matches.get(fields.match_id);if(!match)return {ok:false,error:'No match'};
+      await refreshAuthority(match);
+      const player=Object.entries(match.migration_capabilities||{}).find(([,t])=>t===token)?.[0];
+      if(!player||identity.gameFor(match,player)!==fields.user_id)return {ok:false,error:'Invalid participant'};
+      return applyRecovery(match,player,token,fields);
+    });
+  }
+
+  async function recoveryAction(player,fields) {
+    if(!store||!/^[a-f0-9]{16}$/.test(fields?.match_id||'')||
+       !['status','closed','claim'].includes(fields.operation))return {ok:false,error:'Invalid recovery action'};
+    return matchOperation(fields.match_id,async()=>{
+      const match=matches.get(fields.match_id);
+      if(!match||inMatch.get(player)!==match.id)return {ok:false,error:'No match'};
+      await refreshAuthority(match);
+      const token=match.migration_capabilities?.[player];
+      if(!token)return {ok:false,error:'Invalid participant'};
+      return applyRecovery(match,player,token,fields);
     });
   }
 
@@ -3298,6 +3379,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   function livePayload(match, recipient) {
     return {
       type: 'match_live', match_id: match.id, map: match.map, host: match.host, host_game_steam_id: identity.gameFor(match, match.host),
+      roster_revision:match.roster_revision||0,
       vote: voidVotePayload(match, recipient),
       network: match.network || null,
       live_seconds: Math.max(0, Math.round((match.deadline - Date.now()) / 1000)),
@@ -3309,6 +3391,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       ...(recipient === match.host && match.reportToken ? {report_token:match.reportToken} : {}),
       ...(match.migration_capabilities?.[recipient] ? {migration_token:match.migration_capabilities[recipient]} : {}),
       host_epoch:match.host_epoch||0,
+      session_key:require('./recovery.cjs').sessionFor(match),
+      ...(match.recovery?{recovery:{...match.recovery,server_now:Date.now(),world_ready:Boolean(match.lobby_stamped),
+        can_rejoin:require('./recovery.cjs').canRejoin(match,recipient,Date.now()),
+        ...(match.recovery.phase==='restoring'?{checkpoint:match.recovery_checkpoint}:{})}}:{}),
     };
   }
 
@@ -3529,7 +3615,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const permit = hostPermits.get(id);
     const until = permit ? permit.until : match && match.host_permit_until;
     if (permit && !(until > Date.now())) hostPermits.delete(id);
-    return Boolean(match && match.host === id && match.state === 'connecting'
+    return Boolean(match && match.host === id && (match.state === 'connecting'||match.recovery?.phase==='restoring')
       && !match.lobby_stamped && until > Date.now() && (!permit || permit.matchId === match.id));
   }
 
@@ -3589,11 +3675,12 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   /** Every player in the match EXCEPT the host, the moment the host is confirmed in. */
   function grantJoinPermits(match) {
     if (!match || !Array.isArray(match.players)) return 0;
-    const until = Date.now() + JOIN_PERMIT_SECONDS * 1000;
+    const until = Math.min(Date.now() + JOIN_PERMIT_SECONDS * 1000,
+      match.recovery?.phase==='restoring'&&!match.recovery?.roster ? match.recovery.rejoin_until||Infinity : Infinity);
     let n = 0;
     for (const p of match.players) {
       const id = String(p.player_id || '');
-      if (!identity.validPlayer(id) || id === String(match.host || '')) continue;
+      if (!identity.validPlayer(id) || id === String(match.host || '')||match.recovery?.roster?.excluded.includes(id)) continue;
       joinPermits.set(id, {until, matchId:match.id});
       n += 1;
     }
@@ -3608,7 +3695,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     joinPermits.delete(id);
     const match = matches.get(permit.matchId);
     return permit.until > Date.now() && inMatch.get(id) === permit.matchId &&
-      !!match && ['connecting','live'].includes(match.state) && match.players.some(p=>p.player_id===id);
+      !!match && ['connecting','live'].includes(match.state) && match.players.some(p=>p.player_id===id)&&
+      !match.recovery?.roster?.excluded.includes(id)&&
+      !(match.recovery?.phase==='restoring'&&!match.recovery.roster&&Date.now()>=match.recovery.rejoin_until);
   }
 
   function revokeJoinPermit(steamId) {
@@ -3659,7 +3748,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     // The roster is `players` - who is STILL in the match. Someone who walked out is deliberately
     // not a member any more: if they reconnect into the game world they are as much a stranger as
     // anyone else, and the kick is the right answer.
-    const member = match.players.some((p) => p.player_id === subject);
+    const member = match.players.some((p) => p.player_id === subject)&&!match.recovery?.roster?.excluded.includes(subject);
     if (String(ask || '') === 'member') {
       return { ok: true, match_id: match.id, subject, ask: 'member', member, yes: member };
     }
@@ -3822,6 +3911,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const match = matches.get(id);
     if (!identity.validPlayer(host) || !match || inMatch.get(host) !== id) return reject('no match');
     if (String(match.host || '') !== host) return reject('not the host');
+    if(match.recovery?.phase==='restoring')return reject('recovery is being verified');
     if (!['connecting', 'live'].includes(match.state)) return reject('match is not starting');
     const t = match.assigned_teams;
     if (!Array.isArray(t?.[1]) || !Array.isArray(t?.[2])) return reject('no frozen assignment');
@@ -3852,8 +3942,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     return { ok: true, started: true, match_id: id };
   }
 
-  async function reconnectPenalty(match, id) {
-    if (noShowPenaltiesPaused()) return null;
+  async function reconnectPenalty(match, id, {recovery=false}={}) {
+    const recoveryMiss=recovery&&match.recovery?.roster?.excluded.includes(id)&&
+      Date.now()>=match.recovery.rejoin_until;
+    if (noShowPenaltiesPaused()&&!recoveryMiss) return null;
     return withRatingLocks([id], async () => {
       for (let attempt=0; attempt<4; attempt++) {
         await drainRatingWrites(id); await drainPenaltyWrites(id);
@@ -3870,7 +3962,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         const penaltyJson=JSON.stringify(penalty);
         try {
           const saved=store?await require('./abandon-penalty.cjs').commit(store,prefix||'hub:',match.id,id,{
-            host:match.host,host_epoch:match.host_epoch||0,
+            host:match.host,host_epoch:match.host_epoch||0,roster_revision:match.roster_revision||0,
             expectedRank:before.revision||0,expectedPenalty:rawPenalty||'',rankJson:JSON.stringify(rank),penaltyJson,
             guardJson:JSON.stringify({operationId:`reconnect:${match.id}`,json:penaltyJson}),
             receiptJson:JSON.stringify(receipt),placing:ratingLib.isPlacing(rank),progress:boardScore(rank),
@@ -3892,7 +3984,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   function matchPresence(host, id, present) {
     return matchOperation(id, async () => {
       const match=matches.get(id);
+      if(match)await refreshAuthority(match);
       if(!match || match.terminal || match.void_pending || match.host!==host || inMatch.get(host)!==id)return {ok:false,error:'not the host'};
+      if(match.recovery?.phase==='restoring')return {ok:false,error:'recovery is being verified'};
       const observation=require('./reconnect.cjs').observe(match,present);
       if(!observation.ok)return observation;
       const previous=match.reconnect;
@@ -3901,8 +3995,11 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         match.reconnect=observation.windows;
         // Save the deadline before a penalty can be applied; reloads cannot grant another five minutes.
         if(changed) {
-          try { await persistLive(match); }
-          catch(e) { match.reconnect=previous; throw e; }
+          const membershipFrom=match.roster_revision||0;
+          match.roster_revision=membershipFrom+1;
+          try { await persistLive(match,{membershipFrom}); }
+          catch(e) { match.reconnect=previous;match.roster_revision=membershipFrom;throw e; }
+          if(match.roster_revision!==membershipFrom+1)return {ok:false,error:'match decision changed'};
         }
         if(matches.get(id)!==match || match.state!=='live' || match.final_snapshot)return {ok:false,error:'match ended'};
         if(duel&&observation.expired.length===1){
@@ -3910,7 +4007,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
           return decideDuel(match,player,'reconnect_timeout');
         }
         const removed=[],departures=[];
-        const beforeRemoval={players:match.players,left:match.left,reconnect:{...match.reconnect}};
+        const beforeRemoval={players:match.players,left:match.left,reconnect:{...match.reconnect},terminal:match.terminal,roster_revision:match.roster_revision};
         for(const player of observation.expired) {
           const member=match.players.find(p=>p.player_id===player);
           if(!member)continue;
@@ -3921,17 +4018,30 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
           removed.push(player);
         }
         if(removed.length) {
+          const membershipFrom=match.roster_revision||0;
+          match.roster_revision=membershipFrom+1;
           match.left=[...(match.left||[]),...departures];
           match.players=match.players.filter(p=>!removed.includes(p.player_id));
           match.reconnect={...match.reconnect};
           for(const player of removed)delete match.reconnect[player];
-          try { await persistLive(match); }
+          const remainingSides=[1,2].filter(side=>match.players.some(p=>match.assigned_teams?.[side]?.includes(p.player_id)));
+          if(remainingSides.length===1){
+            const winner=remainingSides[0],loser=match.left.find(p=>match.assigned_teams?.[winner===1?2:1]?.includes(p.player_id))?.player_id;
+            match.terminal={reason:'reconnect_timeout',absence:true,loser,winner,at:Date.now(),score:match.score?{...match.score}:null};
+          }
+          try { await persistLive(match,{membershipFrom}); }
           catch(e) { Object.assign(match,beforeRemoval); throw e; }
           if(matches.get(id)!==match || match.state!=='live' || match.final_snapshot)return {ok:false,error:'match ended'};
+          if(match.roster_revision!==membershipFrom+1)return {ok:false,error:'match decision changed'};
           for(const player of removed) {
             inMatch.delete(player); revokeJoinPermit(player);
             sendTo(player,{type:'match_over',match_id:id,reason:'reconnect_timeout'});
           }
+          if(!match.terminal)for(const member of match.players)sendTo(member.player_id,livePayload(match,member.player_id));
+        }
+        if(match.terminal?.absence){
+          await finishDuelDecision(match);
+          return {ok:false,error:'Match decided by forfeit'};
         }
         const waiting=Object.entries(match.reconnect).map(([player_id,w])=>({player_id,deadline:w.deadline}));
         for(const p of match.players)sendTo(p.player_id,{type:'match_reconnect',match_id:id,waiting});
@@ -5696,8 +5806,17 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       hostChecks.set(m.id,Date.now());
       await matchOperation(m.id,async()=>{
         await refreshAuthority(m);
+        await syncRecoveryRoster(m);
+        if(m.terminal||matches.get(m.id)!==m)return;
         const raw=await store(['GET',authorityKey(m.id)],{strict:true});
         const a=raw&&identity.parse(raw);
+        if(a?.phase==='restoring'&&a.restore_until&&Date.now()>=a.restore_until) {
+          const expired=await store(['EVAL',require('./recovery.cjs').EXPIRE,'2',authorityKey(m.id),settlementKey(m.id),
+            m.host,String(m.host_epoch||0),String(Date.now()),String(LIVE_STATE_TTL_SECONDS)],{strict:true});
+          if(expired===1){approvedClosures.add(m);closeMatch(m,'recovery_expired',[]);}
+          return;
+        }
+        if(a?.phase==='restoring')return; // Separate setup/rejoin/verification deadline.
         if(!a?.last_seen||Date.now()-a.last_seen<300000)return;
         // A verified final snapshot remains retryable even if its reporter died.
         if(m.final_snapshot) {
@@ -5985,7 +6104,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (!identity.validPlayer(id)) return { ok: false, error: 'not a steamid64' };
     const matchId = inMatch.get(id);
     const match = matchId && matches.get(matchId);
-    if (!match || match.state !== 'connecting') return { ok: false, error: 'no connecting match' };
+    if (!match || (match.state !== 'connecting'&&match.recovery?.phase!=='restoring')) return { ok: false, error: 'no connecting match' };
     if (String(match.host || '') !== id) return { ok: false, error: 'not the host' };
     const player = match.players.find((p) => p.player_id === id);
     const name = String(event || '');
@@ -6015,6 +6134,15 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     // before the host's lobby exists spends it on an empty Steam. ch_lobby_read is proof that the
     // lobby is up, sent from inside the match world - which is a fact, not a claim the hub makes.
     if (!player) return { ok: false, error: 'not in the match' };
+    if(match.recovery?.phase==='restoring') {
+      return (async()=>{
+      const result=await recoveryTransition(match,id,match.reportToken,{operation:'opened',epoch:match.host_epoch,session:match.session_key});
+      if(!result.ok)return result;
+      revokeHostPermit(id);grantJoinPermits(match);
+      for(const p of match.players)sendTo(p.player_id,livePayload(match,p.player_id));
+      return {ok:true,host:id,event:name,connected:1,total:match.players.length};
+      })();
+    }
     const releasing = !match.joiners_released;
     // A SECOND CHANCE AT THE FRAME, not at the release. Once the joiners are out there is nothing
     // left to do here - but the t+30 write is a free opportunity to re-send the snapshot to a hub
@@ -7109,7 +7237,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
           analytics_outbox: add(`${socialPrefix}analytics:outbox`, 'set') };
         plan.authority=add(authorityKey(id),'string');plan.host=host;plan.host_epoch=match.host_epoch||0;
         plan.writes.push({ index: add(matchKey(id), 'string'), value: JSON.stringify(full), ttl: MATCH_TTL_SECONDS });
-        if(duel && match.terminal?.reason==='reconnect_timeout' && !noShowPenaltiesPaused()){
+        if(duel && match.terminal?.reason==='reconnect_timeout' && (!noShowPenaltiesPaused()||match.terminal.recovery===true)){
           const loser=match.terminal.loser,key=penaltyKey(loser),raw=await store(['GET',key],{strict:true});
           const prior=raw?identity.parse(raw):{},count=effectiveCount(prior)+1,seconds=rungSeconds(count);
           // The ordinary loss supplies the RR change; save the escalating queue cooldown
@@ -7128,7 +7256,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
           // into each would exceed storage request limits in a full-size match.
           delete row.event.round_details;
           canonical.events[sid] = { ...row.event, mode:mode.id, terminal:match.terminal||null, data_collected: true, close_allowed: true, close_after: canonical.close_after };
-          const h = { ...historyRow(match, record, sid), ...(match.terminal?{outcome:'played',reason:match.terminal.reason}:{}), won: draw ? null : team === winner, draw,
+          if(match.recovery||match.terminal?.absence)canonical.events[sid].players=everyone(match).map(p=>({steam_id:p.player_id,
+            name:p.persona||p.player_id,team:side.get(p.player_id)+1,left:!(match.players||[]).some(a=>a.player_id===p.player_id)}));
+          const h = { ...historyRow(match, record, sid), ...(match.terminal?{outcome:'played',reason:match.terminal.reason,
+            recovery_forfeit:(match.terminal.recovery===true||match.terminal.absence===true)&&match.terminal.reason==='reconnect_timeout'}:{}), won: draw ? null : team === winner, draw,
             score: score ? `${score[team]}-${score[team === 1 ? 2 : 1]}` : null, rr_delta: row.rr.delta,
             delta: ratingLib.arrowsFor(row.rr.delta), placement: Boolean(row.rr.placing || row.rr.placed) };
           canonical.history[sid] = h;
@@ -7158,14 +7289,18 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
 
   async function finishDuelDecision(match) {
     let terminal=match.terminal;
-    if(!duel||!terminal||!['concede','reconnect_timeout'].includes(terminal.reason))return {ok:false,error:'No duel decision.'};
+    if((!duel&&!terminal?.recovery&&!terminal?.absence)||!terminal||!['concede','reconnect_timeout'].includes(terminal.reason))return {ok:false,error:'No match decision.'};
     try {
       await persistLive(match);
       if(matches.get(match.id)!==match)return {ok:true,match_id:match.id,data_collected:true,close_allowed:true};
       if(match.void_pending)return finishVoidVote(match);
       terminal=match.terminal;
       const ids=everyone(match).map(p=>p.player_id),assigned=match.assigned_teams;
-      if(ids.length!==2||assigned?.[1]?.length!==1||assigned?.[2]?.length!==1||!ids.includes(terminal.loser))throw Error('Invalid duel roster');
+      if(!ids.includes(terminal.loser)||!assigned?.[1]?.length||!assigned?.[2]?.length||
+         (duel&&(ids.length!==2||assigned[1].length!==1||assigned[2].length!==1)))throw Error('Invalid decision roster');
+      if(terminal.recovery&&(!match.recovery?.roster?.done||[1,2].filter(side=>
+        match.players.some(p=>assigned[side].includes(p.player_id))).join(',')!==String(terminal.winner)))throw Error('Invalid recovery forfeit');
+      if(terminal.absence&&[1,2].filter(side=>match.players.some(p=>assigned[side].includes(p.player_id))).join(',')!==String(terminal.winner))throw Error('Invalid absence forfeit');
       const side=new Map([...assigned[1].map(x=>[x,0]),...assigned[2].map(x=>[x,1])]);
       const score=terminal.score,total=score ? score[1]+score[2] : null;
       match.score=score;match.final_ended_at=terminal.at;
@@ -7175,6 +7310,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     }catch{return {ok:false,unavailable:true,error:'Match decision is being saved. Please retry.'};}
   }
   async function decideDuel(match,loser,reason) {
+    if(match.recovery?.phase==='restoring')return {ok:false,error:'Wait for match recovery to finish before conceding.'};
     if(!duel||!match.start_ready_verified||match.state!=='live'||match.void_pending||match.final_snapshot||match.collecting||match.finished)
       return {ok:false,error:'The match cannot be conceded now.'};
     if(match.terminal && (match.terminal.loser!==loser || match.terminal.reason!==reason))return {ok:false,error:'The match is already decided.'};
@@ -8907,6 +9043,13 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       return true;
     }
     if (pathname === '/api/match/accept' && method === 'POST') { handleAccept(res, account); return true; }
+    if (pathname === '/api/match/recovery' && method === 'POST') {
+      res.setHeader('cache-control','no-store, private');
+      try { const result=await recoveryAction(account.player_id,await readJsonBody(req));
+        sendJson(res,result.ok?200:409,result);
+      } catch {sendJson(res,503,{ok:false,error:'Recovery is temporarily unavailable.'});}
+      return true;
+    }
     if (pathname === '/api/match/void-vote' && method === 'POST') {
       const result = await voteToVoid(account, await readJsonBody(req));
       sendJson(res, result.ok ? 200 : result.unavailable ? 503 : 409, result);
@@ -9204,7 +9347,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     declinePartyInvite,
     gameReportedScore: nativeHost(gameReportedScore),
     authoriseReport,
-    authoriseReportFresh, migrationReport, withReportAuthority,
+    authoriseReportFresh, migrationReport, recoveryReport, recoveryAction, withReportAuthority,
     authoriseFinalReport,
     authoriseLegacyReport,
     gameReportedStats: nativeHost(gameReportedStats),

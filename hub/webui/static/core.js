@@ -234,6 +234,10 @@
     var screen=state&&screens[state.view];
     for (var i = 0; i < open.length; i++) {
       if(screen&&typeof screen.preserveOverlay==="function"&&screen.preserveOverlay(open[i],state))continue;
+      var keep=Object.keys(overlays).some(function(name){
+        return typeof overlays[name].preserveOverlay==="function"&&overlays[name].preserveOverlay(open[i],state);
+      });
+      if(keep)continue;
       if (open[i].parentNode) { open[i].parentNode.removeChild(open[i]); }
     }
   }
@@ -348,8 +352,8 @@
     var st = state.status || {};
     var ok = st.connected;
     statusEl.className = "status-dot " + (ok ? "ok" : "bad");
-    registeredEl.textContent = ok ? t("topbar_registered", { n: st.players_registered == null ? "—" : st.players_registered }) : t("topbar_offline");
-    tournamentEl.textContent = ok ? t("topbar_tournament", { n: st.tournament_registered == null ? "—" : st.tournament_registered }) : "";
+    registeredEl.textContent = ok ? t("topbar_registered", { n: st.players_registered == null ? "-" : st.players_registered }) : t("topbar_offline");
+    tournamentEl.textContent = ok ? t("topbar_tournament", { n: st.tournament_registered == null ? "-" : st.tournament_registered }) : "";
   }
 
   // ---------------------------------------------------------------- app self-update strip
@@ -396,7 +400,7 @@
       msg = t("update_banner_failed", { reason: u.error || "" });
     } else if (u.forced) {
       // The forced overlay reuses the old all-or-nothing update screen's strings.
-      msg = t("update_title") + " — " + t("update_body", { new: u.latest, old: u.current });
+      msg = t("update_title") + " - " + t("update_body", { new: u.latest, old: u.current });
     } else {
       msg = t("update_banner", { new: u.latest, old: u.current });
     }

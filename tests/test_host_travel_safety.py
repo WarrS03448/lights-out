@@ -24,7 +24,9 @@ def test_host_travel_sends_the_stamped_match_credential():
     graph = json.loads(lobby_graphs.chlobby_logic())
     # Follow the actual data edges into SendAttributionEvent's bearer input.
     links = {tuple(link) for link in graph["links"]}
-    assert ("rt_str.ReturnValue", "hdly.BearerToken") in links
+    assert ("rt_str.ReturnValue", "rt_cap.SourceString") in links
+    assert ("rt_cap.ReturnValue", "hdly.BearerToken") in links
+    assert next(n for n in graph['nodes'] if n['id']=='rt_cap')['defaults']['Count']=='64'
 
 
 def test_host_does_not_start_searches_beside_travel():
@@ -53,13 +55,16 @@ def test_shipped_host_bytecode_cannot_launch_search_or_join():
     assert "CallMath OpenLevel@" in calls
     assert not any("CallMath " + name + "@" in calls for name in FORBIDDEN)
     # Inspect the shipped bytecode, not only the source graph: the bearer argument
-    # immediately after the delay URL must be the stamped token's converted value.
+    # immediately after the delay URL must be only the 64-character capability,
+    # not the recovery envelope appended to the stamped token.
     literal = re.search(r"Let \(([^\n]+)\)\n[^\n]*\n[^\n]*CallMath MakeLiteralName[^\n]*\n"
                         r"[^\n]*NameConst 'chreport-7f3a91'", calls)[1]
     converted = re.search(r"Let \(([^\n]+)\)\n[^\n]*\n[^\n]*CallMath Conv_NameToString[^\n]*\n"
                           r"[^\n]*\$Local " + re.escape(literal), calls)[1]
+    capability = re.search(r"Let \(([^\n]+)\)\n[^\n]*\n[^\n]*CallMath Left[^\n]*\n"
+                           r"[^\n]*\$Local " + re.escape(converted) + r"\n[^\n]*Int 64", calls)[1]
     assert re.search(r"String 'https://play.lightsoutranked.com/api/probe/slow'\n"
-                     r"[^\n]*\$Local " + re.escape(converted), calls)
+                     r"[^\n]*\$Local " + re.escape(capability), calls)
     assert calls.count("CallMath OpenLevel@") == 1
     assert calls.count("String 'LobbyHost'") == 2
     assert calls.count("CallMath GetCurrentLevelName@") == 3  # two guards plus diagnostics

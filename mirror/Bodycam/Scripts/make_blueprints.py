@@ -43,6 +43,10 @@ import bodybomb_variant as BV
 importlib.reload(BG)
 import migration_graphs as MIGRATION
 importlib.reload(MIGRATION)
+import recovery_graphs as RECOVERY
+importlib.reload(RECOVERY)
+import recovery_restore_graphs as RESTORE
+importlib.reload(RESTORE)
 import combat_graphs as COMBAT
 importlib.reload(COMBAT)
 import combat_transport_graphs as TRANSPORT
@@ -182,25 +186,26 @@ def cls_of(path):
     return c
 
 def pre_clean():
-    """delete last run's assets in dependency order (referencing assets first), so re-runs start clean"""
-    for path in ["/Game/GM/Gamemode/GM_BB1"] + [
+    """Delete authored mirror assets together, including mutually referring request actors."""
+    paths = ["/Game/GM/Gamemode/GM_BB1"] + [
             "/Game/GM/Gamemode/BB1/" + asset for asset in (
-                "BP_BB1MigrationRequest", "BP_BB1StartRequest", "BP_BB1TeamRequest",
+                "BP_BB1RestoreRequest", "BP_BB1Recovery", "BP_BB1MigrationRequest", "BP_BB1StartRequest", "BP_BB1TeamRequest",
                 "BP_CHCombatRequest", "BP_CHCombatObserver", "BP_CHCombatManager",
-                "AC_BB1BombRule", "GE_BB1_DroneCooldown")] + ["/Game/GM/DATA/DataAsset/DA_BB1"]:
-        if EAL.does_asset_exist(path) and not EAL.delete_asset(path):
-            raise BuildFailed("Could not remove stale " + path)
-    for path in ("/Game/GM/Gamemode/GM_DOM", DOM_DIR + "/BP_DOM_Point", DOM_DIR + "/GE_DOM_DroneCooldown", "/Game/GM/DATA/DataAsset/DA_DOM",
+                "AC_BB1BombRule", "GE_BB1_DroneCooldown")] + ["/Game/GM/DATA/DataAsset/DA_BB1"]
+    paths += ["/Game/GM/Gamemode/GM_DOM", DOM_DIR + "/BP_DOM_Point", DOM_DIR + "/GE_DOM_DroneCooldown", "/Game/GM/DATA/DataAsset/DA_DOM",
                  "/Game/GM/Gamemode/GM_CTF", CTF_DIR + "/BP_CTF_Base", CTF_DIR + "/BP_CTF_Flag", CTF_DIR + "/GE_CTF_NoPerk", CTF_DIR + "/GE_CTF_DroneCooldown", "/Game/MenuSystemPro/INGAME/HUD_Dot",
                  "/Game/GM/DATA/DataAsset/DA_CTF",
-                 BB5_DIR + "/BP_BB5MigrationRequest", "/Game/GM/Gamemode/GM_BB5", BB5_DIR + "/BP_BB5StartRequest", BB5_DIR + "/BP_BB5TeamRequest", BB5_DIR + "/AC_BB5BombRule", BB5_DIR + "/GE_BB5_DroneCooldown", "/Game/GM/DATA/DataAsset/DA_BB5",
+                 BB5_DIR + "/BP_BB5RestoreRequest", BB5_DIR + "/BP_BB5Recovery", BB5_DIR + "/BP_BB5MigrationRequest", "/Game/GM/Gamemode/GM_BB5", BB5_DIR + "/BP_BB5StartRequest", BB5_DIR + "/BP_BB5TeamRequest", BB5_DIR + "/AC_BB5BombRule", BB5_DIR + "/GE_BB5_DroneCooldown", "/Game/GM/DATA/DataAsset/DA_BB5",
                  BG.INV_PKG, BG.BOMBE_PKG,
                  "/Game/GM/Gamemode/GM_CHLobby", LG.HOST_PKG,
                  LG.GI_PKG,
-                 "/Game/GM/Gamemode/BP_BodycamGameModeAbstract"):
-        if EAL.does_asset_exist(path):
-            ok = EAL.delete_asset(path)
-            (log if ok else warn)(f"delete {path}: {'ok' if ok else 'FAILED (stale asset may be reused)'}")
+                 "/Game/GM/Gamemode/BP_BodycamGameModeAbstract"]
+    # The combat manager/observer/request also refer to one another.
+    paths += [BB5_DIR + '/' + name for name in ('BP_CHCombatRequest','BP_CHCombatObserver','BP_CHCombatManager')]
+    assets = [EAL.load_asset(path) for path in paths if EAL.does_asset_exist(path)]
+    if assets and not EAL.delete_loaded_assets(assets):
+        raise BuildFailed('Could not remove stale authored mirror assets')
+    log(f'deleted {len(assets)} authored mirror assets as one dependency group')
 
 def make_drone_cooldown_ge(path, name, factor):
     """infinite GameplayEffect: CharacterAttributeSet.GadgetCooldown x factor, stack limit 1 (the GM re-applies it every 2 s)"""
@@ -423,10 +428,15 @@ def stage3_bb5(parent, mode_id="BB5"):
         add_var(rule, name, pin("string"))
     add_var(rule, "GuardDispatched", pin("bool"))
     add_var(rule, "HostEpoch", pin("int"))
+    add_var(rule, "RecoveryPending", pin("bool"))
+    add_var(rule, "RecoveryApplied", pin("bool"))
     add_var(rule, "MigrationPending", pin("bool"))
     add_var(rule, "MigrationCallbackSeen", pin("bool"))
     add_var(rule, "MigrationCandidate", pin("string"))
     for name in MIGRATION.DURABLE:
+        if not TOOLS.set_variable_save_game(rule, name):
+            raise BuildFailed("SaveGame flag missing: " + name)
+    for name in ("RecoveryPending", "RecoveryApplied"):
         if not TOOLS.set_variable_save_game(rule, name):
             raise BuildFailed("SaveGame flag missing: " + name)
     compile_report(rule, "AC_BB5BombRule (vars)")
@@ -509,11 +519,62 @@ def stage3_bb5(parent, mode_id="BB5"):
         layout(bp, bp.get_name())
         EAL.save_loaded_asset(bp)
 
-    # ---------- GM_BB5 ----------
+    recovery = make_blueprint(BB5_DIR, "BP_BB5Recovery", unreal.Actor)
+    add_var(recovery, "Rule", pin("object", gen_class(rule)))
+    add_var(recovery, "Session", pin("string"))
+    add_var(recovery, "SeedSession", pin("string"))
+    add_var(recovery, "RestoreDeadline", pin("int"))
+    for name in ("Rows", "Meta"):
+        add_var(recovery, name, pin("string"))
+    add_var(recovery, "HasCapture", pin("bool"))
+    add_var(recovery, "SnapshotRosterValid", pin("bool"))
+    add_var(recovery, "SnapshotIds", pin("string", None, "array"))
+    add_var(recovery, "Parts", pin("string", None, "array"))
+    for name in ("Epoch", "Sequence", "Ticks", "Score0", "Score1", "CapturedRound", "CapturedEpoch", "SeedEpoch", "Stage"):
+        add_var(recovery, name, pin("int"))
+    for name in ("Session", "Epoch", "Sequence"):
+        if not TOOLS.set_variable_replicated(recovery, name, True, "OnRep_Sequence" if name == "Sequence" else ""):
+            raise BuildFailed("recovery replication flag: " + name)
+    TOOLS.ensure_function_graph(recovery, "OnRep_Sequence")
+    TOOLS.ensure_function_graph(recovery, "BuildSnapshot")
+    TOOLS.ensure_function_graph(recovery, "ApplySnapshot")
+    compile_report(recovery, "recovery vars")
+    build(recovery, "EventGraph", RECOVERY.events(), "recovery events")
+    compile_report(recovery, "recovery signatures")
+    restore_request = make_blueprint(BB5_DIR, "BP_BB5RestoreRequest", unreal.Actor)
+    add_var(restore_request, "Manager", pin("object", gen_class(recovery)))
+    add_var(restore_request, "Consumed", pin("bool"))
+    for name in ("Meta", "Rows", "Session"):
+        add_var(restore_request, name, pin("string"))
+    for name in ("Stage", "Epoch", "Deadline"):
+        add_var(restore_request, name, pin("int"))
+    build(restore_request, "EventGraph", RESTORE.request_events(), "restore request signatures")
+    compile_report(restore_request, "restore request signatures")
+    # Recovery's bounded failure path calls the shared authored session exit.
+    # Create its signature before compiling graphs that reference it.
     gm = make_blueprint("/Game/GM/Gamemode", "GM_BB5", gen_class(parent))
     add_component(gm, gen_class(rule), "BB5BombRule")
     compile_report(gm, "GM_BB5 (shell)")
     build(gm, "EventGraph", BG.gm_events(), "GM_BB5 events")
+    compile_report(gm, "GM_BB5 signatures")
+    build(recovery, "OnRep_Sequence", RECOVERY.on_rep(), "recovery RepNotify")
+    build(recovery, "BuildSnapshot", RECOVERY.snapshot(), "coherent round snapshot")
+    build(recovery, "ApplySnapshot", RESTORE.apply_snapshot(), "restore native round fields")
+    build(recovery, "EventGraph", RECOVERY.logic(), "recovery host tick")
+    build(recovery, "EventGraph", RECOVERY.pulse_logic(), "recovery participant pulse")
+    build(recovery, "EventGraph", RECOVERY.checkpoint_logic(), "durable checkpoint transport")
+    build(recovery, "EventGraph", RESTORE.warmup_event(), "hold warmup for restore validation")
+    build(restore_request, "EventGraph", RESTORE.request_logic(), "restore acknowledgement")
+    compile_report(restore_request, "restore request logic")
+    EAL.save_loaded_asset(restore_request)
+    cdo = unreal.get_default_object(gen_class(recovery))
+    cdo.set_editor_property("replicates", True)
+    cdo.set_editor_property("always_relevant", True)
+    cdo.set_editor_property("net_update_frequency", 5.0)
+    compile_report(recovery, "recovery logic")
+    EAL.save_loaded_asset(recovery)
+
+    # ---------- GM_BB5 ----------
     log("  override ShouldSpawnBots: " + TOOLS.override_function(gm, "ShouldSpawnBots"))
     # The player-count gate. The override graph has to be CREATED from the parent's signature first, or BuildGraph's
     # FindGraph(create=true) makes a plain new function of the same name whose result node has no ReturnValue pin -
@@ -615,7 +676,7 @@ def stage4_dom(parent):
 
     # ---------- class defaults ----------
     cdo = unreal.get_default_object(gen_class(point))
-    for prop, val in (("replicates", True), ("replicate_movement", True), ("always_relevant", True), ("owner_team", -1), ("cap_team", -1)):
+    for prop, val in (("replicates", True), ("replicate_movement", True), ("always_relevant", True), ("OwnerTeam", -1), ("CapTeam", -1)):
         try: cdo.set_editor_property(prop, val); log(f"  BP_DOM_Point default {prop} = {val}")
         except Exception as e: warn(f"  BP_DOM_Point: could not set {prop}: {e}")
     gcdo = unreal.get_default_object(gen_class(gm))

@@ -79,18 +79,24 @@ def zip_tree(folder,target):
                 z.writestr(entry,path.read_bytes())
 
 
-def verify_proof(proof, migration=False, ranked_modes=("BB5",)):
+def verify_proof(proof, migration=False, ranked_modes=("BB5",), recovery=False):
     from collections import Counter
     modes = tuple(ranked_modes)
     if not modes or len(set(modes)) != len(modes) or any(m not in ("BB5", "BB1") for m in modes):
         raise ValueError("Unexpected ranked endpoint inventory")
-    expected = Counter({("GM_CHJoin.uexp", 1): 1, ("GM_CHLobby.uexp", 3): 1})
+    lobby = 'Bodycam/Content/GM/Gamemode/'
+    expected = Counter({(lobby+"GM_CHJoin.uexp", 1): 1, (lobby+"GM_CHLobby.uexp", 3): 1})
     for mode in modes:
+        def asset(name):
+            return 'cooked/'+lobby+('' if name==f'GM_{mode}.uexp' else mode+'/')+name
         for name, count in ((f"GM_{mode}.uexp", 16), (f"BP_{mode}StartRequest.uexp", 1),
                             (f"BP_{mode}TeamRequest.uexp", 9), ("BP_CHCombatRequest.uexp", 1)):
-            expected[(name, count)] += 1
+            expected[(asset(name), count)] += 1
         if migration:
-            expected[(f"BP_{mode}MigrationRequest.uexp", 1)] += 1
-    actual = Counter((Path(item["asset"]).name, item["endpoints"]) for item in proof)
+            expected[(asset(f"BP_{mode}MigrationRequest.uexp"), 1)] += 1
+        if recovery:
+            expected[(asset(f"BP_{mode}Recovery.uexp"), 2)] += 1
+            expected[(asset(f"BP_{mode}RestoreRequest.uexp"), 1)] += 1
+    actual = Counter((item["asset"], item["endpoints"]) for item in proof)
     if actual != expected:
         raise ValueError("Authored endpoint baseline changed; review all authored assets before building")

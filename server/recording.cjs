@@ -4,11 +4,13 @@ const crypto = require('node:crypto');
 function config(env = process.env) {
   if (env.HUB_RECORDING !== '1') return null;
   const mode = env.HUB_RECORDING_MODE || 'recording';
-  if (!['recording', 'host-test', 'account-test'].includes(mode)) throw Error('Unknown private client mode');
-  const count = mode === 'recording' ? 2 : 1;
+  if (!['recording', 'host-test', 'account-test', 'recovery-test'].includes(mode)) throw Error('Unknown private client mode');
+  const count = mode === 'recovery-test' ? Number(env.COMP_MATCH_SIZE) : mode === 'recording' ? 2 : 1;
+  if (mode === 'recovery-test' && ![2,10].includes(count)) throw Error('Recovery test requires two or ten human players');
   if (!/^recording:[a-z0-9-]+:$/.test(env.HUB_STORE_PREFIX || '')) throw Error('Recording storage prefix must be recording:<id>:');
   if (mode === 'host-test' && !/^recording:hosttest[a-z0-9-]*:$/.test(env.HUB_STORE_PREFIX)) throw Error('Host test requires its own storage namespace');
   if (mode === 'account-test' && !/^recording:accounttest[a-z0-9-]*:$/.test(env.HUB_STORE_PREFIX)) throw Error('Account test requires its own storage namespace');
+  if (mode === 'recovery-test' && !/^recording:recoverytest[a-z0-9-]*:$/.test(env.HUB_STORE_PREFIX)) throw Error('Recovery test requires its own storage namespace');
   const ids = String(env.COMP_PRIVATE_STEAM_IDS || '').split(',').map(s=>s.trim());
   if (ids.length !== count || new Set(ids).size !== count || ids.some(id=>!/^7656119\d{10}$/.test(id))) throw Error(`Private ${mode} requires exactly ${count} Steam IDs`);
   const key = env.HUB_RECORDING_DOWNLOAD_KEY || '';
@@ -52,7 +54,7 @@ function validateDeployment(env=process.env) {
   }
   if(!/^https:\/\//.test(env.UPSTASH_REDIS_REST_URL||'') || !env.UPSTASH_REDIS_REST_TOKEN) throw Error('Recording requires persistent Upstash storage');
   if(env.HUB_TEST_TOKENS || env.COMP_NETWORK_TEST_BYPASS) throw Error('Test authentication/network bypass is forbidden on the recording server');
-  if(recording.mode!=='recording' && env.COMP_NO_SHOW_PENALTIES_PAUSED!=='1') throw Error('Private solo tests require paused no-show penalties');
+  if(recording.mode!=='recording' && env.COMP_NO_SHOW_PENALTIES_PAUSED!=='1') throw Error('Private tests require paused no-show penalties');
   if(recording.mode==='account-test'&&(!require('./account-mail.cjs').fromEnvironment(env)||!env.STEAM_WEB_API_KEY))
     throw Error('Account test requires email delivery and game identity verification');
   return recording;

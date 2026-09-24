@@ -53,3 +53,11 @@ test('a cancelled host epoch cannot charge a pending reconnect penalty',async()=
   await assert.rejects(lib.commit(store,prefix,'m','p',{...payload(),host,host_epoch:0}));
   for(const key of ['rating:p','penalty:p','reconnect:penalty:m:p'])assert.equal(await store(['GET',prefix+key]),null);
 });
+
+test('a changed membership version cannot charge from a stale reconnect observation',async()=>{
+  const prefix='roster:',host='76561198000000001';
+  await store(['SET',prefix+'live:authority:m',JSON.stringify({host,epoch:0,roster_revision:2,last_seen:1})]);
+  await assert.rejects(lib.commit(store,prefix,'m','p',{...payload(),host,host_epoch:0,roster_revision:1}));
+  for(const key of ['rating:p','penalty:p','reconnect:penalty:m:p'])assert.equal(await store(['GET',prefix+key]),null);
+  assert.equal((await lib.commit(store,prefix,'m','p',{...payload(),host,host_epoch:0,roster_revision:2})).replayed,false);
+});

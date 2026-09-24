@@ -19,7 +19,8 @@ LEGACY = 'lightsout.up.railway.app'
 PUBLIC = 'play.lightsoutranked.com'
 EXPECTED = {'GM_CHJoin.uexp': 1, 'GM_CHLobby.uexp': 3, 'GM_BB5.uexp': 16,
             'BP_BB5MigrationRequest.uexp': 1, 'BP_BB5StartRequest.uexp': 1,
-            'BP_BB5TeamRequest.uexp': 9, 'BP_CHCombatRequest.uexp': 1}
+            'BP_BB5TeamRequest.uexp': 9, 'BP_CHCombatRequest.uexp': 1,
+            'BP_BB5Recovery.uexp': 2, 'BP_BB5RestoreRequest.uexp': 1}
 
 
 def shipped_tree(tmp_path):
@@ -43,7 +44,7 @@ def test_actual_shipped_endpoints_change_only_inline_string_bytes(tmp_path):
     proof = []
     endpoint_assets.retarget_tree(tree, source, target, proof)
     assert {Path(p['asset']).name: p['endpoints'] for p in proof} == EXPECTED
-    assert len(proof) == 7
+    assert len(proof) == 9
     for rel, old in before.items():
         new = (tree / rel).read_bytes()
         assert len(new) == len(old)
@@ -51,7 +52,7 @@ def test_actual_shipped_endpoints_change_only_inline_string_bytes(tmp_path):
         assert new.replace(target.encode(), source.encode()) == old
         if rel.suffix == '.uasset':
             assert new == old
-    assert sum(p['endpoints'] for p in proof) == 32
+    assert sum(p['endpoints'] for p in proof) == 35
     with pytest.raises(ValueError, match='No endpoint'):
         endpoint_assets.retarget_tree(tree, source, target, [])
 
@@ -116,7 +117,7 @@ def test_publisher_endpoint_release_preserves_pack_contents_and_ctf(tmp_path, mo
         manifest = archive.read('manifest.json')
     (tmp_path / 'gamemodes/bb5').mkdir(parents=True)
     (tmp_path / 'gamemodes/bb5/manifest.json').write_bytes(manifest)
-    shutil.copytree(ROOT / 'hub/lobbyseed', tmp_path / 'hub/lobbyseed')
+    shutil.copytree(ROOT / 'tests/fixtures/proxy/lobbyseed', tmp_path / 'hub/lobbyseed')
     for path in (tmp_path / 'hub/lobbyseed').rglob('*.uexp'):
         path.write_bytes(path.read_bytes().replace(PUBLIC.encode(), LEGACY.encode()))
     monkeypatch.setattr(publish, 'ROOT', str(tmp_path))

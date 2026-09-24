@@ -109,18 +109,19 @@ def logic(g):
     # Keep the same searchable session name so a crashed original host can find
     # the successor through the existing joiner path.
     g.existing('migration_advertise','MigrationAdvertise')
+    session,_=B._start_key(g,'migration_session_',full=True)
     g.call('migration_lobby',B.ONLINE,'GetCurrentLobbyInfo')
     for i,name in enumerate(('Name','CH_MATCH')):
         node='migration_same'+str(i)
         g.call(node,B.ONLINE_TYPES,'CompareLobbyInfoStringAttribute',{'Key':name})
-        g.link(('migration_lobby.ReturnValue',node+'.LobbyInfo'),(key,node+'.Value'))
+        g.link(('migration_lobby.ReturnValue',node+'.LobbyInfo'),(session if name=='Name' else key,node+'.Value'))
     g.call('migration_advertised',MATH,'BooleanAND');g.link(('migration_same0.ReturnValue','migration_advertised.A'),('migration_same1.ReturnValue','migration_advertised.B'))
     g.branch('migration_needs_publish');g.link(('migration_advertised.ReturnValue','migration_needs_publish.condition'));g.chain('migration_advertise','migration_needs_publish')
     g.n('migration_attrs','makemap',count=2)
     for i,name in enumerate(('Name','CH_MATCH')):
         p='migration_attr'+str(i)
         g.call(p+'key',SYS,'MakeLiteralString',{'Value':name})
-        g.call(p+'value',B.ONLINE_TYPES,'MakeStringLobbyAttribute');g.link((key,p+'value.Value'))
+        g.call(p+'value',B.ONLINE_TYPES,'MakeStringLobbyAttribute');g.link((session if name=='Name' else key,p+'value.Value'))
         g.link((p+'key.ReturnValue','migration_attrs.Key '+str(i)),(p+'value.ReturnValue','migration_attrs.Value '+str(i)))
     g.call('migration_update',B.UPDATE_LOBBY,'UpdateLobby',{'SessionName':'GameSession','MaxPlayers':'10',
         'bAllowJoinInProgress':'true','bLockForInviteOnly':'false'})

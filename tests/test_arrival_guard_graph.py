@@ -32,6 +32,8 @@ class ArrivalHarness(SweepHarness):
             f = n['func']
             if f == 'GetGameInstance': return self.gi
             if f == 'Len': return len(self.arg(n, 'S'))
+            if f == 'GreaterEqual_IntInt': return int(self.arg(n, 'A')) >= int(self.arg(n, 'B'))
+            if f == 'Left': return self.arg(n, 'SourceString')[:int(self.arg(n, 'Count'))]
             if f == 'IsNumeric': return self.arg(n, 'SourceString').isdigit()
             if f == 'GetPathName': return self.arg(n, 'Object')['path']
             if f == 'Contains': return self.arg(n, 'Substring') in self.arg(n, 'SearchIn')

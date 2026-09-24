@@ -8,7 +8,7 @@ local authority=redis.call('GET',KEYS[1])
 local raw=redis.call('GET',KEYS[2])
 if not authority or not raw or redis.call('GET',KEYS[3]) then return {'closed'} end
 local a=cjson.decode(authority)
-if a.closed then return {'closed'} end
+if a.closed or a.phase=='restoring' then return {'closed'} end
 local m=cjson.decode(raw)
 local op,who,token,epoch,now,candidate=ARGV[1],ARGV[2],ARGV[3],tonumber(ARGV[4]),tonumber(ARGV[5]),ARGV[6]
 if m.state~='live' or not m.start_ready_verified or m.final_snapshot then return {'closed'} end
@@ -35,7 +35,7 @@ if now-a.last_seen<10000 or now-a.last_seen>300000 then return {'lease'} end
 if (m.host_epoch or 0)~=a.epoch or m.host~=a.host then return {'snapshot'} end
 if raw~=ARGV[8] or authority~=ARGV[10] then return {'conflict'} end
 local saved=ARGV[9]
-local nextAuthority=cjson.encode({host=who,epoch=epoch,digest=token,candidate='',last_seen=now})
+local nextAuthority=cjson.encode({host=who,epoch=epoch,digest=token,candidate='',last_seen=now,roster_revision=m.roster_revision or 0})
 redis.call('SET',KEYS[2],saved,'EX',ARGV[7])
 redis.call('SET',KEYS[1],nextAuthority,'EX',ARGV[7])
 return {'activated',saved}

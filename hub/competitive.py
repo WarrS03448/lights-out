@@ -918,6 +918,15 @@ class MockSession(Session):
         self.report_token = ""       # private per-match capability; never placed in UI snapshots
         self.migration_token = ""
         self.host_epoch = 0
+        self.session_key = ""
+        self.recovery = {}
+        self.recovery_health = {}
+        self._recovery_busy = False
+        self._recovery_claim_busy = False
+        self._recovery_clock = None
+        self.roster_revision = 0
+        self._recovery_launch_busy = False
+        self._recovery_next = 0
         self.match_complete = ""
         self.game_close = ""
         self._close_armed = False      # one close per match, whatever order the events arrive in
@@ -996,7 +1005,15 @@ class MockSession(Session):
         pak, so there is no new field and no way for the two halves to disagree. Lowercase hex with
         one dash, so it can never trip UE's trailing _<digits> FName-number split."""
         mid = str(getattr(self, "match_id", "") or "")
-        return ("chm-" + mid) if mid else ""
+        return (getattr(self, "session_key", "") or "chm-" + mid) if mid else ""
+
+    def _report_configuration(self, token):
+        recovery = getattr(self, "recovery", {}) or {}
+        if not self.host_epoch and not recovery:
+            return token
+        return lobbypak_mod._retarget_module().recovery_config.encode(
+            token, self.match_id, self.host_epoch,
+            recovery.get("checkpoint") if recovery.get("phase") == "restoring" else None, recovery.get("hash", ""))
 
     def _prepare_joiner_pak(self):
         """Put the JOINER pak into ~mods, stamped with this match's token, before Steam launches.
@@ -1017,7 +1034,7 @@ class MockSession(Session):
         try:
             ready = lobbypak_mod.prepare(game, getattr(self, "ranked_mode", "BB5"), self.map, log=None,
                                  host_id=player_identity.native_id(self.host),
-                                 token=token, role="join", report_token=self.migration_token)
+                                 token=token, role="join", report_token=self._report_configuration(self.migration_token))
             self.pak_done = bool(ready)
             if ready:
                 self._lobby_pak_dir = game
@@ -1059,7 +1076,7 @@ class MockSession(Session):
             self.host_level = lobbypak_mod.prepare(
                 game, getattr(self, "ranked_mode", HOST_GAMEMODE_ID), self.map,
                 host_id=player_identity.native_id(self.host),
-                token=self._match_token(), report_token=self.report_token)
+                token=self._match_token(), report_token=self._report_configuration(self.report_token))
             self.host_pak_done = bool(self.host_level)
             if self.host_pak_done:
                 self._lobby_pak_dir = game
@@ -1253,6 +1270,14 @@ class MockSession(Session):
         """Open the game after the player has closed it, without terminating a process."""
         if self.phase not in ("connecting", "live"):
             return
+        recovery = getattr(self, "recovery", {}) or {}
+        if recovery:
+            from . import match_recovery
+            match_recovery.relaunch(self)
+            return
+        self._relaunch_closed_game()
+
+    def _relaunch_closed_game(self):
         try:
             if game_mod.game_running():
                 self._game_launch_at = None
@@ -2496,6 +2521,7 @@ class MockSession(Session):
         self._changed()
 
     def leave_result(self):
+        self._dismissed_result = (getattr(self, "_account_epoch", 0), self.match_id)
         self.reset_match()
         self.phase = "idle"
         self._changed()
@@ -2594,8 +2620,6 @@ class MockSession(Session):
                 sid = str(p.get("steam_id") or "")
                 teams[n].append({"steam_id": sid, "name": p.get("name") or sid,
                                  "is_me": bool(me_id) and sid == me_id, "left": False})
-        if teams[1] or teams[2]:
-            return teams
         payload = self.result_payload if isinstance(self.result_payload, dict) else {}
         for p in (payload.get("players") or []):
             if not isinstance(p, dict):
@@ -2604,6 +2628,10 @@ class MockSession(Session):
             if n not in (1, 2):
                 continue
             sid = str(p.get("steam_id") or "")
+            existing = next((q for q in teams[n] if q["steam_id"] == sid), None)
+            if existing is not None:
+                existing["left"] = bool(p.get("left"))
+                continue
             teams[n].append({"steam_id": sid,
                              "name": p.get("name") or p.get("persona") or sid,
                              "is_me": bool(me_id) and sid == me_id,
@@ -2638,6 +2666,7 @@ class MockSession(Session):
             "map": str(self.map or ""),
             "won": r.get("won") if isinstance(r.get("won"), bool) else None,
             "voided": bool(r.get("voided")),
+            "recovery_forfeit": bool(r.get("recovery_forfeit")),
             "void_reason": str(r.get("reason") or ""),
             "my_team": mine,
             "winner": self._postmatch_winner(mine),
@@ -2828,6 +2857,8 @@ class LiveSession(MockSession):
             self._changed()
 
     def concede(self):
+        if (getattr(self, "recovery", {}) or {}).get("phase") == "restoring":
+            return
         if self.ranked_mode != "BB1" or self.phase != "live" or not self.client:
             return
         match_id, client = self.match_id, self.client
@@ -3801,6 +3832,10 @@ class LiveSession(MockSession):
             # Its result belongs in history and must never close the current game.
             self.history_stale = True
             return
+        if (kind in ("match_result", "match_over", "match_cancelled") and event.get("match_id") and
+                getattr(self, "_dismissed_result", None) == (getattr(self, "_account_epoch", 0), event["match_id"])):
+            self.history_stale = True
+            return
         if kind == "network_status":
             self._changed()
             return
@@ -3940,6 +3975,8 @@ class LiveSession(MockSession):
             # would drag the player back to the accept screen and reset their lobby (bug 3).
             if self.phase in ("lobby", "connecting", "live", "result"):
                 return
+            if event.get("match_id"):
+                self.match_id = str(event["match_id"])
             self.players = [self._player_from(p) for p in (event.get("players") or [])]
             self.accept_total = max(1, int(event.get("total") or 0) or len(self.players))
             self.accept_left = int(event.get("accept_seconds") or ACCEPT_SECONDS)
@@ -4037,6 +4074,9 @@ class LiveSession(MockSession):
             self._changed()
             return
         elif kind == "match_live":
+            from . import match_recovery
+            if match_recovery.stale_event(self, event):
+                return
             # the server archives a match the moment it goes live, so what we hold is stale
             self.history_stale = True
             self._match_replay_seen = True
@@ -4076,6 +4116,8 @@ class LiveSession(MockSession):
         elif kind == "match_over":
             self._match_replay_seen = True
             self.history_stale = True
+            if event.get("recovery_excluded") is True:
+                self.error = t("comp_recovery_excluded")
             if self.phase not in ("idle", "signed_out"):
                 self.phase = "idle"
             # The service has closed the books on this match. Whatever data was going to be
@@ -4229,6 +4271,50 @@ class LiveSession(MockSession):
 
     def _update_match_authority(self, event):
         """Refresh host role on live replays without restarting an open game."""
+        import re
+        from . import match_recovery
+        if match_recovery.stale_event(self, event):
+            return
+        old_session = getattr(self, "session_key", "")
+        next_epoch = int(event.get("host_epoch") or 0)
+        if next_epoch < getattr(self, "host_epoch", 0):
+            return
+        next_session = str(event.get("session_key") or "chm-" + self.match_id)
+        if not re.fullmatch(r"chm-" + re.escape(self.match_id) + r"(?:-r[a-f0-9]{16})?", next_session):
+            return
+        self.session_key = next_session
+        incoming = dict(event.get("recovery") or {})
+        previous = getattr(self, "recovery", {}) or {}
+        if next_epoch == getattr(self, "host_epoch", 0) and next_session == old_session:
+            if (incoming.get("revision") or 0) < (previous.get("revision") or 0):
+                incoming = previous
+            elif previous.get("phase") == "playing" and incoming.get("phase") == "restoring":
+                incoming = previous
+            elif previous.get("world_ready") is True and incoming:
+                incoming["world_ready"] = True
+        self.recovery = incoming
+        self.roster_revision = int(event.get("roster_revision") or 0)
+        if isinstance(event.get("players"), list) and event["players"]:
+            known = {p["steam_id"]: p for p in self.players}
+            refreshed = []
+            for entry in event["players"]:
+                player = self._player_from(entry)
+                prior = known.get(player["steam_id"], {})
+                merged = {**prior, **{key: value for key, value in player.items() if value is not None and value != ""}}
+                if not entry.get("persona") and prior.get("name"):
+                    merged["name"] = prior["name"]
+                refreshed.append(merged)
+            self.players = refreshed
+            by_id = {p["steam_id"]: p for p in refreshed}
+            teams = event.get("teams")
+            if isinstance(teams, dict):
+                self.teams = {n: [by_id[str(i)] for i in teams.get(str(n), teams.get(n, [])) if str(i) in by_id] for n in (1, 2)}
+            sides = event.get("sides") or {}
+            for n in (1, 2):
+                if sides.get(str(n)) in ("attack", "defend"):
+                    self.sides[n] = sides[str(n)]
+        if self.recovery:
+            self.host_ready = self.recovery.get("world_ready") is True
         host_id = str(event.get("host") or "")
         old_host = str((self.host or {}).get("steam_id") or "")
         if host_id:
@@ -4240,7 +4326,12 @@ class LiveSession(MockSession):
         if self._i_am_host():
             self.report_token = self.migration_token or self.report_token
         self.host_epoch = int(event.get("host_epoch") or 0)
-        if old_host and host_id and old_host != host_id:
+        if (old_host and host_id and old_host != host_id) or (old_session and old_session != next_session) or (
+                previous.get("phase") == "restoring" and self.recovery.get("phase") == "playing"):
+            self._recovery_busy = False
+            self._recovery_claim_busy = False
+            self._recovery_launch_busy = False
+            self.recovery_health = {}
             # The next launch must build for the new role. Never replace a mounted
             # pak: relaunch_game already checks that the process has exited.
             self.pak_done = False
@@ -4248,6 +4339,7 @@ class LiveSession(MockSession):
             self.host_level = ""
             self.launched = False
             self.launched_for = ""
+        match_recovery.note_clock(self, incoming.get("server_now"))
 
     def _on_result(self, event):
         """The match is over and the service has the scoreboard (docs/match-result.md hop 2).
@@ -4279,7 +4371,8 @@ class LiveSession(MockSession):
             self.result = {"won": False, "score": (0, 0), "delta": 0, "voided": True,
                            "reason": str(event.get("void_reason") or "")}
         else:
-            mine = self.my_team() or 1
+            mine = next((_int_or(p.get("team")) for p in event.get("players", [])
+                if str(p.get("steam_id") or "") == str((self.me or {}).get("steam_id") or "") and _int_or(p.get("team")) in (1, 2)), None) or self.my_team() or 1
             raw_score = event.get("score") or (0, 0)
             score = ([raw_score.get("1", raw_score.get(1, 0)), raw_score.get("2", raw_score.get(2, 0))]
                      if isinstance(raw_score, dict) else list(raw_score)[:2])
@@ -4319,7 +4412,9 @@ class LiveSession(MockSession):
                            "placing": bool(you.get("placing")),
                            "placed": bool(you.get("placed")),
                            "placements_left": _int_or(you.get("placements_left")),
-                           "placed_rank": placed_rank}
+                           "placed_rank": placed_rank,
+                           "recovery_forfeit": ((event.get("terminal") or {}).get("recovery") is True or (event.get("terminal") or {}).get("absence") is True) and
+                               (event.get("terminal") or {}).get("reason") == "reconnect_timeout"}
             if you.get("level") is not None and self.me:
                 self.me["level"] = _int_or(you.get("level")) or self.me.get("level")
             # the visible rank moves with the matchmaking rating, so a finished match is exactly when
@@ -4392,6 +4487,8 @@ class LiveSession(MockSession):
             self.error = t("comp_no_show_others")
         elif reason == "stalled":
             self.error = t("comp_match_stalled")
+        elif reason == "recovery_expired":
+            self.error = t("comp_recovery_failed")
         else:
             self.error = t("comp_declined")
         # Written down - why it died, what it cost, where the player goes next. NOW the game may
@@ -4889,7 +4986,7 @@ class LiveSession(MockSession):
         self.connected_ids = set(by_id)
         self.i_connected = True
         self.i_accepted = True
-        self.host_ready = True
+        self.host_ready = self.recovery.get("world_ready") is True if self.recovery.get("phase") == "restoring" else True
         self.phase = "live"
         self.error = ""
         self.rejoined = True
@@ -4897,6 +4994,8 @@ class LiveSession(MockSession):
 
     def _watch_tick(self):
         """The shared watchdog, plus the one deadline only a live session can be waiting on."""
+        from . import match_recovery
+        match_recovery.poll(self)
         if self._pending_lobby_cleanup and not game_mod.game_running_cached(game_mod.SNAPSHOT_TTL_SECONDS):
             for game in tuple(self._pending_lobby_cleanup):
                 if game == self._lobby_pak_dir and (self.host_pak_done or self.pak_done):
@@ -4908,6 +5007,11 @@ class LiveSession(MockSession):
                     pass
         self._check_rejoin_deadline()
         super()._watch_tick()
+
+    def claim_recovery(self):
+        from . import match_recovery
+        if (getattr(self, "recovery_health", {}) or {}).get("can_claim") is True:
+            match_recovery.poll(self, claim=True)
 
     def _check_rejoin_deadline(self):
         """Has the grace after a reconnect run out with no match handed back?"""
@@ -5403,7 +5507,8 @@ class CompetitivePanel:
         s = self.session
         skip = set(self._SIG_LIVE) | set(self._SIG_SKIP)
         parts = [self.view, bool(self.gamemode_installed()), bool(getattr(self.app, "busy", False)),
-                 self.sound_volume(), bool(self.party_code_hidden)]
+                 self.sound_volume(), bool(self.party_code_hidden),
+                 bool(getattr(s,"_recovery_claim_busy",False)),bool(getattr(s,"_recovery_launch_busy",False))]
         for key in sorted(vars(s)):
             if key in skip or key.startswith("_"):
                 continue
@@ -6681,8 +6786,44 @@ class CompetitivePanel:
         s = self.session
         inner = self._centre()
         if getattr(s, "live", False):
-            self._button(inner, t("comp_relaunch" if s._i_am_host() else "comp_reconnect"),
-                         s.relaunch_game).pack(pady=(0, 8))
+            from . import match_recovery
+            recovery = match_recovery.public_status(s)
+            if recovery["visible"]:
+                key = {"creating":"comp_recovery_creating", "returning":"comp_recovery_restoring",
+                       "verifying":"comp_recovery_verifying", "sealing":"comp_recovery_return_closed",
+                       "resumed":"comp_recovery_resumed", "close_game":"comp_recovery_close_hint",
+                       "available":"comp_recovery_available", "checking":"comp_recovery_checking",
+                       "unavailable":"comp_recovery_unavailable"}[recovery["state"]]
+                tk.Label(inner, text=t(key, round=recovery["round"] or 0), bg=WHITE, fg=GREY,
+                         wraplength=520, justify="center").pack(pady=(0, 8))
+                if recovery["restoring"] and recovery["rejoin_until"] and not recovery["roster_sealed"]:
+                    countdown = tk.Label(inner, bg=WHITE, fg=GREY, wraplength=520, justify="center")
+                    countdown.pack(pady=(0, 8))
+                    def tick_recovery():
+                        remaining=max(0,int((recovery["rejoin_until"]-match_recovery.server_now(s)+999)/1000))
+                        countdown.config(text=t("comp_recovery_return_clock",time=format_duration(remaining),
+                                                returned=recovery["returned"],total=recovery["expected"]))
+                        if remaining == 0:
+                            countdown.config(text=t("comp_recovery_return_closed"))
+                            if return_button is not None:
+                                return_button.config(state="disabled")
+                    self._live(countdown,tick_recovery)
+                    tk.Label(inner,text=t("comp_recovery_return_rule"),bg=WHITE,fg=GREY,
+                             wraplength=520,justify="center").pack(pady=(0,8))
+                return_button = None
+                if recovery["can_claim"]:
+                    claim_button=self._button(inner, t("comp_recovery_host"), s.claim_recovery)
+                    claim_button.config(state="disabled" if recovery["busy"] else "normal")
+                    claim_button.pack(pady=(0, 8))
+                elif recovery["can_launch"]:
+                    return_button = self._button(inner, t("comp_relaunch" if s._i_am_host() else "comp_recovery_rejoin" if recovery["restoring"] else "comp_reconnect"), s.relaunch_game)
+                    return_button.config(state="disabled" if recovery["busy"] else "normal")
+                    return_button.pack(pady=(0, 8))
+                if recovery["busy"]:
+                    tk.Label(inner,text=t("comp_recovery_working"),bg=WHITE,fg=GREY,wraplength=520).pack(pady=(0,8))
+            else:
+                self._button(inner, t("comp_relaunch" if s._i_am_host() else "comp_reconnect"),
+                             s.relaunch_game).pack(pady=(0, 8))
             if s.error:
                 tk.Label(inner, text=s.error, bg=WHITE, fg=RED,
                          wraplength=520, justify="center").pack(pady=(0, 8))
@@ -6694,7 +6835,7 @@ class CompetitivePanel:
                  font=self.f_big).pack(pady=(2, 8))
         host_name = (s.host or {}).get("name", "?")
         host_ping = (s.host or {}).get("ping")
-        tk.Label(inner, text=t("comp_host", name=host_name, ping=host_ping if host_ping is not None else "—"),
+        tk.Label(inner, text=t("comp_host", name=host_name, ping=host_ping if host_ping is not None else "-"),
                  bg=WHITE, fg=GREY).pack()
         tk.Label(inner, text=t("comp_join_hint", name=host_name), bg=WHITE, fg=GREY,
                  wraplength=520, justify="center").pack(pady=(4, 14))
@@ -6749,6 +6890,8 @@ class CompetitivePanel:
                               division=s.me.get("division"), placing=s.me.get("placing")).pack(side="left", padx=(0, 8))
             self._arrows(row, r.get("delta", 0)).pack(side="left")
         self._draw_game_close(inner)
+        if r.get("recovery_forfeit"):
+            tk.Label(inner,text=t("comp_recovery_forfeit"),bg=WHITE,fg=GREY,wraplength=520,justify="center").pack(pady=(0,12))
         self._button(inner, t("comp_back"), s.leave_result, primary=True).pack()
 
     # The close is silent while it has nothing to say. "armed" draws nothing on purpose: the

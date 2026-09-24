@@ -582,6 +582,9 @@ class LiveClient:
         except Exception as e:         # noqa: BLE001 — offline, DNS, timeout
             return 0, {"error": str(e)}
 
+    def recover_match(self, payload):
+        return self._post("/api/match/recovery", payload)
+
     def history(self, match_id=None):
         """The player's own past matches, newest first, or one match in full.
 

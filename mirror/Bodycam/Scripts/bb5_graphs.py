@@ -88,7 +88,8 @@ def _report_send(g, node, defaults):
     g.cast(p+"rule", RULE, pure=True);g.link((p+"component.ReturnValue",p+"rule.cast_object"))
     g.get(p+"epoch", "HostEpoch", RULE);g.link((p+"rule.cast_result",p+"epoch.self"))
     g.call(p+"epoch_s", STR, "Conv_IntToString");g.link((p+"epoch.HostEpoch",p+"epoch_s.InInt"))
-    g.call(p+"prefix", STR, "Concat_StrStr", {"B":"."});g.link((p+"token."+REPORT_TOKEN_PROP,p+"prefix.A"))
+    g.call(p+"cap", STR, "Left", {"Count":"64"});g.link((p+"token."+REPORT_TOKEN_PROP,p+"cap.SourceString"))
+    g.call(p+"prefix", STR, "Concat_StrStr", {"B":"."});g.link((p+"cap.ReturnValue",p+"prefix.A"))
     g.call(p+"bearer", STR, "Concat_StrStr");g.link((p+"prefix.ReturnValue",p+"bearer.A"),(p+"epoch_s.ReturnValue",p+"bearer.B"),(p+"bearer.ReturnValue",node+".BearerToken"))
 
 # The lobby half of the proof. CreateLobby/UpdateLobby/FindLobbies all take an arbitrary
@@ -1032,6 +1033,8 @@ def gm_logic():
     # Both timers are on the ONE chain. Each block only declares its timer node; the order lives
     # here, in a single line, because an exec output pin drives exactly one link.
     import combat_graphs as combat
+    import recovery_graphs as recovery
+    recovery.spawn(g)
     g.call("combat_transform", MATH, "MakeTransform")
     g.spawn("combat_manager", combat.GM)
     g.link(("combat_transform.ReturnValue", "combat_manager.SpawnTransform"))
@@ -1039,7 +1042,7 @@ def gm_logic():
     g.link(("combat_manager.ReturnValue", "combat_start.self"))
     g.get("combat_rule", "BB5BombRule"); g.set("keep_combat", "CombatManager", RULE)
     g.link(("combat_rule.BB5BombRule", "keep_combat.self"), ("combat_manager.ReturnValue", "keep_combat.CombatManager"))
-    g.chain("bp", "bp_parent", "combat_manager", "combat_start", "keep_combat", "t_score", "t_stats", "t_team", "t_arrival", "t_startgate", "t_final", "migration_timeout")
+    g.chain("bp", "bp_parent", "recovery_actor", "recovery_start", "combat_manager", "combat_start", "keep_combat", "t_score", "t_stats", "t_team", "t_arrival", "t_startgate", "t_final", "migration_timeout")
     g.chain("t_migration", "perktimer")
     # RefreshPerkMods (server, every 2 s): every pawn carries the infinite "GadgetCooldown x4" effect (stack limit 1 -> never compounds;
     # the ASC lives on the pawn, so a new round's pawn needs it again) — the CTF mechanism with factor 4
@@ -1342,7 +1345,7 @@ def gm_arrival_guard(g):
     g.get("ag_token", REPORT_TOKEN_PROP, GI_CLASS)
     g.link(("ag_context_cast.cast_result", "ag_token.self"))
     g.call("ag_token_len", STR, "Len"); g.link(("ag_token." + REPORT_TOKEN_PROP, "ag_token_len.S"))
-    g.call("ag_token_ready", MATH, "EqualEqual_IntInt", {"B": "64"})
+    g.call("ag_token_ready", MATH, "GreaterEqual_IntInt", {"B": "64"})
     g.link(("ag_token_len.ReturnValue", "ag_token_ready.A"))
     g.call("ag_host_ps_local", GS_LIB, "GetPlayerController", {"PlayerIndex":"0"}); g.get("ag_host_ps", "PlayerState", CONTROLLER); g.link(("ag_host_ps_local.ReturnValue", "ag_host_ps.self"))
     g.call("ag_host_id", ONLINE, "RetrievePlatformIdAsStringFromPlayerState")
@@ -2266,7 +2269,7 @@ START_URL = REPORT_URL + "/start-ready"
 START_GI = "/Game/MenuSystemPro/Blueprints/Core/BodycamGI.BodycamGI_C"
 
 
-def _start_key(g, p):
+def _start_key(g, p, full=False):
     # The existing per-match lobby pak stamps this BEFORE hosting/travel. Unlike lobby
     # membership this survives travel locally and cannot shrink as players load or leave.
     g.call(p + "gi", GS_LIB, "GetGameInstance")
@@ -2274,7 +2277,11 @@ def _start_key(g, p):
     g.get(p + "key", "Session Name", START_GI); g.link((p + "cast.cast_result", p + "key.self"))
     g.call(p + "ranked", STR, "StartsWith", {"InPrefix": "chm-"})
     g.link((p + "key.Session Name", p + "ranked.SourceString"))
-    return p + "key.Session Name", p + "ranked.ReturnValue"
+    if full:
+        return p + "key.Session Name", p + "ranked.ReturnValue"
+    g.call(p + "match", STR, "Left", {"Count": "20"})
+    g.link((p + "key.Session Name", p + "match.SourceString"))
+    return p + "match.ReturnValue", p + "ranked.ReturnValue"
 
 
 def _start_predicate():

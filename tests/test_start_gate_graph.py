@@ -55,6 +55,7 @@ class Graph:
             if f == 'Not_PreBool': return not a
             if f == 'EqualEqual_StrStr': return a == b
             if f == 'StartsWith': return self.arg(n, 'SourceString').startswith(self.arg(n, 'InPrefix'))
+            if f == 'Left': return self.arg(n, 'SourceString')[:int(self.arg(n, 'Count'))]
             if f == 'SelectBool': return bool(a if self.arg(n, 'bPickA') else b)
             if f == 'SelectString': return a if self.arg(n, 'bPickA') else b
             if f == 'IsValid': return self.arg(n, 'Object') is not None

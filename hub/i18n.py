@@ -3280,3 +3280,111 @@ _RECOVERY_COPY = {
 }
 for _language, _copy in _RECOVERY_COPY.items():
     STRINGS[_language].update(zip(_RECOVERY_KEYS, _copy))
+
+_MATCH_RECOVERY_KEYS = ("comp_recovery_checking", "comp_recovery_available", "comp_recovery_host",
+    "comp_recovery_restoring", "comp_recovery_wait", "comp_recovery_close", "comp_recovery_unavailable", "comp_recovery_rejoin")
+_MATCH_RECOVERY_COPY = {
+    "en": ("Checking whether the match can be recovered…", "Resume after saved round {round}. The interrupted round will be replayed.",
+        "Resume as host", "Restoring the match after round {round}…", "Waiting for the replacement host.",
+        "Close Bodycam before recovering the match.", "Recovery is not ready. Please try again.", "Rejoin recovered match"),
+    "de": ("Es wird geprüft, ob das Match wiederhergestellt werden kann…", "Nach gespeichertem Rundestand {round} fortsetzen. Die unterbrochene Runde wird wiederholt.",
+        "Als Host fortsetzen", "Match nach Runde {round} wird wiederhergestellt…", "Auf den neuen Host warten.",
+        "Schließe Bodycam, bevor du das Match wiederherstellst.", "Die Wiederherstellung ist noch nicht bereit. Bitte erneut versuchen.", "Wiederhergestelltem Match beitreten"),
+    "es": ("Comprobando si se puede recuperar la partida…", "Continuar tras la ronda guardada {round}. La ronda interrumpida se repetirá.",
+        "Continuar como anfitrión", "Recuperando la partida tras la ronda {round}…", "Esperando al nuevo anfitrión.",
+        "Cierra Bodycam antes de recuperar la partida.", "La recuperación aún no está lista. Inténtalo de nuevo.", "Volver a la partida recuperada"),
+    "fr": ("Vérification de la récupération du match…", "Reprendre après la manche sauvegardée {round}. La manche interrompue sera rejouée.",
+        "Reprendre comme hôte", "Restauration du match après la manche {round}…", "En attente du nouvel hôte.",
+        "Fermez Bodycam avant de restaurer le match.", "La restauration n’est pas encore prête. Réessayez.", "Rejoindre le match restauré"),
+    "pt": ("Verificando se a partida pode ser recuperada…", "Continuar após a rodada salva {round}. A rodada interrompida será repetida.",
+        "Continuar como anfitrião", "Restaurando a partida após a rodada {round}…", "Aguardando o novo anfitrião.",
+        "Feche o Bodycam antes de recuperar a partida.", "A recuperação ainda não está pronta. Tente novamente.", "Voltar à partida recuperada"),
+    "ru": ("Проверяем, можно ли восстановить матч…", "Продолжить после сохранённого раунда {round}. Прерванный раунд будет переигран.",
+        "Продолжить как хост", "Восстанавливаем матч после раунда {round}…", "Ожидаем нового хоста.",
+        "Закройте Bodycam перед восстановлением матча.", "Восстановление пока недоступно. Попробуйте ещё раз.", "Вернуться в восстановленный матч"),
+    "zh": ("正在检查能否恢复比赛…", "从已保存的第 {round} 回合后继续。中断的回合将重新进行。",
+        "作为主机继续", "正在恢复第 {round} 回合后的比赛…", "正在等待新主机。",
+        "请先关闭 Bodycam，再恢复比赛。", "暂时无法恢复，请重试。", "重新加入已恢复的比赛"),
+}
+for _language, _copy in _MATCH_RECOVERY_COPY.items():
+    STRINGS[_language].update(zip(_MATCH_RECOVERY_KEYS, _copy))
+
+_MATCH_RETURN_COPY = {
+    "en": ("Rejoin within {time} · {returned}/{total} players returned", "Missing the deadline removes you from this match and applies the abandonment penalty."),
+    "de": ("Innerhalb von {time} zurückkehren · {returned}/{total} Spieler zurück", "Wer die Frist verpasst, wird aus diesem Match entfernt und erhält die Strafe für das Verlassen."),
+    "es": ("Vuelve en {time} · Han vuelto {returned}/{total} jugadores", "Si no vuelves a tiempo, quedarás fuera de esta partida y recibirás la penalización por abandono."),
+    "fr": ("Rejoignez le match sous {time} · {returned}/{total} joueurs revenus", "Après ce délai, vous serez exclu de ce match et recevrez la pénalité d’abandon."),
+    "pt": ("Volte em {time} · {returned}/{total} jogadores retornaram", "Se perder o prazo, você será removido desta partida e receberá a penalidade por abandono."),
+    "ru": ("Вернитесь за {time} · Вернулись {returned}/{total} игроков", "Если не вернуться вовремя, вы будете исключены из этого матча и получите штраф за выход."),
+    "zh": ("请在 {time} 内重新加入 · 已返回 {returned}/{total} 名玩家", "逾期未返回将被移出本场比赛，并受到中途退出处罚。"),
+}
+for _language, _copy in _MATCH_RETURN_COPY.items():
+    STRINGS[_language].update(zip(("comp_recovery_return_clock","comp_recovery_return_rule"),_copy))
+
+for _language, _copy in {
+    "en": "The return window has closed. Confirming the returning players…",
+    "de": "Die Rückkehrfrist ist abgelaufen. Zurückgekehrte Spieler werden bestätigt…",
+    "es": "El plazo para volver ha terminado. Confirmando quiénes han regresado…",
+    "fr": "Le délai de retour est écoulé. Confirmation des joueurs revenus…",
+    "pt": "O prazo de retorno terminou. Confirmando os jogadores que voltaram…",
+    "ru": "Время на возвращение истекло. Подтверждаем вернувшихся игроков…",
+    "zh": "重新加入时间已结束。正在确认已返回的玩家…",
+}.items():
+    STRINGS[_language]["comp_recovery_return_closed"] = _copy
+
+_RECOVERY_AUDIT_KEYS = ("comp_recovery_creating", "comp_recovery_verifying", "comp_recovery_close_hint",
+    "comp_recovery_resumed", "comp_recovery_working", "comp_recovery_failed", "comp_recovery_excluded", "comp_recovery_forfeit")
+_RECOVERY_AUDIT_COPY = {
+    "en": ("The replacement host is creating the lobby.", "Returning players are confirmed. Verifying the saved round before play resumes…",
+        "This session has stopped reporting. If Bodycam has returned to the menu, close it so Lights Out can check recovery.",
+        "The match has resumed from the saved round. You can reconnect to the current host.", "Checking your game and recovery request…",
+        "Recovery could not be completed. This match was cancelled.",
+        "You missed the five-minute return window. You cannot rejoin this match, and the abandonment penalty applies.",
+        "Match decided by forfeit: one team had no remaining players. The displayed score is the recorded score."),
+    "de": ("Der neue Host erstellt die Lobby.", "Die zurückgekehrten Spieler sind bestätigt. Der gespeicherte Rundenstand wird geprüft…",
+        "Diese Sitzung sendet keine Meldungen mehr. Wenn Bodycam zum Menü zurückgekehrt ist, schließe es, damit Lights Out die Wiederherstellung prüfen kann.",
+        "Das Match wurde ab der gespeicherten Runde fortgesetzt. Du kannst dich mit dem aktuellen Host verbinden.", "Spiel und Wiederherstellungsanfrage werden geprüft…",
+        "Die Wiederherstellung ist fehlgeschlagen. Dieses Match wurde abgebrochen.",
+        "Du hast die Rückkehrfrist von fünf Minuten verpasst. Du kannst diesem Match nicht mehr beitreten und erhältst die Strafe für das Verlassen.",
+        "Match durch Aufgabe entschieden: Ein Team hatte keine verbleibenden Spieler. Angezeigt wird der aufgezeichnete Spielstand."),
+    "es": ("El nuevo anfitrión está creando la sala.", "Se han confirmado los jugadores que regresaron. Verificando la ronda guardada…",
+        "Esta sesión ha dejado de enviar datos. Si Bodycam ha vuelto al menú, ciérralo para que Lights Out compruebe la recuperación.",
+        "La partida se ha reanudado desde la ronda guardada. Puedes reconectarte al anfitrión actual.", "Comprobando el juego y la solicitud de recuperación…",
+        "No se pudo completar la recuperación. Se ha cancelado esta partida.",
+        "No regresaste dentro de los cinco minutos. Ya no puedes entrar en esta partida y se aplica la penalización por abandono.",
+        "Partida decidida por abandono: un equipo se quedó sin jugadores. Se muestra el marcador registrado."),
+    "fr": ("Le nouvel hôte crée le salon.", "Les joueurs revenus sont confirmés. Vérification de la manche sauvegardée…",
+        "Cette session ne transmet plus de données. Si Bodycam est revenu au menu, fermez-le pour que Lights Out vérifie la récupération.",
+        "Le match a repris depuis la manche sauvegardée. Vous pouvez rejoindre l’hôte actuel.", "Vérification du jeu et de la demande de récupération…",
+        "La récupération n’a pas pu aboutir. Ce match a été annulé.",
+        "Vous avez dépassé le délai de retour de cinq minutes. Vous ne pouvez plus rejoindre ce match et la pénalité d’abandon s’applique.",
+        "Match décidé par forfait : une équipe n’avait plus de joueurs. Le score affiché est le score enregistré."),
+    "pt": ("O novo anfitrião está criando a sala.", "Os jogadores que voltaram foram confirmados. Verificando a rodada salva…",
+        "Esta sessão parou de enviar dados. Se Bodycam voltou ao menu, feche-o para que Lights Out verifique a recuperação.",
+        "A partida foi retomada a partir da rodada salva. Você pode se reconectar ao anfitrião atual.", "Verificando o jogo e o pedido de recuperação…",
+        "Não foi possível concluir a recuperação. Esta partida foi cancelada.",
+        "Você perdeu o prazo de retorno de cinco minutos. Não pode mais entrar nesta partida e a penalidade por abandono se aplica.",
+        "Partida decidida por abandono: uma equipe ficou sem jogadores. O placar exibido é o placar registrado."),
+    "ru": ("Новый хост создаёт лобби.", "Вернувшиеся игроки подтверждены. Проверяем сохранённый раунд перед продолжением…",
+        "Сессия перестала передавать данные. Если Bodycam вернулся в меню, закройте его, чтобы Lights Out проверил возможность восстановления.",
+        "Матч продолжен с сохранённого раунда. Вы можете подключиться к текущему хосту.", "Проверяем игру и запрос на восстановление…",
+        "Восстановление не удалось завершить. Этот матч отменён.",
+        "Вы не вернулись за пять минут. Подключиться к этому матчу больше нельзя; применяется штраф за выход.",
+        "Матч завершён техническим поражением: в одной из команд не осталось игроков. Показан зафиксированный счёт."),
+    "zh": ("新主机正在创建大厅。", "已确认返回的玩家。正在验证已保存的回合，随后继续比赛…",
+        "此会话已停止上报数据。如果 Bodycam 已返回菜单，请关闭游戏，让 Lights Out 检查恢复条件。",
+        "比赛已从保存的回合恢复。你可以重新连接当前主机。", "正在检查游戏和恢复请求…",
+        "无法完成恢复。本场比赛已取消。",
+        "你未在五分钟内返回，已无法重新加入本场比赛，并将受到中途退出处罚。",
+        "比赛因弃权结束：一队已无剩余玩家。显示的比分为已记录的比分。"),
+}
+for _language, _copy in _RECOVERY_AUDIT_COPY.items():
+    STRINGS[_language].update(zip(_RECOVERY_AUDIT_KEYS, _copy))
+
+for _language, _copy in {"en":"Forfeit", "de":"Aufgabe", "es":"Abandono",
+    "fr":"Forfait", "pt":"Abandono", "ru":"Техническое поражение", "zh":"弃权"}.items():
+    STRINGS[_language]["comp_recovery_forfeit_short"] = _copy
+
+for _language, _copy in {"en":("Returned","Waiting"),"de":("Zurück","Wartet"),"es":("De vuelta","Esperando"),
+    "fr":("De retour","En attente"),"pt":("Retornou","Aguardando"),"ru":("Вернулся","Ожидание"),"zh":("已返回","等待中")}.items():
+    STRINGS[_language].update(zip(("comp_recovery_returned","comp_recovery_waiting"),_copy))

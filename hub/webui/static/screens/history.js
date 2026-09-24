@@ -213,6 +213,7 @@
             (d.score[leftTeam] || 0) + " - " + (d.score[rightTeam] || 0)));
         }
         children.push(head);
+        if(d.recovery_forfeit)children.push(el("div","hist-note",hs("comp_recovery_forfeit")));
         if (d.rounds_played) {
           children.push(el("div", "md-sub", hs("rounds_played", { n: d.rounds_played })));
         }
@@ -605,6 +606,7 @@
     }
 
     function reasonWord(r) {
+      if(r.recovery_forfeit)return hs("comp_recovery_forfeit_short");
       var map = { no_show: "reason_no_show", declined: "reason_declined",
                   abandoned: "reason_abandoned" };
       return map[r.reason] ? hs(map[r.reason]) : "";

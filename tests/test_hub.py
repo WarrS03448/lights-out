@@ -3262,7 +3262,8 @@ def test_webui_a_modal_is_cleared_by_the_next_render():
 
     body = core[core.index("function clearOverlays()"):]
     assert ".ui-overlay" in body[:400], "clearOverlays must target the overlay class ui.modal makes"
-    assert "removeChild" in body[:400] or "remove()" in body[:400], "...and actually remove them"
+    clear_function = body.split("function renderScreen()", 1)[0]
+    assert "removeChild" in clear_function or "remove()" in clear_function, "...and actually remove them"
 
     # ...and the screens really do append to the body, which is what makes the above load-bearing.
     appenders = [f.name for f in sorted((paths.webui_dir() / "screens").glob("*.js"))

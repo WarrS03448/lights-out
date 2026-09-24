@@ -22,11 +22,19 @@
 (function () {
   "use strict";
 
-  window.HubUI.registerOverlay("postmatch", { render: render });
+  function refreshKey(state){
+    var a=state.auth||{};
+    return JSON.stringify([a.signed_in,a.player_id||a.steam_id||"",state.lang,state.postmatch]);
+  }
+  window.HubUI.registerOverlay("postmatch", { render: render, preserveOverlay:function(overlay,state){
+    return !!(state.postmatch||{}).open&&overlay.classList.contains('pm-overlay')&&overlay._postmatchKey===refreshKey(state);
+  } });
 
   function render(state, ctx) {
     var pm = (state && state.postmatch) || {};
     if (!pm.open || !pm.card) { window.HubUI.clearRoundSelection("postmatch"); return; }
+    var preserved=document.querySelector('body > .pm-overlay');
+    if(preserved&&preserved._postmatchKey===refreshKey(state))return;
 
     var ui = ctx.ui, call = ctx.call, el = ui.el;
     var card = pm.card;
@@ -84,6 +92,7 @@
       onClose: function () { ui.clearRoundSelection("postmatch"); call("close_postmatch"); }
     });
     overlay.classList.add("pm-overlay");
+    overlay._postmatchKey=refreshKey(state);
     var dialog = overlay.querySelector(".ui-modal");
     if (dialog) {
       dialog.classList.add("pm-modal", "pm-" + tone());
@@ -112,6 +121,7 @@
       box.appendChild(el("div", "pm-headline",
         kind === "win" ? ps("victory") : (kind === "loss" ? ps("defeat") : ps("voided"))));
       if (kind === "void") { box.appendChild(el("div", "pm-void-body", ps("voided_body"))); }
+      if (card.recovery_forfeit) { box.appendChild(el("div", "pm-void-body", ps("recovery_forfeit"))); }
       return box;
     }
 

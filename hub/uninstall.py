@@ -242,7 +242,7 @@ def perform(game_dir, wipe_data=False, log=None) -> dict:
         return {"ok": False, "error": "game_running", "removed": [], "failed": [],
                 "wiped": False, "uninstaller": path}
 
-    say("%s %s — uninstalling" % (version.APP_NAME, version.HUB_VERSION))
+    say("%s %s - uninstalling" % (version.APP_NAME, version.HUB_VERSION))
     from . import recording
     if recording.enabled():
         try:

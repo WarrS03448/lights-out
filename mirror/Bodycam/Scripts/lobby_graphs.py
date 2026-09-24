@@ -1964,7 +1964,8 @@ def chlobby_logic():
     g.link(("native_first_boot.ReturnValue", "native_boot_gate.condition"))
     # Use the host-only capability already stamped into the seed's FName table.
     # The server can authorize travel without correlating connection addresses.
-    g.link(("rt_str.ReturnValue", "hdly.BearerToken"))
+    g.call("rt_cap", STR, "Left", {"Count": "64"})
+    g.link(("rt_str.ReturnValue", "rt_cap.SourceString"), ("rt_cap.ReturnValue", "hdly.BearerToken"))
     # FAN OUT, never chain, through SendAttributionEvent. It is a LATENT node
     # (meta=(Latent, LatentInfo="LatentInfo")), so its exec output fires only when the latent action
     # completes - and chaining the three calls in a line meant the first one held up the other two

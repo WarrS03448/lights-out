@@ -170,7 +170,7 @@
       // it is hidden - the value is already on this machine; what is being protected is the
       // SCREEN, for someone streaming.
       row.appendChild(el("span", "fr-code" + (f.code_hidden ? " masked" : ""),
-        f.code ? (f.code_hidden ? f.code_masked : f.code) : "—"));
+        f.code ? (f.code_hidden ? f.code_masked : f.code) : "-"));
       row.appendChild(ui.btn("fr-mini", f.code_hidden ? ft("show") : ft("hide"),
         function () { call("friend_code_toggle"); }, { tag: "button" }));
       row.appendChild(ui.btn("fr-mini", ft("copy"), function () {

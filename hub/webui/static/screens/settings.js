@@ -192,7 +192,7 @@
 
       var pathRow = el("div", "set-path-row");
       if (game.can_browse) {
-        var box = el("div", "set-path", game.path || "—");
+        var box = el("div", "set-path", game.path || "-");
         box.title = game.path || "";
         pathRow.appendChild(box);
         pathRow.appendChild(ui.btn("set-btn", t("browse"),

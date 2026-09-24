@@ -33,6 +33,7 @@ class Host:
         if f == 'GetGameInstance': return self.gi
         if f == 'MakeLiteralName': return self.arg(n, 'Value')
         if f == 'Conv_NameToString': return self.arg(n, 'InName')
+        if f == 'Left': return self.arg(n, 'SourceString')[:int(self.arg(n, 'Count'))]
         if f == 'IsStandalone': return self.standalone
         if f == 'IsServer': return self.server
         if f == 'Not_PreBool': return not a

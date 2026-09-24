@@ -99,7 +99,7 @@ _S = {
         "uninst_err_not_installed": "This copy was not put here by the Lights Out installer, so "
                                     "there is nothing for Windows to uninstall.",
         "uninst_err_not_windows": "The uninstaller only exists on Windows.",
-        "uninst_err_game_running": "Close Bodycam first — our files are in use while it runs.",
+        "uninst_err_game_running": "Close Bodycam first - our files are in use while it runs.",
         "uninst_err_launch_failed": "Windows could not start the uninstaller.",
     },
     "de": {
@@ -155,7 +155,7 @@ _S = {
         "uninst_err_not_installed": "Diese Kopie stammt nicht vom Lights-Out-Installer, es gibt "
                                     "also nichts, was Windows deinstallieren könnte.",
         "uninst_err_not_windows": "Den Deinstaller gibt es nur unter Windows.",
-        "uninst_err_game_running": "Schließe zuerst Bodycam — solange es läuft, sind unsere Dateien in Benutzung.",
+        "uninst_err_game_running": "Schließe zuerst Bodycam - solange es läuft, sind unsere Dateien in Benutzung.",
         "uninst_err_launch_failed": "Windows konnte den Deinstaller nicht starten.",
     },
     "es": {
@@ -267,7 +267,7 @@ _S = {
         "uninst_err_not_installed": "Cette copie n'a pas été posée là par l'installeur Lights Out : "
                                     "Windows n'a donc rien à désinstaller.",
         "uninst_err_not_windows": "Le désinstalleur n'existe que sous Windows.",
-        "uninst_err_game_running": "Ferme d'abord Bodycam — tant qu'il tourne, nos fichiers sont utilisés.",
+        "uninst_err_game_running": "Ferme d'abord Bodycam - tant qu'il tourne, nos fichiers sont utilisés.",
         "uninst_err_launch_failed": "Windows n'a pas pu lancer le désinstalleur.",
     },
     "pt": {
@@ -323,7 +323,7 @@ _S = {
         "uninst_err_not_installed": "Esta cópia não foi colocada aqui pelo instalador do Lights "
                                     "Out, por isso o Windows não tem nada para desinstalar.",
         "uninst_err_not_windows": "O desinstalador só existe no Windows.",
-        "uninst_err_game_running": "Fecha primeiro o Bodycam — enquanto corre, os nossos ficheiros estão em uso.",
+        "uninst_err_game_running": "Fecha primeiro o Bodycam - enquanto corre, os nossos ficheiros estão em uso.",
         "uninst_err_launch_failed": "O Windows não conseguiu iniciar o desinstalador.",
     },
     "ru": {
@@ -379,7 +379,7 @@ _S = {
         "uninst_err_not_installed": "Эта копия установлена не программой установки Lights Out, "
                                     "поэтому Windows нечего удалять.",
         "uninst_err_not_windows": "Деинсталлятор есть только в Windows.",
-        "uninst_err_game_running": "Сначала закройте Bodycam — пока игра запущена, наши файлы заняты.",
+        "uninst_err_game_running": "Сначала закройте Bodycam - пока игра запущена, наши файлы заняты.",
         "uninst_err_launch_failed": "Windows не удалось запустить деинсталлятор.",
     },
     "zh": {
@@ -431,7 +431,7 @@ _S = {
         "uninst_locked": "已锁定对局期间无法卸载。",
         "uninst_err_not_installed": "这份程序不是由 Lights Out 安装程序放置的，Windows 没有可卸载的项目。",
         "uninst_err_not_windows": "卸载程序只存在于 Windows 上。",
-        "uninst_err_game_running": "请先关闭 Bodycam —— 游戏运行时我们的文件正被占用。",
+        "uninst_err_game_running": "请先关闭 Bodycam -- 游戏运行时我们的文件正被占用。",
         "uninst_err_launch_failed": "Windows 无法启动卸载程序。",
     },
 }

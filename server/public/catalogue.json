@@ -1,11 +1,11 @@
 {
   "catalogue_version": 1,
   "hub": {
-    "version": "2.6.13",
-    "download_url": "https://play.lightsoutranked.com/hub/LightsOut-Setup-2.6.13.exe",
+    "version": "2.6.14",
+    "download_url": "https://play.lightsoutranked.com/hub/LightsOut-Setup-2.6.14.exe",
     "page_url": "https://lightsoutranked.com/",
-    "sha256": "b8bafe913ea4539e473f8f2c4b53bee5ee2ef970e47c2bc8890e9a6e489c15d5",
-    "size": 21533136,
+    "sha256": "510aa1e97be70cfbf2a0adeb2b6aac3f89c9c6db929586510d675055501dd008",
+    "size": 24192032,
     "kind": "inno-setup"
   },
   "gamemodes": [
@@ -55,11 +55,11 @@
         "ru": "Bodybomb 5 на 5",
         "zh": "Bodybomb 5v5"
       },
-      "version": "1.0.29",
+      "version": "1.0.30",
       "description": "Competitive Bodybomb. 5v5, first to 7 round wins, sides and spawn bases swap after round 6. A 6–6 tie goes to a deciding round. The bomb starts on the ground at the attacker spawn. [4X DRONE COOLDOWN] [NO SPECTATOR DRONES]",
-      "pack_url": "https://play.lightsoutranked.com/packs/BB5-1.0.29.zip",
-      "sha256": "3c1aca5d2d8a02471f547dde8ca98e078fd0b7b5292e54c24ac88e2e9587e3cf",
-      "size": 73321,
+      "pack_url": "https://play.lightsoutranked.com/packs/BB5-1.0.30.zip",
+      "sha256": "d5a4d858e53e30841ee98b475664cb830d6aa9beee14a93022d3b905149f1caf",
+      "size": 90596,
       "localized": true,
       "rulesets": {
         "en": "Bodybomb 5v5\n\n• Two teams of 5: attackers plant the bomb at a bomb site, defenders stop them or defuse it.\n• One life per round – no respawns. Dead players go straight to spectating their team (no spectator drone).\n• The bomb starts on the ground in the attacker spawn; any attacker can pick it up.\n• First team to 7 round wins takes the match (13 rounds maximum). Sides and spawn bases swap after round 6; a 6–6 tie goes to a deciding round.\n• Rounds last 3 minutes; friendly fire is on, as in Bodybomb.\n• Drones are allowed; their cooldown is 4× the normal duration.\n• No bots.",
@@ -90,11 +90,11 @@
         "ru": "Bodybomb 1v1 (Paintball)",
         "zh": "Bodybomb 1v1 (Paintball)"
       },
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Ranked 1v1 Bodybomb on Paintball. First to 7 wins, 13 rounds maximum. Two-minute rounds. Sides and spawns switch every round. Drone cooldown 3x. No spectator drones or bots. The coin-flip winner chooses their starting side. No map bans.",
-      "pack_url": "https://play.lightsoutranked.com/packs/BB1-1.0.0.zip",
-      "sha256": "cb76f277f4d842535372789f2c6a2c37e24bdabcd9b533f3dd58e3dae62f48a8",
-      "size": 71485,
+      "pack_url": "https://play.lightsoutranked.com/packs/BB1-1.0.1.zip",
+      "sha256": "24e0e2fa7793ea60dc125cec7620d2babcaaa44c6497f3fa0de685e91f003219",
+      "size": 88743,
       "localized": true,
       "rulesets": {
         "de": "Bodybomb 1v1 (Paintball)\n\nGewertetes 1v1 Bodybomb auf Paintball. Zuerst 7 Siege, maximal 13 Runden. Runden dauern 2 Minuten. Seiten und Spawns wechseln jede Runde. Drohnen-Abklingzeit 3x. Keine Zuschauer-Drohnen oder Bots. Der Münzwurf-Sieger wählt seine Startseite. Keine Kartenbanns.",

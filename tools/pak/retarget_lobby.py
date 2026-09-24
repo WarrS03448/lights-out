@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paklib                                             # noqa: E402
 from pakfile import PakFile                               # noqa: E402
 from pkgedit import CookedPackage, case_preserving_hash   # noqa: E402
+import recovery_config                                  # noqa: E402
 
 _C = "Bodycam/Content/"
 CHLOBBY_UASSET = _C + "GM/Gamemode/GM_CHLobby.uasset"
@@ -234,8 +235,7 @@ def retarget_pak(src_pak, out_pak, level_pkg, level_name,
             raise ValueError("token must be lowercase alphanumeric or '-', got %r" % (token,))
     if report_token:
         report_token = str(report_token)
-        if len(report_token) != 64 or any(c not in "0123456789abcdef" for c in report_token):
-            raise ValueError("report_token must be 64 lowercase hex characters")
+        recovery_config.decode(report_token)
     stamped = False
     token_stamped = False
     report_token_stamped = False

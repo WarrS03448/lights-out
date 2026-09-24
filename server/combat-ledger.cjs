@@ -82,7 +82,7 @@ if p.authority then
   if redis.call('GET',KEYS[7]) then return {'authority'} end
   if raw then
     local a=cjson.decode(raw)
-    if a.closed or a.epoch~=p.authority.epoch or a.host~=p.authority.host then return {'authority'} end
+    if a.closed or a.phase=='restoring' or a.epoch~=p.authority.epoch or a.host~=p.authority.host then return {'authority'} end
   elseif p.authority.epoch>0 then return {'authority'} end
 end
 local revision = 0

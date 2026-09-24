@@ -51,7 +51,7 @@ if authorityKey then
   local expected=cjson.decode(ARGV[2])
   if raw then
     local a=cjson.decode(raw)
-    if a.closed or a.epoch~=(expected.host_epoch or 0) or a.host~=expected.host then return {'authority'} end
+    if a.closed or a.phase=='restoring' or a.epoch~=(expected.host_epoch or 0) or a.host~=expected.host then return {'authority'} end
   elseif (expected.host_epoch or 0)>0 then return {'authority'} end
 end
 if KEYS[queueIndex] and not validType(KEYS[queueIndex], 'set') then return {'invalid-type'} end
@@ -93,9 +93,18 @@ if KEYS[4] then
   if authority then
     local a=cjson.decode(authority)
     if a.closed or a.epoch~=(incoming.host_epoch or 0) or a.host~=incoming.host then return {'authority'} end
+    if a.phase and (not incoming.recovery or incoming.recovery.phase~=a.phase) then return {'authority'} end
+    if a.recovery_revision and (not incoming.recovery or incoming.recovery.revision~=a.recovery_revision) then return {'authority'} end
+    local rosterRevision=a.roster_revision or 0
+    if ARGV[4] and ARGV[4]~='' then
+      local expected=tonumber(ARGV[4])
+      if not expected or expected~=rosterRevision or (incoming.roster_revision or 0)~=expected+1 then return {'authority'} end
+      a.roster_revision=expected+1
+      initialAuthority=cjson.encode(a)
+    elseif (incoming.roster_revision or 0)~=rosterRevision then return {'authority'} end
   elseif (incoming.host_epoch or 0)>0 then return {'authority'}
   elseif incoming.migration_digests then
-    initialAuthority=cjson.encode({host=incoming.host,epoch=0,digest=incoming.migration_digests[incoming.host],candidate='',last_seen=0})
+    initialAuthority=cjson.encode({host=incoming.host,epoch=0,digest=incoming.migration_digests[incoming.host],candidate='',last_seen=0,roster_revision=incoming.roster_revision or 0})
   end
 end
 if previous then
@@ -117,10 +126,11 @@ redis.call('SADD', KEYS[3], ARGV[1])
 return {'saved'}
 `;
 
-async function snapshot(store, keys, id, json, ttl) {
+async function snapshot(store, keys, id, json, ttl, {membershipFrom}={}) {
   const packed = await combatStorage.pack(store, JSON.parse(json), keys[1], {ttl: Number(ttl) + 86400});
   json = JSON.stringify(packed);
-  const out = await store(['EVAL', SNAPSHOT, String(keys.length), ...keys, id, json, String(ttl)], { strict: true });
+  const from=Number.isSafeInteger(membershipFrom)&&membershipFrom>=0?String(membershipFrom):'';
+  const out = await store(['EVAL', SNAPSHOT, String(keys.length), ...keys, id, json, String(ttl),...(from?[from]:[])], { strict: true });
   if (!Array.isArray(out) || !['saved', 'settled', 'pending'].includes(out[0])) throw new Error('Live match not saved');
   if (out[0] === 'pending') return { pendingMatch: await combatStorage.unpack(store, JSON.parse(out[1]), keys[1]) };
   return out[0] === 'settled' ? combatStorage.unpack(store, JSON.parse(out[1]), keys[0]) : null;

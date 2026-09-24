@@ -362,7 +362,7 @@
         var row = ui.listRow({
           leading: el("span", "recent-res " + res.cls, res.letter),
           children: [
-            el("div", "recent-map", (m.mode==="BB1"?"1v1":"5v5")+" · "+(m.map || "—")),
+            el("div", "recent-map", (m.mode==="BB1"?"1v1":"5v5")+" · "+(m.map || "-")),
             el("div", m.cheater_reverted ? "cheater-reverted-notice" : "recent-meta", m.cheater_reverted ? pt("profile_cheater_reverted") : eloText(m.elo) + (m.ended ? " · " + whenText(m.ended) : ""))
           ]
         });
@@ -420,8 +420,8 @@
 
     function whenText(ended) {
       var ms = Number(ended);
-      if (!isFinite(ms) || ms <= 0) { return "—"; }
-      try { return new Date(ms).toLocaleDateString(); } catch (e) { return "—"; }
+      if (!isFinite(ms) || ms <= 0) { return "-"; }
+      try { return new Date(ms).toLocaleDateString(); } catch (e) { return "-"; }
     }
   }
 })();

@@ -206,6 +206,12 @@ def _teams_snapshot(session) -> list:
         members = [_team_member(p, cap_id, my_id,
                                alias=aliases.get(str(p.get("steam_id") or "")) or "")
                    for p in (teams.get(n) or [])]
+        recovery = getattr(session, "recovery", {}) or {}
+        if recovery.get("phase") == "restoring":
+            health = getattr(session, "recovery_health", {}) or {}
+            returned = set(health.get("connected") or (recovery.get("roster") or {}).get("admitted") or [])
+            for member in members:
+                member["recovery_status"] = "returned" if member["steam_id"] in returned else "waiting"
         out.append({"team": n, "side": sides.get(n) or "", "members": members})
     return out
 
@@ -385,6 +391,7 @@ def connect_snapshot(session) -> dict:
 
 def live_snapshot(session) -> dict:
     """In-game: the map/host to join, and the vote-to-cancel if one is running."""
+    from ...match_recovery import public_status
     host = getattr(session, "host", None) or {}
     vote = getattr(session, "vote", None)
     v = None
@@ -398,7 +405,9 @@ def live_snapshot(session) -> dict:
         "host": {"name": host.get("name") or "", "ping": host.get("ping"), "estimated": bool(host.get("ping_estimated"))},
         "vote": v,
         "can_vote": getattr(session, "phase", "") == "live" and getattr(session, "ranked_mode", "BB5") == "BB5",
-        "can_concede": getattr(session, "phase", "") == "live" and getattr(session, "ranked_mode", "BB5") == "BB1",
+        "can_concede": getattr(session, "phase", "") == "live" and getattr(session, "ranked_mode", "BB5") == "BB1" and
+            (getattr(session, "recovery", {}) or {}).get("phase") != "restoring",
+        "recovery": public_status(session),
         # host-gated join (additive), same fields as the connect slice: in `live` everyone has
         # connected so host_ready is already true, but the JS still reads is_host to decide whether
         # to show the host's Relaunch or the joiner's Relaunch + Join.
@@ -422,6 +431,7 @@ def result_snapshot(session) -> dict:
     return {
         "won": r.get("won"),
         "voided": bool(r.get("voided")),
+        "recovery_forfeit": bool(r.get("recovery_forfeit")),
         "score": score if r.get("score") is not None else None,
         "delta": int(r.get("delta") or 0),
         # The RR the match moved (None from a service that does not send it), and the placement
@@ -661,6 +671,7 @@ register_verbs("competitive", {
     # real non-host -> host connect.
     "launch_game":      lambda panel: panel.post(panel.session.launch_game),
     "relaunch_game":    lambda panel: panel.post(panel.session.relaunch_game),
+    "claim_recovery":   lambda panel: panel.post(panel.session.claim_recovery),
     "join_match":       lambda panel: panel.post(panel.session.join_match),
     "start_vote":       lambda panel: panel.post(panel.session.start_vote),
     "cast_vote":        lambda panel, yes=False: panel.post(lambda: panel.session.cast_vote(bool(yes))),

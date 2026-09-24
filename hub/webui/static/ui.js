@@ -58,7 +58,7 @@
     return e;
   }
 
-  // btn(cls, text, onclick, opts) — an interactive element. Defaults to a real <button> (keyboard
+  // btn(cls, text, onclick, opts) - an interactive element. Defaults to a real <button> (keyboard
   // accessible); pass opts.tag to render another element (e.g. a "span" link). type="button" avoids
   // implicit form submits. touch-action is handled by the component CSS.
   function btn(cls, text, onclick, opts) {
@@ -76,7 +76,7 @@
 
   // ---------------------------------------------------------------- transient cues (toast)
   var toastTimer = null;
-  // toast(text, ms) — ms is how long it stays up; omitted means the 1.8 s default. Python sets it
+  // toast(text, ms) - ms is how long it stays up; omitted means the 1.8 s default. Python sets it
   // per cue (competitive's "close your game" asks for three seconds), so the length lives with the
   // sentence rather than being one number for every cue there will ever be.
   function toast(text, ms) {
@@ -91,7 +91,7 @@
   // ================================================================ shared components
   // Each returns a detached DOM node the caller appends. Styles live in ui.css (ui-* classes).
 
-  // chip(text, opts) — status pill / inline action. opts: {variant:'accent'|'green'|'gold'|'solid',
+  // chip(text, opts) - status pill / inline action. opts: {variant:'accent'|'green'|'gold'|'solid',
   // onClick, ariaLabel}. With onClick it is a real <button>; otherwise an inert <span>.
   function chip(text, opts) {
     opts = opts || {};
@@ -102,7 +102,7 @@
     return s;
   }
 
-  // card(opts) — a titled surface. opts: {title, accent:bool, children:[nodes]}.
+  // card(opts) - a titled surface. opts: {title, accent:bool, children:[nodes]}.
   function card(opts) {
     opts = opts || {};
     var c = el("div", "ui-card" + (opts.accent ? " accent" : ""));
@@ -111,14 +111,14 @@
     return c;
   }
 
-  // panel(children) — a plain surface (no title).
+  // panel(children) - a plain surface (no title).
   function panel(children) {
     var p = el("div", "ui-panel");
     appendChildren(p, children);
     return p;
   }
 
-  // statTile(number, label) — a number + label tile.
+  // statTile(number, label) - a number + label tile.
   function statTile(number, label) {
     var s = el("div", "ui-stat");
     s.appendChild(el("div", "n", number === null || number === undefined ? "—" : String(number)));
@@ -126,7 +126,7 @@
     return s;
   }
 
-  // tabs(items, activeId, onSelect) — a segmented control. items: [{id, label}].
+  // tabs(items, activeId, onSelect) - a segmented control. items: [{id, label}].
   function tabs(items, activeId, onSelect) {
     var wrap = el("div", "ui-tabs");
     wrap.setAttribute("role", "tablist");
@@ -141,7 +141,7 @@
     return wrap;
   }
 
-  // listRow(opts) — one row. opts: {leading:node, children:[nodes], trailing:node}.
+  // listRow(opts) - one row. opts: {leading:node, children:[nodes], trailing:node}.
   function listRow(opts) {
     opts = opts || {};
     var row = el("div", "ui-listrow");
@@ -153,14 +153,14 @@
     return row;
   }
 
-  // table(rows) — a stack of listRow() nodes.
+  // table(rows) - a stack of listRow() nodes.
   function table(rows) {
     var t2 = el("div", "ui-table");
     appendChildren(t2, rows);
     return t2;
   }
 
-  // avatar(opts) — {text, url, light, anon, ariaLabel}. With `url` (a Steam avatar) the plate shows
+  // avatar(opts) - {text, url, light, anon, ariaLabel}. With `url` (a Steam avatar) the plate shows
   // the PICTURE, with the text still underneath it as the fallback: the image is loaded from the
   // hub's own bridge (/avatar?u=...), because the page's CSP allows `img-src 'self'` and would
   // not allow steamstatic.com - and because the bridge caches the file instead of re-fetching it
@@ -191,7 +191,7 @@
     return a;
   }
 
-  // emptyState(opts) — {icon, message, action:node}.
+  // emptyState(opts) - {icon, message, action:node}.
   function emptyState(opts) {
     opts = opts || {};
     var e = el("div", "ui-empty");
@@ -201,7 +201,7 @@
     return e;
   }
 
-  // modal(opts) — an overlay + dialog. opts: {title, children:[nodes], onClose}. Returns the
+  // modal(opts) - an overlay + dialog. opts: {title, children:[nodes], onClose}. Returns the
   // overlay node; append it to document.body. The X, the backdrop and Escape all call onClose.
   //
   // THE X IS NOT DECORATION. Until 2026-09-16 the only ways out were a backdrop click and

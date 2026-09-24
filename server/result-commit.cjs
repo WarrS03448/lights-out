@@ -10,6 +10,7 @@ for i, expected in ipairs(p.types) do
   if actual ~= 'none' and actual ~= expected then return redis.error_reply('result key type mismatch') end
 end
 local live = redis.call('GET', KEYS[p.live])
+local savedRecoveryForfeit=false
 if live and cjson.decode(live).void_pending and cjson.decode(p.receipt_json).voided ~= true then
   return redis.error_reply('saved void decision takes precedence')
 end
@@ -19,12 +20,15 @@ if live and cjson.decode(live).terminal and cjson.decode(p.receipt_json).voided 
   if not result or result.reason~=decided.reason or result.loser~=decided.loser or result.at~=decided.at then
     return redis.error_reply('saved duel decision takes precedence')
   end
+  local recovering=cjson.decode(live).recovery
+  savedRecoveryForfeit=decided.recovery==true and recovering and recovering.roster and recovering.roster.done==true
+    and result.recovery==true and result.winner==decided.winner
 end
 if p.authority then
   local raw=redis.call('GET',KEYS[p.authority])
   if raw then
     local a=cjson.decode(raw)
-    if a.closed or a.epoch~=p.host_epoch or a.host~=p.host then return redis.error_reply('result authority changed') end
+    if a.closed or (a.phase=='restoring' and cjson.decode(p.receipt_json).voided~=true and not savedRecoveryForfeit) or a.epoch~=p.host_epoch or a.host~=p.host then return redis.error_reply('result authority changed') end
   elseif p.host_epoch>0 then return redis.error_reply('result authority missing') end
 end
 for _, r in ipairs(p.rank_checks or {}) do

@@ -1376,8 +1376,22 @@ async function handleHostMigration(req,res) {
   } catch {return sendJson(res,503,{ok:false,error:'Host handoff could not be saved.'});}
 }
 
-function runAuthorised(cap,operation) {
-  return cap.service.withReportAuthority ? cap.service.withReportAuthority(cap.authorised,operation) : operation();
+async function handleRecoveryReport(req,res) {
+  const cap=/^Bearer ([a-f0-9]{64})\.(0|[1-9]\d{0,5})$/.exec(String(req.headers.authorization||''));
+  if(req.method!=='POST'||!cap)return sendJson(res,401,{ok:false});
+  const parsed=await readRankedReport(req,res);if(!parsed)return;
+  const fields=require('./recovery.cjs').parseReport(parsed.body,Number(cap[2]));
+  if(!fields)return sendJson(res,409,{ok:false});
+  try {
+    const service=live();await service._internals.ready;await service._internals.ensureRecovery();
+    const result=await service.recoveryReport(cap[1],fields);
+    // The game transport consumes only success. Never return internal snapshots or credentials.
+    return sendJson(res,result.ok?200:409,{ok:result.ok});
+  } catch {return sendJson(res,503,{ok:false});}
+}
+
+function runAuthorised(cap,operation,options) {
+  return cap.service.withReportAuthority ? cap.service.withReportAuthority(cap.authorised,operation,options) : operation();
 }
 
 async function readRankedReport(req, res) {
@@ -1421,7 +1435,7 @@ async function handleMatchReport(req, res) {
       const out=dispatchRankedReport(parsed.body,cap.authorised,cap.service);
       if(out.result?.then)out.result=await out.result;
       return out;
-    });
+    },{allowRestoring:ARRIVAL_EVENTS.has(parsed.body.event_name)});
     if (applied.result && applied.result.ok === false) { applied.status = 409; applied.error = applied.result.error; }
   } catch {
     sendJson(res, 500, { ok: false, error: 'Report processing failed.' });
@@ -1444,7 +1458,7 @@ async function handleMatchReportTeam(req, res) {
   const subject = String(parsed.body.storefront || '');
   const ask = String(parsed.body.platform || 'member');
   let ruling = { ok: false, error: 'live not up' };
-  try { ruling = await runAuthorised(cap,()=>cap.service.teamRuling(cap.authorised.steamId, subject, ask)); } catch { /* fail closed */ }
+  try { ruling = await runAuthorised(cap,()=>cap.service.teamRuling(cap.authorised.steamId, subject, ask),{allowRestoring:true}); } catch { /* fail closed */ }
   const status = ruling && ruling.ok ? (ruling.yes ? 200 : 404) : 409;
   await recordReport(req, parsed.raw, { ruling: {
     ask, host: cap.authorised.steamId, subject, status, ...(ruling || {}),
@@ -1841,6 +1855,9 @@ async function router(req, res) {
 
   if (pathname.startsWith('/api/')) {
     res.setHeader('cache-control', 'no-store');
+  }
+  if (pathname === '/api/match-report/recovery') {
+    res.setHeader('cache-control','no-store');return handleRecoveryReport(req,res);
   }
   if (pathname === '/api/match-report/migration') {
     res.setHeader('cache-control','no-store');return handleHostMigration(req,res);

@@ -160,7 +160,7 @@
       var actions = el("div", "gm-actions");
       if (m.ruleset) {
         var rb = ui.btn("gm-ruleset", "", function () { call("open_ruleset", m.id); },
-          { ariaLabel: gt("ruleset") + " — " + m.name });
+          { ariaLabel: gt("ruleset") + " - " + m.name });
         var glyph = el("span", "gm-ruleset-glyph");
         glyph.innerHTML = '<svg viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path d="M5.5 7a3.5 3.5 0 0 1 7 0c0 2.25-3.5 2.25-3.5 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="14.5" r="1" fill="currentColor"/></svg>';
         glyph.setAttribute("aria-hidden", "true");
@@ -188,8 +188,8 @@
     // ---------------------------------------------------------------- ruleset + maps modal
     function rulesetModal(m) {
       var meta = el("div", "gm-meta");
-      metaTile(meta, gt("version"), m.version || "—");
-      metaTile(meta, gt("maps"), m.maps && m.maps.length ? String(m.maps.length) : "—");
+      metaTile(meta, gt("version"), m.version || "-");
+      metaTile(meta, gt("maps"), m.maps && m.maps.length ? String(m.maps.length) : "-");
       metaTile(meta, gt("ranked"), m.ranked ? gt("yes") : gt("no"));
       metaTile(meta, gt("status"), m.installed ? gt("status_installed") : gt("status_available"));
 

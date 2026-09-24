@@ -32,6 +32,8 @@ from ...competitive import kd_ratio, profile_stats
 # language still renders every key (mirrors i18n.strings_for). Use … (U+2026) for ellipses
 # and sentence case labels.
 _EN = {
+    "comp_recovery_forfeit": i18n.STRINGS["en"]["comp_recovery_forfeit"],
+    "comp_recovery_forfeit_short": i18n.STRINGS["en"]["comp_recovery_forfeit_short"],
     **round_strings("en"),
     **player_damage_strings("en"),
     "title": "Match history",
@@ -427,6 +429,8 @@ def strings_for(lang: str) -> dict:
     merged.update(player_damage_strings(lang))
     merged.update(round_strings(lang))
     merged["res_voided"] = i18n.STRINGS.get(lang, i18n.STRINGS["en"])["comp_result_void"]
+    for key in ("comp_recovery_forfeit", "comp_recovery_forfeit_short"):
+        merged[key] = i18n.STRINGS.get(lang, i18n.STRINGS["en"])[key]
     notice, label = {
         "en": ("CHEATER DETECTED, RR RESULTS REVERTED", "CHEATER"),
         "de": ("CHEATER ERKANNT, RR-ERGEBNISSE RÜCKGÄNGIG GEMACHT", "CHEATER"),
@@ -531,6 +535,7 @@ def _row(row: dict) -> dict:
         "mode": row.get("mode") or "BB5",
         "outcome": str(row.get("outcome") or ""),
         "reason": str(row.get("reason") or ""),
+        "recovery_forfeit": row.get("recovery_forfeit") is True,
         "blamed": bool(row.get("blamed")),
         "team": _int_or_none(row.get("team")) or 0,
         "side": side if side in ("attack", "defend") else "",
@@ -700,6 +705,8 @@ def _detail(rec, my_id: str):
         "cheater_reverted": bool(rec.get("cheater_reverted")),
         "outcome": rec.get("outcome") or "",
         "reason": rec.get("reason") or "",
+        "recovery_forfeit": ((rec.get("terminal") or {}).get("recovery") is True or (rec.get("terminal") or {}).get("absence") is True) and
+            (rec.get("terminal") or {}).get("reason") == "reconnect_timeout",
         "created": rec.get("created") or 0,
         "ended": rec.get("ended") or 0,
         "score": rec.get("score") or None,

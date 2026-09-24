@@ -310,7 +310,7 @@
     row.setAttribute("role", "row");
     if (youFlag) { row.tabIndex = -1; }
 
-    row.appendChild(el("span", "lb-cell lb-rank lb-first", p.rank != null ? String(p.rank) : "—"));
+    row.appendChild(el("span", "lb-cell lb-rank lb-first", p.rank != null ? String(p.rank) : "-"));
 
     var player = el("span", "lb-cell lb-player");
     player.appendChild(ui.avatar({
@@ -318,7 +318,7 @@
       text: (p.level !== null && p.level !== undefined) ? p.level : ui.initials(p.name),
       ariaLabel: p.name || ""
     }));
-    player.appendChild(el("span", "lb-name", p.name || "—"));
+    player.appendChild(el("span", "lb-name", p.name || "-"));
     if (youFlag) { player.appendChild(el("span", "lb-youtag", lt("you_label"))); }
     row.appendChild(player);
 
@@ -328,11 +328,11 @@
     var tier = el("span", "lb-cell lb-tier");
     var art = ui.rankBadge(p, ranks);
     if (art) { tier.appendChild(art); }
-    tier.appendChild(el("span", "lb-tier-name", p.tier || "—"));
+    tier.appendChild(el("span", "lb-tier-name", p.tier || "-"));
     row.appendChild(tier);
-    row.appendChild(el("span", "lb-cell lb-rr", p.rr != null ? (p.rr + " RR") : "—"));
-    row.appendChild(el("span", "lb-cell lb-matches", p.matches != null ? String(p.matches) : "—"));
-    row.appendChild(el("span", "lb-cell lb-winrate", p.win_rate != null ? String(p.win_rate) : "—"));
+    row.appendChild(el("span", "lb-cell lb-rr", p.rr != null ? (p.rr + " RR") : "-"));
+    row.appendChild(el("span", "lb-cell lb-matches", p.matches != null ? String(p.matches) : "-"));
+    row.appendChild(el("span", "lb-cell lb-winrate", p.win_rate != null ? String(p.win_rate) : "-"));
     return row;
   }
 

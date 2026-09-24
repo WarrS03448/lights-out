@@ -39,7 +39,7 @@
     return JSON.stringify([a.signed_in,a.player_id||a.steam_id||"",state.lang,c.phase,c.match_id,
       (c.lobby||{}).match_id,(c.connect||{}).match_id,a.account_step]);
   }
-  var retained = ".ranked-mode-bar,.comp-network-row,.chat-row,.join-row,.account-field,.account-remember,.ranked-history-modes";
+  var retained = ".ranked-mode-bar,.comp-network-row,.chat-row,.join-row,.account-field,.account-remember,.ranked-history-modes,.match-recovery-control";
   function nodeKey(n) { return n.nodeType===1 ? n.tagName+":"+(n.id||n.classList[0]||"") : "#text"; }
   function syncAttrs(oldNode,newNode) {
     Array.from(oldNode.attributes).forEach(function(a){if(!newNode.hasAttribute(a.name))oldNode.removeAttribute(a.name);});
@@ -58,6 +58,7 @@
         syncAttrs(old,next);
         if(old.matches(".account-form"))old.onsubmit=next.onsubmit;
         if(old.matches(".ranked-mode-bar"))syncModeBar(old,latestModeContext.state);
+        else if(old.matches(".match-recovery-control"))old.textContent=next.textContent;
         else if(old.matches(".ranked-history-modes")){
           Array.from(old.children).forEach(function(button,i){if(next.children[i])syncAttrs(button,next.children[i]);});
         }else if(old.matches(".comp-network-row")){
@@ -87,6 +88,8 @@
   // clock element leaves the DOM (navigating away, or any rebuild).
   var banTimer = null;
   function clearBanTimer() { if (banTimer) { clearInterval(banTimer); banTimer = null; } }
+  var recoveryTimer = null;
+  function clearRecoveryTimer() { if (recoveryTimer) { clearInterval(recoveryTimer); recoveryTimer = null; } }
 
   // The hub closes Bodycam once it has registered the match as complete, because the game has to be
   // shut before the player can queue again. "armed" is deliberately absent: it draws nothing, so the
@@ -185,6 +188,7 @@
   // MODULE SCOPE for the reason SWEEP_MS is: the record has to outlive the render, and render()
   // is called afresh every time.
   var chatMatch = null;
+  var privateIdentity = undefined;
   var chatDrafts = {};          // match + channel -> private, unsent draft
   var scrollMemory = {};        // id -> { top: px, atBottom: bool }
   var AT_BOTTOM_SLACK = 8;      // px of "close enough to the end", for sub-pixel line heights
@@ -219,8 +223,13 @@
     }
 
     clearBanTimer();   // any prior ban countdown belongs to a DOM node this render is about to wipe
+    clearRecoveryTimer();
     var guideAuth = state.auth || {};
     var identity = guideAuth.signed_in ? (guideAuth.player_id || guideAuth.steam_id || "signed-in") : null;
+    if (privateIdentity !== undefined && privateIdentity !== identity) {
+      accountForm="";accountDraft={};invitesOpen=false;chatMatch=null;chatDrafts={};scrollMemory={};
+    }
+    privateIdentity=identity;
     if (!identity || guideAuth.placing || !guideAuth.rank || identity !== rankGuideIdentity ||
         rankGuidePhase !== (state.comp || {}).phase) { rankGuideOpen = false; }
     rankGuideIdentity = identity;
@@ -767,7 +776,7 @@
       label.appendChild(select);
       row.appendChild(label);
       var cross = el("label", "comp-cross-region");
-      cross.title = strings.network_cross_region + " — " + strings.network_cross_hint;
+      cross.title = strings.network_cross_region + " - " + strings.network_cross_hint;
       var check = document.createElement("input");
       check.type = "checkbox";
       check.id = "comp-network-cross-region";
@@ -1182,13 +1191,55 @@
       var box = el("div", "found-box live-action");
       if (comp.error) box.appendChild(el("div", "hero-error", comp.error));
       box.appendChild(el("div", "found-title", t("comp_live_title")));
+      var recovery = lv.recovery || {};
+      if (recovery.visible) {
+        function recoveryButton(label,verb,disabled) {
+          var button=ui.btn("btn-ghost-light match-recovery-control",t(label),function(){call(verb);},
+            {tag:"button",disabled:!!disabled});
+          button.id="match-recovery-"+verb;
+          return button;
+        }
+        var states={creating:"comp_recovery_creating",returning:"comp_recovery_restoring",verifying:"comp_recovery_verifying",
+          sealing:"comp_recovery_return_closed",resumed:"comp_recovery_resumed",close_game:"comp_recovery_close_hint",
+          available:"comp_recovery_available",checking:"comp_recovery_checking",unavailable:"comp_recovery_unavailable"};
+        var stateKey=states[recovery.state] || (recovery.restoring ? "comp_recovery_restoring" :
+          recovery.can_claim ? "comp_recovery_available" : "comp_recovery_checking");
+        box.appendChild(el("div", "found-count", t(stateKey, { round: recovery.round })));
+        box.appendChild(el("div", "found-map", t("comp_map", {map:lv.map||"?"})));
+        box.appendChild(el("div", "found-count", t("comp_host", {name:host.name||"?",ping:host.ping==null?"-":host.ping})));
+        var serverTime=Number(recovery.server_now)||Date.now(),sampledAt=performance.now();
+        function recoveryNow(){return serverTime+Math.max(0,performance.now()-sampledAt);}
+        if (recovery.restoring && recovery.rejoin_until && !recovery.roster_sealed) {
+          var recoveryClock=el("div","found-count recovery-clock");
+          function tickRecovery() {
+            var remaining=Math.max(0,Math.ceil((Number(recovery.rejoin_until)-recoveryNow())/1000));
+            recoveryClock.textContent=t("comp_recovery_return_clock",{
+              time:Math.floor(remaining/60)+":"+String(remaining%60).padStart(2,"0"),
+              returned:recovery.returned||0,total:recovery.expected||0});
+            var launch=(recoveryClock.closest('.live-action')||box).querySelector('#match-recovery-relaunch_game');
+            if(launch && remaining===0)launch.disabled=true;
+            if(remaining===0)recoveryClock.textContent=t("comp_recovery_return_closed");
+          }
+          tickRecovery();box.appendChild(recoveryClock);
+          box.appendChild(el("div","found-count",t("comp_recovery_return_rule")));
+          recoveryTimer=setInterval(function(){if(!recoveryClock.isConnected){clearRecoveryTimer();return;}tickRecovery();},1000);
+        }
+        if (recovery.can_claim) box.appendChild(recoveryButton("comp_recovery_host","claim_recovery",recovery.busy));
+        var returnOpen=recovery.can_rejoin!==false && (recovery.roster_sealed || !recovery.rejoin_until || recoveryNow()<Number(recovery.rejoin_until));
+        var canLaunch=recovery.can_launch==null ? recovery.restoring&&(isHost||recovery.world_ready) : recovery.can_launch;
+        if (canLaunch && returnOpen) box.appendChild(recoveryButton(
+          isHost ? "comp_relaunch" : recovery.restoring ? "comp_recovery_rejoin" : "comp_reconnect","relaunch_game",recovery.busy));
+        else if (recovery.restoring && !recovery.rejoin_until) box.appendChild(el("div", "found-count", t("comp_recovery_wait")));
+        if(recovery.busy)box.appendChild(el("div","found-count",t("comp_recovery_working")));
+        return box;
+      }
       (lv.reconnect_waiting || []).forEach(function (row) {
         var seconds = Math.max(0, Math.ceil((Number(row.deadline) - Date.now()) / 1000));
         var clock = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
         box.appendChild(el("div", "found-count", t("comp_reconnect_wait", { time: clock })));
       });
       box.appendChild(el("div", "found-map", t("comp_map", { map: lv.map || "?" })));
-      box.appendChild(el("div", "found-count", t("comp_host", { name: host.name || "?", ping: host.ping == null ? "—" : (host.estimated ? "≈" : "") + host.ping })));
+      box.appendChild(el("div", "found-count", t("comp_host", { name: host.name || "?", ping: host.ping == null ? "-" : (host.estimated ? "≈" : "") + host.ping })));
       // Relaunch is for everyone in a live match: their game should be running, and this re-runs it
       // (guarded, safe if it is already up).
       box.appendChild(ui.btn("btn-ghost-light", t(isHost ? "comp_relaunch" : "comp_reconnect"),
@@ -1213,7 +1264,7 @@
         var won = r.won === true;
         box.appendChild(el("div", "result-headline " + (won ? "win" : "loss"),
           won ? t("comp_result_win") : t("comp_result_loss")));
-        var score = r.score || ["—", "—"];
+        var score = r.score || ["-", "-"];
         box.appendChild(el("div", "result-score", score[0] + " : " + score[1]));
         // The RR the match moved - not `delta`, which is an arrow count and read as "+2 RR" here.
         if (r.placing) {
@@ -1225,6 +1276,7 @@
         }
       }
       var closing = CLOSE_LINES[r.game_close];
+      if(r.recovery_forfeit)box.appendChild(el("div","found-count",t("comp_recovery_forfeit")));
       if (closing) { box.appendChild(el("div", "result-close " + closing[1], t(closing[0]))); }
       box.appendChild(ui.btn("btn-accept", t("comp_back"), function () { call("leave_match"); }, { tag: "button" }));
       // THE PEOPLE YOU JUST PLAYED. The result screen carried the score and nobody's name, so
@@ -1290,6 +1342,7 @@
             row.appendChild(mute);
           }
           row.appendChild(el("div", "tm-name", m.name));
+          if(m.recovery_status)row.appendChild(el("span","tm-cap",t(m.recovery_status==="returned"?"comp_recovery_returned":"comp_recovery_waiting")));
           if (m.is_captain) { row.appendChild(el("span", "tm-cap", t("comp_captain"))); }
           // REPORT. teamsBlock is shared by the lobby, the connect window and the live screen, so
           // one button here is three of the four places Sam asked for. Never against yourself:

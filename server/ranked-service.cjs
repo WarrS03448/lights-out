@@ -144,8 +144,10 @@ function create(options){
     },
     authoriseReportFresh:(...args)=>authority('authoriseReportFresh',...args),
     authoriseFinalReport:(...args)=>authority('authoriseFinalReport',...args),
-    withReportAuthority:(auth,operation)=>forMode(auth.mode).withReportAuthority(auth,operation),
+    withReportAuthority:(auth,operation,options)=>forMode(auth.mode).withReportAuthority(auth,operation,options),
     async migrationReport(token,fields){await ensureRecovery();const e=matchEngine(fields?.match_id);return e?e.migrationReport(token,fields):{ok:false,error:'No match.'};},
+    async recoveryReport(token,fields){await ensureRecovery();const e=matchEngine(fields?.match_id);return e?e.recoveryReport(token,fields):{ok:false,error:'No match.'};},
+    async recoveryAction(player,fields){await ensureRecovery();const e=matchEngine(fields?.match_id);return e?e.recoveryAction(player,fields):{ok:false,error:'No match.'};},
   };
   for(const name of ['gameReportedIn','teamRuling','startReady','matchPresence','finalSnapshot','combatBatch',
     'gameReportedTeam','teamKillReported','gameReportedCombat','gameReportedScore','gameReportedStats',

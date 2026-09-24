@@ -16,6 +16,7 @@ local authority=redis.call('GET',KEYS[7])
 if authority then
   local a=cjson.decode(authority)
   if a.closed or a.epoch~=(p.host_epoch or 0) or a.host~=p.host then return {'authority'} end
+  if (a.roster_revision or 0)~=(p.roster_revision or 0) then return {'authority'} end
 elseif (p.host_epoch or 0)>0 then return {'authority'} end
 local receipt=cjson.decode(p.receiptJson)
 local rank=cjson.decode(p.rankJson)
