@@ -14,7 +14,30 @@
 (function () {
   "use strict";
 
-  window.HubUI.registerScreen("competitive", { render: render, update: update });
+  window.HubUI.registerScreen("competitive", { render: render, update: update, preserveOverlay: preserveInfoOverlay });
+  function infoScope(state,kind) {
+    var auth=state.auth||{},comp=state.comp||{};
+    return JSON.stringify([auth.signed_in,auth.player_id||auth.steam_id||"",comp.mode_id||"BB5",state.lang,kind]);
+  }
+  function preserveInfoOverlay(overlay,state) {
+    var kind=overlay.dataset.competitiveInfo,comp=state.comp||{};
+    var open=kind==="rank" ? comp.rank_info_open&&comp.ladder : kind==="penalties"&&comp.penalties_open&&comp.penalties;
+    return state.view==="competitive"&&!!open&&overlay._infoScope===infoScope(state,kind);
+  }
+  function syncInfoOverlay(kind,state,data,build) {
+    var overlay=document.querySelector('body > .rank-overlay[data-competitive-info="'+kind+'"]');
+    var signature=JSON.stringify(data);
+    if(overlay&&preserveInfoOverlay(overlay,state)) {
+      if(overlay._infoData!==signature)patchChildren(overlay,build(),true);
+    }else{
+      if(overlay)overlay.remove();
+      overlay=build();overlay.dataset.competitiveInfo=kind;overlay._infoScope=infoScope(state,kind);
+      document.body.appendChild(overlay);
+      var dialog=overlay.querySelector(".ui-modal");
+      setTimeout(function(){if(dialog&&dialog.isConnected)dialog.focus();},0);
+    }
+    overlay._infoData=signature;
+  }
   var latestModeContext = null;
   function modeBar(state, ctx) {
     latestModeContext = {state:state, ctx:ctx};
@@ -47,14 +70,18 @@
   }
   // Retain controls together with their closures and every ancestor. Moving even a
   // retained select out of its parent closes its native popup on WebView2.
-  function patchChildren(parent,draft) {
+  function patchChildren(parent,draft,retainAll) {
     var unused=Array.from(parent.childNodes),cursor=parent.firstChild;
     Array.from(draft.childNodes).forEach(function(next){
       var old=unused.find(function(n){return nodeKey(n)===nodeKey(next);});
-      var keep=old&&old.nodeType===1&&(old.matches(retained)||old.querySelector(retained)||old.matches(".chat-log,.lobby-top"));
+      var keep=old&&(retainAll||old.nodeType===1&&(old.matches(retained)||old.querySelector(retained)||old.matches(".chat-log,.lobby-top")));
       if(keep){
         unused.splice(unused.indexOf(old),1);
         while(cursor&&cursor!==old){var after=cursor.nextSibling;if(unused.includes(cursor)){unused.splice(unused.indexOf(cursor),1);cursor.remove();}cursor=after;}
+        if(old.nodeType!==1){
+          if(old.nodeValue!==next.nodeValue)old.nodeValue=next.nodeValue;
+          cursor=old.nextSibling;return;
+        }
         syncAttrs(old,next);
         if(old.matches(".account-form"))old.onsubmit=next.onsubmit;
         if(old.matches(".ranked-mode-bar"))syncModeBar(old,latestModeContext.state);
@@ -67,7 +94,7 @@
           var check=old.querySelector("input"),fresh=next.querySelector("input");check.checked=fresh.checked;check.disabled=fresh.disabled;
         }else if(!old.matches(retained)){
           var top=old.scrollTop,left=old.scrollLeft,atBottom=old.scrollHeight-old.clientHeight-top<8;
-          patchChildren(old,next);old.scrollTop=old.matches(".chat-log")&&atBottom?old.scrollHeight:top;old.scrollLeft=left;
+          patchChildren(old,next,retainAll);old.scrollTop=old.matches(".chat-log")&&atBottom?old.scrollHeight:top;old.scrollLeft=left;
         }
         cursor=old.nextSibling;
       }else{parent.insertBefore(next,cursor);}
@@ -255,7 +282,7 @@
     // The modal is appended to the BODY, not into the screen, so it is not inside the grid it
     // would otherwise have to fight (the corner-panel version ran off the bottom of the screen).
     if ((state.comp || {}).rank_info_open && (state.comp || {}).ladder) {
-      document.body.appendChild(rankModal(state.comp.ladder));
+      syncInfoOverlay("rank",state,[state.comp.ladder,(state.auth||{}).rank],function(){return rankModal(state.comp.ladder);});
     }
     // Same treatment, same reason: on the BODY, so it is not inside the hero's grid. The two are
     // mutually exclusive server-side (competitive.py _toggle_penalties), so only one is ever up.
@@ -264,7 +291,7 @@
     // corner and from nowhere else, so there is no screen that can raise it while competitive is
     // not the screen being drawn.
     if ((state.comp || {}).penalties_open && (state.comp || {}).penalties) {
-      document.body.appendChild(penaltiesModal(state.comp.penalties));
+      syncInfoOverlay("penalties",state,state.comp.penalties,function(){return penaltiesModal(state.comp.penalties);});
     }
     // The report box is NOT appended here. It is registered as an OVERLAY at the foot of this
     // file, because it is opened from screens this render knows nothing about - see the comment
@@ -578,7 +605,7 @@
       });
       overlay.classList.add("rank-overlay");
       var dialog = overlay.querySelector(".ui-modal");
-      if (dialog) { dialog.setAttribute("tabindex", "-1"); setTimeout(function () { dialog.focus(); }, 0); }
+      if (dialog) { dialog.setAttribute("tabindex", "-1"); }
       return overlay;
     }
 
@@ -664,7 +691,7 @@
       });
       overlay.classList.add("rank-overlay");
       var dialog = overlay.querySelector(".ui-modal");
-      if (dialog) { dialog.setAttribute("tabindex", "-1"); setTimeout(function () { dialog.focus(); }, 0); }
+      if (dialog) { dialog.setAttribute("tabindex", "-1"); }
       return overlay;
     }
 
