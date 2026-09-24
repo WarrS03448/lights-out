@@ -5,28 +5,14 @@ verified against the official 2.6.8 installer. Certificates renew daily, so thei
 thumbprints/public keys must not be pinned. A new identity requires a reviewed
 client release; neither server metadata nor environment variables can override it.
 """
-import base64
 import contextlib
 import ctypes
 from ctypes import wintypes
-import json
 import os
-import subprocess
 
 PUBLISHER = "Samuel Warren"
 IDENTITY_EKU = "1.3.6.1.4.1.311.97.951605561.555398629.748726612.577571204"
 _ERROR = "Update blocked: a valid timestamped Lights Out publisher signature could not be verified."
-_SCRIPT = r"""
-$ErrorActionPreference = 'Stop'
-Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1') -ErrorAction Stop
-$s = Get-AuthenticodeSignature -LiteralPath $env:LIGHTSOUT_VERIFY_UPDATE
-$v = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($env:LIGHTSOUT_VERIFY_UPDATE)
-$oids = @($s.SignerCertificate.Extensions | Where-Object {$_.Oid.Value -eq '2.5.29.37'} | ForEach-Object {$_.EnhancedKeyUsages | ForEach-Object {$_.Value}})
-@{status=[string]$s.Status; type=[string]$s.SignatureType;
-  publisher=if($s.SignerCertificate){$s.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName,$false)}else{''};
-  timestamp=[bool]$s.TimeStamperCertificate; identityOids=$oids;
-  product=$v.ProductName.Trim(); version=@($v.FileMajorPart,$v.FileMinorPart,$v.FileBuildPart,$v.FilePrivatePart)} | ConvertTo-Json -Compress
-"""
 
 
 def _kernel():
@@ -36,7 +22,7 @@ def _kernel():
 
 
 @contextlib.contextmanager
-def locked_update(path):
+def _locked_file(path):
     """Hold the exact executable read-only against replacement through process creation."""
     kernel = _kernel()
     create = kernel.CreateFileW
@@ -57,44 +43,45 @@ def locked_update(path):
         length = final(handle, buffer, len(buffer), 0)
         if not length or length >= len(buffer):
             raise RuntimeError(_ERROR)
-        yield buffer.value
+        yield buffer.value, handle
     finally:
         close(handle)
 
 
+@contextlib.contextmanager
+def locked_update(path):
+    with _locked_file(path) as (resolved, _):
+        yield resolved
+
+
 def verify_signature(path):
-    """Fail closed on invalid/untrusted/other-publisher signatures or verifier errors."""
-    kernel = _kernel()
-    system_dir = kernel.GetSystemDirectoryW
-    system_dir.argtypes = [wintypes.LPWSTR, wintypes.UINT]
-    system_dir.restype = wintypes.UINT
-    buffer = ctypes.create_unicode_buffer(32768)
-    length = system_dir(buffer, len(buffer))
-    if not length or length >= len(buffer):
-        raise RuntimeError(_ERROR)
-    powershell = os.path.join(buffer.value, "WindowsPowerShell", "v1.0", "powershell.exe")
-    env = dict(os.environ, LIGHTSOUT_VERIFY_UPDATE=os.path.abspath(path))
-    encoded = base64.b64encode(_SCRIPT.encode("utf-16le")).decode("ascii")
+    """Fail closed using native Windows trust and the version in the signed PE section."""
+    from .wintrust import verify_embedded_signature
+    from .pe_version import read_version
     try:
-        result = subprocess.run([powershell, "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-                                capture_output=True, timeout=30, env=env,
-                                creationflags=subprocess.CREATE_NO_WINDOW, check=True)
-        report = json.loads(result.stdout.decode("utf-8-sig"))
+        with _locked_file(path) as (resolved, handle):
+            report = verify_embedded_signature(resolved, handle)
+            report.update(read_version(resolved))
         if (report.get("status") != "Valid" or report.get("type") != "Authenticode"
                 or report.get("publisher") != PUBLISHER or report.get("timestamp") is not True
                 or IDENTITY_EKU not in report.get("identityOids", [])):
             raise ValueError("untrusted signature")
         return report
-    except (OSError, ValueError, TypeError, AttributeError, subprocess.SubprocessError) as exc:
+    except (OSError, ValueError, TypeError, AttributeError) as exc:
         raise RuntimeError(_ERROR) from exc
 
 
-def verify_update(path):
+def verify_update(path, kind=None):
     """Reject signed old clients too: they may predate these security checks."""
     from . import version
     report = verify_signature(path)
     parts = report.get("version")
+    # The signed Inno uninstaller also says Lights Out, with Inno's own higher
+    # file version. Require the signed role matching how launch will execute it.
+    description = ("Lights Out installer (unofficial)" if kind == "inno-setup"
+                   else version.FILE_DESCRIPTION)
     if (report.get("product") != version.PRODUCT_NAME or not isinstance(parts, list)
+            or report.get("description") != description
             or len(parts) != 4 or any(type(n) is not int or not 0 <= n <= 65535 for n in parts)):
         raise RuntimeError("Update blocked: the signed file is not a recognized Lights Out update.")
     if tuple(parts) <= version.version_tuple(version.HUB_VERSION):

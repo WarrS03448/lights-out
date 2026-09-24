@@ -1531,7 +1531,7 @@ def test_launch_starts_installer_or_legacy_exe():
         yield path
         events.append("unlocked")
 
-    def verify(path):
+    def verify(path, kind):
         events.append("verified")
 
     def started(argv, **kwargs):

@@ -224,6 +224,15 @@ def _clear(path):
             "Explorer window in dist\\ and try again")
 
 
+def check_installer_signing_evidence(setup, directory):
+    """Never release a signed internal component accepted by older update gates."""
+    binaries = sorted(Path(directory).iterdir())
+    if len(binaries) != 1 or binaries[0].name != Path(setup).name or not binaries[0].is_file():
+        die("Inno signing evidence must contain only the final installer; internal signing is unsafe for older clients")
+    if sha256_of(binaries[0]) != sha256_of(setup):
+        die("The final installer differs from the verified signing input")
+
+
 def build_hub(version, iscc):
     """PyInstaller --onedir -> self-check -> Inno Setup installer (compiled with `iscc`). Returns the installer path."""
     py = venv_python()
@@ -260,7 +269,7 @@ def build_hub(version, iscc):
     #   * The exe could not be LAUNCHED at all (OSError, e.g. Smart App Control WinError 4551): a
     #     property of the build machine, not the build — warn and continue.
     try:
-        rc = run([exe, "--selfcheck", "--quiet"], cwd=ROOT, check=False)   # console=False exe: stderr not visible here
+        rc = run([exe, "--selfcheck", "--quiet", "--verify-signature"], cwd=ROOT, check=False)
         if rc != 0:
             die(f"self-check FAILED (exit {rc}) — the frozen build is broken; see "
                 f"%LOCALAPPDATA%\\CommunityHub\\logs\\selfcheck.txt. NOT releasing.")
@@ -268,13 +277,25 @@ def build_hub(version, iscc):
     except OSError as e:
         say(f"  WARNING: could not run the self-check on this machine ({e}); the build exists — continuing.")
     say("Building the installer (Inno Setup)…")
+    # Remove evidence/cache from earlier builds, including internally signed
+    # candidates that must never reach older clients. Inno internal signing is off.
+    signed_dir = os.path.join(DIST, "signed-uninstaller")
+    _clear(signed_dir)
+    evidence_dir = os.path.join(DIST, "signing-evidence")
+    _clear(evidence_dir)
+    os.makedirs(evidence_dir, exist_ok=True)
+    # Inno's $f is already quoted. Escape literal dollars in the fixed command;
+    # no user-controlled $p arguments are accepted by this named signing tool.
+    callback = subprocess.list2cmdline(signing + ["-EvidenceDirectory", evidence_dir, "-Path"]).replace("$", "$$") + " $f"
     run([iscc, "/Qp", f"/DHubVersion={version}", f"/DHubFileVersion={check_version(version)}.0",
+         "/DHubSignedRelease=1", "/Slightsout=" + callback,
          os.path.join("hub", "installer.iss")], cwd=ROOT,
         log=os.path.join(ROOT, "hub", "installer.log"))
     if not os.path.isfile(setup):
         die(f"Inno Setup did not produce {setup} — see hub/installer.log")
-    say("Signing and verifying the installer…")
-    run(signing + ["-Path", setup], cwd=ROOT)
+    say("Verifying the signed installer and compiler signing evidence…")
+    check_installer_signing_evidence(setup, evidence_dir)
+    run(signing + ["-VerifyOnly", "-Path", setup], cwd=ROOT)
     say(f"  {os.path.relpath(setup, ROOT)} ({os.path.getsize(setup)} B)")
     return setup
 

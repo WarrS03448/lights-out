@@ -1,6 +1,7 @@
 # Sign first-party release binaries with Azure Artifact Signing, then verify them.
 param(
     [string]$Path,
+    [string]$EvidenceDirectory,
     [switch]$CheckConfiguration,
     [switch]$VerifyOnly
 )
@@ -50,8 +51,18 @@ if (-not $VerifyOnly) {
 & $signTool verify /pa /all /v $binary
 if ($LASTEXITCODE -ne 0) { throw 'Signature verification failed. Publication must stop.' }
 $signature = Get-AuthenticodeSignature -LiteralPath $binary
-if ($signature.Status -ne 'Valid' -or -not $signature.TimeStamperCertificate -or
+$identityEku = '1.3.6.1.4.1.311.97.951605561.555398629.748726612.577571204'
+$signerEkus = @($signature.SignerCertificate.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.37' } |
+    ForEach-Object { $_.EnhancedKeyUsages | ForEach-Object { $_.Value } })
+if ($signature.Status -ne 'Valid' -or $signature.SignatureType -ne 'Authenticode' -or
+    -not $signature.TimeStamperCertificate -or $identityEku -notin $signerEkus -or
     $signature.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false) -ne $publisher) {
     throw 'Release requires a valid timestamped signature from the expected publisher.'
 }
 Write-Output "Verified timestamped signature: $publisher"
+if ($EvidenceDirectory -and -not $VerifyOnly) {
+    # Retain every verified compiler signing input. The publisher requires only
+    # the final setup, byte-identical to its output, and rejects internal signing.
+    New-Item -ItemType Directory -Path $EvidenceDirectory -Force | Out-Null
+    Copy-Item -LiteralPath $binary -Destination (Join-Path $EvidenceDirectory ([IO.Path]::GetFileName($binary)))
+}

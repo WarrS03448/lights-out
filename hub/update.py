@@ -35,6 +35,7 @@ from . import update_trust
 # Both names on purpose: an install that predates the Lights Out rename can still have
 # CommunityHub-<v>.exe sitting beside it, and this is what sweeps it up.
 _EXE_RE = re.compile(r"^(?:LightsOut|CommunityHub)-(\d+(?:\.\d+)*)\.exe$", re.IGNORECASE)
+_DOWNLOAD_RE = re.compile(r"(?:LightsOut|CommunityHub)-(?:Setup-)?\d+(?:\.\d+)*\.exe(?:\.part)?", re.IGNORECASE)
 INSTALLER_KIND = "inno-setup"
 
 
@@ -99,7 +100,7 @@ def launch(path: str, kind=None) -> None:
     Unsupported platforms and verification failures never fall back to execution.
     """
     with update_trust.locked_update(path) as verified_path:
-        update_trust.verify_update(verified_path)
+        update_trust.verify_update(verified_path, kind)
         argv = (installer_command(verified_path, str(paths.logs_dir() / "update-install.log"))
                 if kind == INSTALLER_KIND else [verified_path])
         flags = (getattr(subprocess, "DETACHED_PROCESS", 0)
@@ -108,7 +109,7 @@ def launch(path: str, kind=None) -> None:
 
 
 def clean_old_versions() -> list:
-    """Tidy up on start: the downloaded installer (*.exe, *.part in <state>/updates) and, when
+    """Tidy known Lights Out downloads in <state>/updates and, when
     frozen, older LightsOut-<v>.exe (and pre-rename CommunityHub-<v>.exe) files beside the
     running exe. Returns the removed names."""
     removed = []
@@ -118,7 +119,7 @@ def clean_old_versions() -> list:
     except OSError:
         names = []
     for name in names:
-        if name.lower().endswith((".exe", ".part")):
+        if _DOWNLOAD_RE.fullmatch(name):
             try:
                 os.remove(os.path.join(d, name))
                 removed.append(name)

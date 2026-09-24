@@ -18,7 +18,6 @@ from .. import paths
 from .. import state as state_mod
 from .. import game as game_mod
 from .. import tray as tray_mod
-from .. import update as update_mod
 from ..version import APP_NAME, CATALOGUE_URL
 from . import httpbridge
 from . import window as window_mod
@@ -316,13 +315,7 @@ def run(language=None, local_repo=None):
     def on_started():
         closer.start()
         panel.start()
-        # Tidy the previously downloaded installer / older exes on start, exactly like the Tk main
-        # (hub/app.py). on_started runs on pywebview's worker thread, so this disk work never
-        # blocks the UI thread.
-        try:
-            update_mod.clean_old_versions()
-        except Exception:            # noqa: BLE001 — best-effort tidy, never block launch
-            pass
+        # hub.app.main already cleaned old downloads before choosing a UI backend.
         app.load_catalogue_async()
 
     try:

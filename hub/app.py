@@ -1296,7 +1296,7 @@ class HubApp:
         self.root.after(100, self._pump)
 
 
-def selfcheck(show: bool = True) -> int:
+def selfcheck(show: bool = True, verify_own_signature: bool = False) -> int:
     """`--selfcheck`: prove the bundled pak builder and its Oodle module import. Exit 0 = OK.
 
     The Windows exe is a windowed program, so a console never sees its prints: the result
@@ -1304,6 +1304,11 @@ def selfcheck(show: bool = True) -> int:
     import sys as _sys
     from . import paths, version
     try:
+        if verify_own_signature:
+            from .update_trust import verify_signature
+            report = verify_signature(_sys.executable)
+            if report["product"] != version.PRODUCT_NAME or report["version"] != list(version.version_tuple()):
+                raise RuntimeError("signed executable identity does not match the frozen app")
         d = paths.ensure_builder_on_path()
         import build_gamemode  # noqa: F401  (the bundled tools/pak)
         import ooz             # noqa: F401  (pyooz, needed by the builder)
@@ -1333,7 +1338,8 @@ def selfcheck(show: bool = True) -> int:
                                "auto-host would silently never happen (frozen-bundle regression)")
         msg = (f"{version.APP_NAME} {version.HUB_VERSION}: builder OK ({d}), ooz OK, "
                f"webui {len(_got)} screens + {len(_screens.SCREEN_VERBS)} verbs OK, "
-               f"state dir {paths.state_dir()}, languages {','.join(i18n.CODES)}")
+               f"state dir {paths.state_dir()}, languages {','.join(i18n.CODES)}"
+               + (", native signature verification OK" if verify_own_signature else ""))
         code = 0
     except Exception as e:                      # noqa: BLE001
         msg = f"SELFCHECK FAILED: {e!r}"
@@ -1360,7 +1366,8 @@ def selfcheck(show: bool = True) -> int:
 def main():
     import sys as _sys
     if "--selfcheck" in _sys.argv:
-        raise SystemExit(selfcheck(show="--quiet" not in _sys.argv))
+        raise SystemExit(selfcheck(show="--quiet" not in _sys.argv,
+                                   verify_own_signature="--verify-signature" in _sys.argv))
     # --local  (testing: catalogue + packs from this checkout's server/public, no server needed)
     global LOCAL_REPO
     if "--local" in _sys.argv:

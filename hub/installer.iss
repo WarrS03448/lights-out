@@ -3,8 +3,9 @@
 ;     ISCC.exe /Qp /DHubVersion=1.1.0 /DHubFileVersion=1.1.0.0 hub\installer.iss  ->  dist\LightsOut-Setup-1.1.0.exe
 ; Paths in here are relative to this file (hub\), so the PyInstaller output is ..\dist\LightsOut.
 ;
-; A standard installer manages the application folder, shortcuts, updates and removal.
-; The official release installer is digitally signed after packaging; see BUILDING.md.
+; Why an installer at all: Defender flagged the unsigned one-file exe as a trojan (docs/distribution).
+; A one-folder build inside a standard installer, with a version resource and a publisher name, is
+; the free end of the fix; code signing is the paid end.
 ;
 ; Decisions
 ;   * Per-user install, no UAC (PrivilegesRequired=lowest). The hub updates itself by running this
@@ -42,6 +43,14 @@
 #define AppName "Lights Out"
 
 [Setup]
+#ifdef HubSignedRelease
+; Sign the downloadable setup. Keep internal components unsigned for now: older
+; clients trust product/version alone and could accept Inno's signed uninstaller
+; (same product, higher internal version) as an update. 2.8.4 adds role checks,
+; but those cannot protect clients that have not upgraded yet.
+SignTool=lightsout
+SignedUninstaller=no
+#endif
 ; AppId ties installs, upgrades and the uninstall entry together. It must NEVER change: a new GUID
 ; would make Windows see a second, separate program and leave the old one installed.
 AppId={{2d78e401-2c1f-483f-9b67-51407892cac7}

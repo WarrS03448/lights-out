@@ -17,6 +17,7 @@ Nothing here runs git. `deploy()`'s subprocess calls are captured, so the test a
 WOULD have run.
 """
 import os
+from pathlib import Path
 import sys
 import types
 
@@ -99,23 +100,31 @@ def test_installer_receives_matching_numeric_version(monkeypatch):
     monkeypatch.setattr(publish, "run", lambda cmd, **kwargs: calls.append(cmd) or 0)
     monkeypatch.setattr(publish.subprocess, "run", lambda cmd, **kwargs: calls.append(cmd))
     monkeypatch.setattr(publish, "_clear", lambda path: None)
+    monkeypatch.setattr(publish.os, "makedirs", lambda *args, **kwargs: None)
     monkeypatch.setattr(publish.os.path, "isdir", lambda path: False)
     monkeypatch.setattr(publish.os.path, "isfile", lambda path: True)
     monkeypatch.setattr(publish.os.path, "getsize", lambda path: 100)
+    monkeypatch.setattr(publish, "check_installer_signing_evidence", lambda *args: None, raising=False)
     publish.build_hub("2.3.43", "iscc-test")
     compiler = next(cmd for cmd in calls if cmd[0] == "iscc-test")
     assert "/DHubVersion=2.3.43" in compiler
     assert "/DHubFileVersion=2.3.43.0" in compiler
+    assert "/DHubSignedRelease=1" in compiler
+    callback = next(arg for arg in compiler if arg.startswith("/Slightsout="))
+    assert "sign.ps1" in callback and callback.endswith(" -Path $f")
     signs = [cmd for cmd in calls if "-Path" in cmd and cmd[0] == "powershell.exe"]
     assert [cmd[-1] for cmd in signs] == [publish.onedir_exe(), publish.installer_path("2.3.43")]
+    assert "-VerifyOnly" in signs[1], "Inno already signed the installer; never sign twice"
     assert calls.index(signs[0]) < calls.index(compiler) < calls.index(signs[1]), \
         "sign the bundled app before packaging, then sign the final installer"
     assert not any(cmd[0] == "taskkill" for cmd in calls), "building must not close a player's hub"
 
 
-@pytest.mark.parametrize("failure", ["config", "app", "installer"])
+@pytest.mark.parametrize("failure", ["config", "app", "compiler", "installer"])
 def test_signing_failure_cannot_update_the_public_download(monkeypatch, failure):
     def run(cmd, **kwargs):
+        if cmd[0] == "iscc-test" and failure == "compiler":
+            raise SystemExit("signing failed")
         if cmd[0] == "powershell.exe":
             stage = "config" if "-CheckConfiguration" in cmd else (
                 "app" if cmd[-1] == publish.onedir_exe() else "installer")
@@ -126,12 +135,51 @@ def test_signing_failure_cannot_update_the_public_download(monkeypatch, failure)
     monkeypatch.setattr(publish, "read_hub_version", lambda: "2.3.87")
     monkeypatch.setattr(publish, "find_iscc", lambda: "iscc-test")
     monkeypatch.setattr(publish, "_clear", lambda path: None)
+    monkeypatch.setattr(publish.os, "makedirs", lambda *args, **kwargs: None)
     monkeypatch.setattr(publish.os.path, "isdir", lambda path: False)
     monkeypatch.setattr(publish.os.path, "isfile", lambda path: True)
     monkeypatch.setattr(publish.os.path, "getsize", lambda path: 100)
+    monkeypatch.setattr(publish, "check_installer_signing_evidence", lambda *args: None, raising=False)
     def unexpected(*args, **kwargs):
         raise AssertionError("a failed signing step must not stage installer/catalogue bytes")
     monkeypatch.setattr(publish.shutil, "copy2", unexpected)
     monkeypatch.setattr(publish, "save_catalogue", unexpected)
     with pytest.raises(SystemExit, match="signing failed"):
         publish.publish_hub(types.SimpleNamespace(version="2.3.87"))
+
+
+def test_release_does_not_create_a_signed_uninstaller_accepted_by_older_clients():
+    """Old updaters trust product/version alone: do not introduce a signed uninstaller.
+
+    Inno defaults SignedUninstaller to yes when SignTool is set, so omission is
+    unsafe too. The outer installer must retain its signing callback.
+    """
+    text = (Path(ROOT) / "hub/installer.iss").read_text(encoding="utf-8")
+    settings = {}
+    for line in text.splitlines():
+        if "=" in line and not line.lstrip().startswith(";"):
+            key, value = line.split("=", 1)
+            settings.setdefault(key.strip().lower(), []).append(value.strip().lower())
+    assert settings["signtool"] == ["lightsout"]
+    assert settings["signeduninstaller"] == ["no"], \
+        "a signed Inno uninstaller is accepted by pre-2.8.4 update gates"
+    assert "signeduninstallerdir" not in settings
+
+
+def test_signing_evidence_contains_only_the_exact_final_installer(tmp_path):
+    setup = tmp_path / "LightsOut-Setup-2.8.4.exe"
+    setup.write_bytes(b"final signed installer")
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    with pytest.raises(SystemExit):
+        publish.check_installer_signing_evidence(setup, evidence)
+    captured = evidence / setup.name
+    captured.write_bytes(setup.read_bytes())
+    publish.check_installer_signing_evidence(setup, evidence)
+    captured.write_bytes(b"different output")
+    with pytest.raises(SystemExit):
+        publish.check_installer_signing_evidence(setup, evidence)
+    captured.write_bytes(setup.read_bytes())
+    (evidence / "uninst.e32.tmp").write_bytes(b"unsafe signed internal component")
+    with pytest.raises(SystemExit):
+        publish.check_installer_signing_evidence(setup, evidence)
