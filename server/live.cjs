@@ -2072,6 +2072,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (size !== MATCH_SIZE || teamOfId.size !== MATCH_SIZE
         || roster[1].length !== teamSize || roster[2].length !== MATCH_SIZE - teamSize
         || [...teamOfId.keys()].some(id => inMatch.has(id)) || bindingConflict([...teamOfId.keys()])) return null;
+    const duelRules=duel?rulesExpected():null;
+    if(duel&&!duelRules)return null;
     for (const unit of taken) removeFromQueue(unit.members[0]);
 
     const matchId = crypto.randomBytes(8).toString('hex');
@@ -2111,6 +2113,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
                       ratings: picked.ratings,
                       parties: taken.filter((u) => u.members.length > 1).map((u) => u.members.slice()),
                     } };
+    // Freeze duel rules before the lobby so a release cannot change a formed match.
+    if(duel){match.expected_score_limit=duelRules.score_limit;match.expected_max_rounds=duelRules.max_rounds;}
     matches.set(matchId, match);
     note(match, 'formed', { quality: picked.quality, wait_seconds: picked.waited, match_size: size });
     for (const p of players) inMatch.set(p.player_id, matchId);
@@ -2183,6 +2187,11 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       if (value && typeof value === 'object' && Array.isArray(value.__map)) out[key] = new Map(value.__map);
       else if (value && typeof value === 'object' && Array.isArray(value.__set)) out[key] = new Set(value.__set);
       else out[key] = value;
+    }
+    // Before first-to-five, duel rules were only saved when connecting began.
+    // Existing found/ready lobbies still have the first-to-seven pack installed.
+    if(duel && out.expected_score_limit===undefined && out.expected_max_rounds===undefined){
+      out.expected_score_limit=7;out.expected_max_rounds=13;
     }
     return identity.freezeMatch(out);
   }
@@ -3129,7 +3138,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (!match.agreedScoreLimit) {
       const rules = typeof rankedRules === 'function' ? rankedRules() : null;
       const requested = Number(rules && rules.score_limit);
-      match.agreedScoreLimit = (duel ? mode.scoreLimit : forcedScoreLimit()) ??
+      match.agreedScoreLimit = (duel ? (match.expected_score_limit ?? mode.scoreLimit) : forcedScoreLimit()) ??
         (Number.isInteger(requested) && requested > 0 && requested <= 999 ? requested : DEFAULT_SCORE_LIMIT);
     }
   }
@@ -3464,7 +3473,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       adoptLobby(match, body);
     }
 
-    const expected = rulesExpected();
+    const expected = duel && match.expected_score_limit && match.expected_max_rounds
+      ? {score_limit:match.expected_score_limit,max_rounds:match.expected_max_rounds} : rulesExpected();
     if (!expected) return { ok: false, error: 'Published game rules are unavailable.' };
     match.expected_score_limit = expected.score_limit;
     match.expected_max_rounds = expected.max_rounds;
@@ -7307,7 +7317,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       match.score=score;match.final_ended_at=terminal.at;
       const mergedRows=(match.stats?.players||[]).map(row=>({...row,stats_complete:false}));
       return await commitPlayedResult(match,{ids,side,winner:terminal.winner,draw:false,score,total,
-        limit:mode.scoreLimit,host:match.host,id:match.id,mergedRows});
+        limit:match.expected_score_limit ?? match.agreedScoreLimit ?? mode.scoreLimit,host:match.host,id:match.id,mergedRows});
     }catch{return {ok:false,unavailable:true,error:'Match decision is being saved. Please retry.'};}
   }
   async function decideDuel(match,loser,reason) {
@@ -7319,7 +7329,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       const team=[1,2].find(n=>match.assigned_teams?.[n]?.includes(loser));
       if(!team)return {ok:false,error:'Invalid duel player.'};
       const score=match.score;
-      if(score && ![1,2].every(n=>Number.isSafeInteger(score[n])&&score[n]>=0&&score[n]<7))return {ok:false,error:'The match is already decided.'};
+      const limit=match.expected_score_limit ?? match.agreedScoreLimit ?? mode.scoreLimit;
+      if(score && ![1,2].every(n=>Number.isSafeInteger(score[n])&&score[n]>=0&&score[n]<limit))return {ok:false,error:'The match is already decided.'};
       match.terminal={reason,loser,winner:team===1?2:1,at:Date.now(),score:score ? {1:score[1],2:score[2]} : null};
       clearTimeout(match.timer);clearTimeout(match.collectTimer);match.timer=null;match.collectTimer=null;
     }

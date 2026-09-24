@@ -60,6 +60,17 @@ test('invalid mode is rejected by request router',async t=>{
   await s.route({headers:{'x-ranked-mode':'oops'}},res,'GET','/api/leaderboard',new URL('http://test/api/leaderboard'));
   assert.equal(res.status,400);assert.equal(res.body.ok,false);
 });
+
+test('BB1 queue requires the first-to-five pack without requiring a new app',async t=>{
+ const s=make({requiredVersions:mode=>({hub:'2.8.0',mode:mode==='BB1'?'1.0.2':'1.0.30'})});
+ t.after(()=>s.shutdown());
+ for(const [version,status]of [['1.0.1',426],['1.0.2',200]]){
+  const res={},path='/api/queue/join';
+  await s.route({token:A,body:{},headers:{'x-ranked-mode':'BB1','x-hub-version':'2.8.0',
+   'x-bb1-version':version,'x-bb5-version':'1.0.30'}},res,'POST',path,new URL('http://test'+path));
+  assert.equal(res.status,status);assert.equal(s.forMode('BB1')._internals.queueOf.has(A),status===200);
+ }
+});
 test('Players directory tracks either queue across ladder selections and clears it on leave',async t=>{
   const s=make();t.after(()=>s.shutdown());await s._internals.ensureRecovery();
   for(const mode of ['BB5','BB1']){

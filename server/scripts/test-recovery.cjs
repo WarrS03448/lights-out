@@ -39,6 +39,18 @@ const call=(operation,who=0,extra={})=>recovery.execute(store,keys,{operation,pl
   session:'chm-0123456789abcdef',now,ttl:86400,...extra});
 async function eligible(){await fixture();assert.equal((await call('checkpoint',0,{checkpoint:checkpoint()})).ok,true);
   for(const who of [1,2])assert.equal((await call('closed',who)).ok,true);}
+
+for(const limit of [5,7])test(`BB1 recovery accepts only its frozen first-to-${limit} checkpoint`,async()=>{
+ const m=await fixture();m.mode='BB1';m.map='Paintball';m.players=m.players.slice(0,2);
+ m.teams={1:[ids[0]],2:[ids[1]]};m.assigned_teams=structuredClone(m.teams);
+ m.game_bindings=Object.fromEntries(ids.slice(0,2).map(id=>[id,id]));
+ m.expected_score_limit=limit;m.expected_max_rounds=limit*2-1;m.agreedScoreLimit=limit;
+ await store(['SET',keys[1],JSON.stringify(m)]);
+ const cp={...checkpoint(),limit,rows:checkpoint().rows.slice(0,2)};
+ assert.equal((await call('checkpoint',0,{checkpoint:{...cp,limit:limit===5?7:5}})).ok,false);
+ assert.equal((await call('checkpoint',0,{checkpoint:cp})).ok,true);
+ assert.equal(JSON.parse(await store(['GET',keys[3]])).checkpoint.data.limit,limit);
+});
 async function prepareRestore(m) {
   const who=ids.indexOf(m.host),args={epoch:m.host_epoch,session:m.session_key,token:m.reportToken,checkpoint:checkpoint()};
   assert.equal((await call('opened',who,args)).ok,true);

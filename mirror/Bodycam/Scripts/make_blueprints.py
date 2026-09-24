@@ -4,7 +4,7 @@ CTF gamemode assets. Everything is logged with a [MB] prefix; blueprints.log / b
 Stage 1 (2026-09-14, shipped as v16): the stand-in parent BP_BodycamGameModeAbstract (exact variable order of the game's
 class), DA_CTF, and a logic-less GM_CTF child.
 Stage 3 (2026-09-14): Bodybomb 5v5 — stand-ins Bombe + BP_InventoryComponent, AC_BB5BombRule (bomb dropped at the attacker
-spawn), GE_BB5_DroneCooldown (x4), DA_BB5 (first to 7, 12 rounds, sides swap every 6), GM_BB5 (no bots). Graphs: bb5_graphs.py.
+spawn), GE_BB5_DroneCooldown (x4), DA_BB5 (first to 7, 13 rounds, sides swap every 6), GM_BB5 (no bots). Graphs: bb5_graphs.py.
 Stage 2: the real CTF logic — BP_CTF_Flag / BP_CTF_Base actors, GM_CTF events + spawn functions, a stub
 HUD_Dot widget + icon texture at the game's paths (referenced, never shipped). Node graphs come from ctf_graphs.py and
 are built by UBodycamMirrorTools.BuildGraph (C++). Three passes per Blueprint: variables/components -> compile;
@@ -390,9 +390,9 @@ def stage3_bb5(parent, mode_id="BB5"):
 
     make_drone_cooldown_ge(BB5_DIR, "GE_BB5_DroneCooldown", (3.0 if mode_id == "BB1" else BG.DRONE_COOLDOWN_FACTOR))
     # the game's DA_BodyBomb values (PhaseDuration 180, warm-up 6, 5 per team / 10 players) with Sam's round format; the pak
-    # builder writes the same numbers from the manifest's "rules" (score_limit 7, max_rounds 12, team_switch_interval 6)
-    da = make_config_asset("DA_BB5", {"phase_duration": (120.0 if mode_id == "BB1" else 180.0), "round_warmup_duration": 6.0}, {"score_limit": 7, "max_phases": 13},
-                           {"team_max_size": 5, "max_players": 10, "team_switch_interval": (1 if mode_id == "BB1" else 6)}, "first to 7 of 12 rounds, sides swap every 6, 5 per team, 10 players, 180 s rounds")
+    # builder also applies these values from each manifest: BB1 first to 5 of 9; BB5 first to 7 of 13.
+    da = make_config_asset("DA_BB5", {"phase_duration": (120.0 if mode_id == "BB1" else 180.0), "round_warmup_duration": 6.0}, {"score_limit": (5 if mode_id == "BB1" else 7), "max_phases": (9 if mode_id == "BB1" else 13)},
+                           {"team_max_size": 5, "max_players": 10, "team_switch_interval": (1 if mode_id == "BB1" else 6)}, ("first to 5 of 9, sides swap every round, 120 s rounds" if mode_id == "BB1" else "first to 7 of 13, sides swap every 6, 180 s rounds"))
 
     # ---------- AC_BB5BombRule: pass 1 variables ----------
     rule = make_blueprint(BB5_DIR, "AC_BB5BombRule", unreal.ObjectiveRuleSetComponent)

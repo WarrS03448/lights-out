@@ -3,7 +3,7 @@
 const MODES=Object.freeze({
   BB5:Object.freeze({id:'BB5',players:10,teamSize:5,maxParty:5,scoreLimit:7,maxRounds:13,
     switchInterval:6,roundSeconds:180,droneCooldown:4,fixedMap:null}),
-  BB1:Object.freeze({id:'BB1',players:2,teamSize:1,maxParty:1,scoreLimit:7,maxRounds:13,
+  BB1:Object.freeze({id:'BB1',players:2,teamSize:1,maxParty:1,scoreLimit:5,maxRounds:9,
     switchInterval:1,roundSeconds:120,droneCooldown:3,fixedMap:'Paintball'}),
 });
 function modeOf(id){

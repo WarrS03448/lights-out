@@ -8,18 +8,36 @@ function redis(t){
  child.on('exit',()=>{for(const p of pending.values())p.reject(Error('Fixture closed'));});t.after(()=>child.kill());
  return args=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});child.stdin.write(JSON.stringify({id,command:args})+'\n');});
 }
-async function setup(t){
+async function setup(t, limit=5){
  const raw=redis(t);let fail=false;
  const store=async args=>{if(fail&&args[0]==='EVAL'&&args[1].includes('local old = redis.call'))throw Error('receipt offline');return raw(args);};
  const L=live.create({upstashCmd:store,modeId:'BB1'});await L._internals.ready;t.after(()=>L.shutdown());
  const ids=['76561198000000001','76561198000000002'],teams={1:[ids[0]],2:[ids[1]]};
  const match=identity.freezeMatch({mode:'BB1',id:'abcdef0123456789',state:'live',host:ids[0],created:Date.now(),live_at:Date.now(),
   players:ids.map(steam_id=>({steam_id,connected:true,accepted:true})),teams,assigned_teams:structuredClone(teams),
-  start_ready_verified:true,left:[],map:'Paintball',expiry:'live',deadline:Date.now()-1000});
+  start_ready_verified:true,expected_score_limit:limit,expected_max_rounds:limit*2-1,
+  left:[],map:'Paintball',expiry:'live',deadline:Date.now()-1000});
  L._internals.matches.set(match.id,match);ids.forEach(id=>L._internals.inMatch.set(id,match.id));
  await L._internals.flushMatches();
  return {L,match,ids,store,fail:x=>fail=x,account:i=>({player_id:ids[i],game_steam_id:ids[i]})};
 }
+
+for(const limit of [5,7])test(`concession respects frozen first-to-${limit} rules after restart`,async t=>{
+ const f=await setup(t,limit);f.match.score={1:limit-1,2:4};f.fail(true);
+ assert.equal((await f.L.concedeMatch(f.account(0),{match_id:f.match.id})).unavailable,true);
+ await f.L.shutdown();f.fail(false);
+ const reboot=live.create({upstashCmd:f.store,modeId:'BB1'});t.after(()=>reboot.shutdown());await reboot._internals.ready;
+ assert.equal((await reboot.finalSnapshot(f.ids[0],{match_id:f.match.id})).ok,true);
+ const receipt=JSON.parse(await f.store(['GET','hub:ranked:BB1:settlement:'+f.match.id]));
+ assert.equal(receipt.limit,limit);assert.deepEqual(receipt.score,{1:limit-1,2:4});
+});
+
+test('a first-to-five winner cannot reverse the result by conceding at five',async t=>{
+ const f=await setup(t);f.match.score={1:5,2:4};
+ assert.equal((await f.L.concedeMatch(f.account(0),{match_id:f.match.id})).ok,false);
+ assert.equal(f.match.terminal,undefined);
+ assert.equal(await f.store(['GET','hub:ranked:BB1:settlement:'+f.match.id]),null);
+});
 test('pending concession survives overdue clocks, opposite concession, restart and late native final',async t=>{
  const f=await setup(t);f.fail(true);
  assert.equal((await f.L.concedeMatch(f.account(0),{match_id:f.match.id})).unavailable,true);

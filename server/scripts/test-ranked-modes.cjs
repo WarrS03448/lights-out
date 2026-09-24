@@ -20,6 +20,9 @@ test('BB1 forms two solo opponents while default BB5 retains ten-player capacity
   one._internals.enqueue([A],'',Date.now());one._internals.enqueue([B],'',Date.now());
   const match=one._internals.tryFormMatch();
   assert.ok(match);assert.equal(match.mode,'BB1');assert.equal(match.players.length,2);
+  assert.equal(match.expected_score_limit,5);assert.equal(match.expected_max_rounds,9);
+  assert.deepEqual(require('../ranked-modes.cjs').rulesOf('BB5'),{
+    score_limit:7,max_rounds:13,team_switch_interval:6,round_seconds:180,time_limit:180});
 });
 test('mode rank reads retain existing BB5 record and use independent BB1 placements',async t=>{
   const records=new Map([['ranked-test:rating:'+A,JSON.stringify({matches:8,wins:5,losses:3,progress:950})]]);
@@ -28,9 +31,30 @@ test('mode rank reads retain existing BB5 record and use independent BB1 placeme
   assert.equal((await one._internals.loadRating(A)).matches,0);
   assert.notEqual(one._internals.boardKey(),five._internals.boardKey());
 });
+
+for(const legacy of [false,true])test(`BB1 ${legacy?'legacy':'new'} lobby retains its rules through restore and connect`,t=>{
+ const svc=service('BB1');t.after(()=>svc.shutdown());const I=svc._internals;
+ I.enqueue([A],'',Date.now());I.enqueue([B],'',Date.now());const original=I.tryFormMatch();
+ const raw=I.serialiseMatch(original);
+ if(legacy){delete raw.expected_score_limit;delete raw.expected_max_rounds;}
+ const match=I.reviveMatch(JSON.parse(JSON.stringify(raw)));I.matches.set(match.id,match);clearTimeout(original.timer);
+ for(const p of match.players)I.acceptMatch(p.player_id);
+ I.flipCoin(match.lobby.coin_captain,{side:'heads'});I.expireStageTurn(match.id);
+ I.pickSide(match.lobby.captains[match.lobby.toss_winner],{side:'defend'});
+ assert.equal(I.beginConnect(A,{host:A,map:'Paintball'}).ok,true);
+ assert.equal(match.expected_score_limit,legacy?7:5);assert.equal(match.expected_max_rounds,legacy?13:9);
+ assert.equal(match.agreedScoreLimit,legacy?7:5);
+});
 test('unknown explicit mode fails instead of entering default ladder',()=>{
   let svc;
   try {assert.throws(()=>{svc=service('unknown');},/mode/i);}finally{svc?.shutdown();}
+});
+
+test('BB1 freezes the served rules including an operator test override',t=>{
+ const svc=live.create({modeId:'BB1',expectedRules:()=>({score_limit:3,max_rounds:5})});
+ t.after(()=>svc.shutdown());const I=svc._internals;
+ I.enqueue([A],'',Date.now());I.enqueue([B],'',Date.now());const match=I.tryFormMatch();
+ assert.equal(match.expected_score_limit,3);assert.equal(match.expected_max_rounds,5);
 });
 test('BB1 coin winner picks a side directly and cannot enter map bans',t=>{
   const svc=service('BB1');t.after(()=>svc.shutdown());const I=svc._internals;

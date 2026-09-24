@@ -128,6 +128,16 @@ function create(options){
     if(pathname.startsWith('/api/match/')&&pathname!=='/api/match/history'){
       const account=await options.whoami(options.bearer(req)),player=identity.playerOf(account);
       if(identity.validPlayer(player)){
+        if(pathname==='/api/match/completion'&&method==='GET'){
+          // Installed cleanup workers have no mode header. Settlement removes active
+          // membership, and a newer match may belong to the other ladder. Resolve the
+          // requested durable receipt, then retain the engine's full authentication gate.
+          const id=url?.searchParams.get('id');
+          const found=(await Promise.all([...engines.values()].map(async e=>
+            (await e.completion(player,id)).ok?e:null))).filter(Boolean);
+          if(found.length>1){options.sendJson(res,409,{ok:false,data_collected:false,close_allowed:false});return true;}
+          if(found.length===1)return found[0].route(stampedRequest(req,found[0].mode),res,method,pathname,url);
+        }
         const active=[...engines.values()].find(e=>e.activity().some(a=>a.player_id===player));
         if(active)return active.route(stampedRequest(req,active.mode),res,method,pathname,url);
       }

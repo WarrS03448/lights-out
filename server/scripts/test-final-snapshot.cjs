@@ -40,6 +40,50 @@ function fixture(t, count = 4, modeId = 'BB5') {
   return { L, match, fields, fail: value => { fail = value; }, commits: () => commits, plan: () => lastPlan, store };
 }
 
+for(const limit of [5,7])for(const losing of [0,limit-1])test(`BB1 frozen first-to-${limit} settles ${limit}-${losing}`,async t=>{
+ const f=fixture(t,2,'BB1');f.match.map='Paintball';
+ f.match.expected_score_limit=limit;f.match.expected_max_rounds=limit*2-1;
+ f.match.score={1:limit,2:losing};
+ f.fields.meta=`${limit+losing};${limit};0;${limit};1;${losing}`;
+ assert.equal((await f.L.finalSnapshot(f.match.host,f.fields)).ok,true);
+ assert.equal(f.plan().receipt.limit,limit);assert.deepEqual(f.plan().receipt.score,{1:limit,2:losing});
+});
+
+test('BB1 first-to-five rejects unfinished, over-limit and old-rules final scores',async t=>{
+ for(const meta of ['8;5;0;4;1;4','10;5;0;5;1;5','9;7;0;7;1;2']){
+  const f=fixture(t,2,'BB1');f.match.expected_score_limit=5;f.match.expected_max_rounds=9;
+  assert.equal((await f.L.finalSnapshot(f.match.host,{...f.fields,meta})).ok,false);
+  assert.equal(f.commits(),0);
+ }
+});
+
+for(const mode of ['BB1','BB5'])test(`${mode} completed match authorizes installed cleanup worker after restart without mode`,async t=>{
+ const f=fixture(t,mode==='BB1'?2:4,mode);
+ assert.equal((await f.L.finalSnapshot(f.match.host,f.fields)).ok,true);
+ assert.equal(f.L.activity().length,0);
+ const ranked=require('../ranked-service.cjs');
+ const s=ranked.create({upstashCmd:f.store,whoami:async token=>({steam_id:token}),bearer:req=>req.token,
+  sendJson:(res,status,body)=>Object.assign(res,{status,body})});t.after(()=>s.shutdown());await s._internals.ready;
+ async function completion(token,headers={}){
+  const res={},url=new URL('http://test/api/match/completion?id='+f.match.id);
+  await s.route({token,headers},res,'GET',url.pathname,url);return res;
+ }
+ for(const headers of [{},{'x-ranked-mode':mode==='BB1'?'BB5':'BB1'}]){
+  const r=await completion(f.match.host,headers);assert.equal(r.status,200);
+  assert.equal(r.body.close_allowed,true);assert.equal(r.body.match_id,f.match.id);
+ }
+ assert.equal((await completion('76561198000000099')).body.close_allowed,false);
+ assert.equal((await completion('')).status,401);
+ // A newer match on the other ladder cannot hide the earlier durable receipt.
+ s.forMode(mode==='BB1'?'BB5':'BB1')._internals.inMatch.set(f.match.host,'another-match');
+ assert.equal((await completion(f.match.host)).body.close_allowed,true);
+ // A conflicting durable ID must never grant an ambiguous close authorization.
+ const otherPrefix=mode==='BB1'?'hub:':'hub:ranked:BB1:';
+ await f.store(['SET',otherPrefix+'settlement:'+f.match.id,JSON.stringify(f.plan().receipt)]);
+ const ambiguous=await completion(f.match.host);
+ assert.equal(ambiguous.status,409);assert.equal(ambiguous.body.close_allowed,false);
+});
+
 test('BB1 concession settles once with its actual score and no invented round',async t=>{
   const f=fixture(t,2,'BB1');f.match.map='Paintball';f.match.score={1:0,2:0};
   const loser=f.match.players[0].player_id;
