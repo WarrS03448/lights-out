@@ -3826,8 +3826,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const t = match.assigned_teams;
     if (!Array.isArray(t?.[1]) || !Array.isArray(t?.[2])) return reject('no frozen assignment');
     const ids = [...t[1], ...t[2]].map(String), unique = new Set(ids);
-    if(duel&&(ids.length!==2||assigned[1].length!==1||assigned[2].length!==1))return reject('invalid duel assignment');
-      if (ids.length < (soloMatch(match)?1:2) || ids.length > 10 || unique.size !== ids.length || ids.some(x => !identity.validPlayer(x)))
+    if (duel && (ids.length !== 2 || t[1].length !== 1 || t[2].length !== 1)) return reject('invalid duel assignment');
+    if (ids.length < (soloMatch(match)?1:2) || ids.length > 10 || unique.size !== ids.length || ids.some(x => !identity.validPlayer(x)))
       return reject('invalid frozen assignment');
     const sideOf = new Map([...t[1].map(x => [String(x), 0]), ...t[2].map(x => [String(x), 1])]);
     if (!Array.isArray(rows) || rows.length !== ids.length) return reject('wrong roster size');
