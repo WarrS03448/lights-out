@@ -180,6 +180,8 @@ JOIN_SECONDS = 300
 # closes the game ... the game must be closed anyways to queue so its much faster to just put the
 # user back at base 1 rather than them having to manually close the game." And, the same day:
 # "make sure the game only closes after flashbang registers the game as complete."
+# The queue restriction in that historical request was removed on 2026-09-24.
+# Players may search with Bodycam open and close it during pre-match selection.
 #
 # That second sentence is the whole contract, so it is worth spelling out. The hub (Flashbang) is
 # the ONLY thing that may decide a match is finished, and it decides it in exactly one place -
@@ -203,12 +205,9 @@ CLOSE_GAME_AFTER_SECONDS = 20        # end-of-match screen the player gets befor
 CLOSE_GAME_GRACE_SECONDS = 25        # how long the close REQUEST is given before a kill (game.py)
 # A /F kill looks exactly like a crash, and a crash while hosting has been measured to lock the
 # account out of hosting for 20+ minutes. The host therefore gets the request and nothing else;
-# everyone else gets killed rather than left with a window they have to close before they queue.
+# everyone else retains the existing forced-close policy after confirmed match completion.
 CLOSE_GAME_FORCE_HOST = False
 CLOSE_GAME_FORCE_OTHERS = True
-
-# How long the "close your game" cue stays up when Find match is pressed with Bodycam open.
-CLOSE_GAME_CUE_MS = 3000
 
 # A flat five minutes is farmable, so the ban climbs on repeats (Sam, 2026-09-14) as multiples
 # of the first rung: 5 min, 15, 30, 1 h, then 1 h from then on (capped at an hour by Sam on
@@ -1152,7 +1151,7 @@ class MockSession(Session):
 
         Both branches of _maybe_launch_game count. A game that was ALREADY open is taken on too,
         and deliberately: that player's one BeginPlay is spent, so they are the person who most
-        needs it closed at the end - they cannot queue again until it is.
+        needs a fresh launch before joining another match.
 
         Bumping the generation here is what makes a stale close harmless. Any close armed for an
         earlier match is now looking at a game that no longer exists, and will decline to run."""
@@ -1541,42 +1540,6 @@ class MockSession(Session):
         if 200 <= int(status or 0) < 300:
             self._combat_warning_pending.discard(key)
 
-    # ------------------------------------------------------------ the queue's one hard rule
-    def game_is_open(self) -> bool:
-        """Is Bodycam running right now? The EXACT probe, not the cached display value.
-
-        This is a decision (may this player queue at all), and the cached answer is only
-        refreshed when a snapshot is built - a hub sitting still on the Competitive screen can
-        hold a minutes-old opinion, which is exactly the case this guard exists for: the player
-        opens the game, then presses Find match. One `tasklist` on one deliberate press is a
-        different cost from the three per redraw that made every click take three seconds
-        (hub/game.py). It fails OPEN: if we cannot tell, the queue is not withheld."""
-        try:
-            return bool(game_mod.game_running())
-        except Exception:              # noqa: BLE001 — a probe must never eat the button
-            self._log_exception("game_running")
-            return False
-
-    def _close_game_cue(self):
-        """Say "close your game" for three seconds and change nothing else.
-
-        The web UI has a toast for exactly this. The classic Tk window has none, so there the
-        same sentence goes on the idle screen's error line and is taken away again on a one-shot
-        - otherwise its Find match button would look broken."""
-        text = t("comp_close_game_queue")
-        if self._cue(text, ms=CLOSE_GAME_CUE_MS):
-            return
-        self.error = text
-        self._changed()
-        self._later(CLOSE_GAME_CUE_MS, lambda: self._clear_close_game_cue(text))
-
-    def _clear_close_game_cue(self, text):
-        """Take the stand-in line back down, unless something else has since had its say."""
-        if self.error != text:
-            return
-        self.error = ""
-        self._changed()
-
     # ------------------------------------------------------------ the watchdog
     # One repeating tick for the whole session. It watches the phase (and, in the lobby, the
     # stage) and how long it has held still. Nothing else has to remember to set a timer, and
@@ -1946,15 +1909,6 @@ class MockSession(Session):
             self._changed()
             return
         if not self.is_party_leader():
-            return
-        # BODYCAM HAS TO BE CLOSED TO QUEUE. The hub opens the game itself when the match is
-        # found and puts the player straight into the lobby; a game that is already running has
-        # spent its one BeginPlay before the match existed, and there is no channel into a live
-        # Bodycam process to put it into one. This used to be a paragraph under the button asking
-        # the player to work that out for themselves. Now the button simply does nothing while the
-        # game is up, and says why for three seconds.
-        if self.game_is_open():
-            self._close_game_cue()
             return
         left = self.banned_left()
         if left:
@@ -6123,9 +6077,6 @@ class CompetitivePanel:
             tk.Label(inner, text=t("comp_party_waiting_leader", name=s.party_leader_name()),
                      bg=WHITE, fg=AMBER, wraplength=520, justify="center").pack(pady=(4, 4))
 
-        # The paragraph about keeping Bodycam closed is gone from under the button: find_match
-        # enforces that rule itself now and says so for three seconds when it bites. The waiting
-        # screens keep their line - there the game genuinely is about to be opened for you.
         self._draw_sound_row(inner)
 
         link = tk.Label(inner, text=t("comp_check_what"), bg=WHITE, fg=ACCENT,
@@ -6422,7 +6373,8 @@ class CompetitivePanel:
                      bg=WHITE, fg=ACCENT, font=self.f_small).pack(pady=(2, 0))
         tk.Frame(inner, bg=WHITE, height=12).pack()
         self._button(inner, t("comp_cancel"), self.session.cancel_queue).pack()
-        self._draw_ready_state(inner)
+        tk.Label(inner, text=t("comp_search_game_notice"), bg=WHITE, fg=AMBER,
+                 font=self.f_small, wraplength=560, justify="center").pack(pady=(10, 0))
 
     # ------------------------------------------------- match found
     def _draw_found(self):
@@ -6544,6 +6496,8 @@ class CompetitivePanel:
 
     # ------------------------------------------------- lobby (coin flip + veto + chat)
     def _draw_lobby(self):
+        tk.Label(self.body, text=t("comp_lobby_close_game"), bg=WHITE, fg=GREY,
+                 font=self.f_small, wraplength=560, justify="left").pack(anchor="w", pady=(4, 0))
         s = self.session
         if s.stage == "rejoin":
             self._draw_rejoin()

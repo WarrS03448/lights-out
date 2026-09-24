@@ -142,8 +142,8 @@ def test_settings_strings_cover_every_language():
     i18n.set_language("en")
 
 
-def test_readiness_says_CLOSED_is_ready():
-    """Closed is the green state; running is the warning. The inverse of what it used to say."""
+def test_readiness_does_not_require_bodycam_closed():
+    """Opening Bodycam does not introduce a readiness warning or checklist item."""
     from hub import game as game_mod
     i18n.set_language("en")
     panel, s = _panel()
@@ -152,31 +152,21 @@ def test_readiness_says_CLOSED_is_ready():
     try:
         game_mod.game_running_cached = lambda *a, **k: False
         items = {it["key"]: it for it in _slice(panel)["readiness"]}
-        assert items["bodycam"]["state"] == "ok"
-        assert items["bodycam"]["value_key"] == "ready_closed"
+        assert set(items) == {"steam", "servers"}
 
         game_mod.game_running_cached = lambda *a, **k: True
-        items = {it["key"]: it for it in _slice(panel)["readiness"]}
-        assert items["bodycam"]["state"] == "warn", "a running game is not the ready state"
-        assert items["bodycam"]["value_key"] == "ready_close_it"
+        assert {it["key"]: it for it in _slice(panel)["readiness"]} == items
     finally:
         game_mod.game_running_cached = real
 
 
 def test_settings_readiness_reflects_state():
-    """The inline checklist (Steam, Bodycam, Servers) mirrors the real state.
-
-    THE LOCATION ROW IS GONE and Bodycam's meaning is INVERTED (Sam, 2026-09-15: "remove the
-    message that says location go to shooting range, as thats the incorrect state the user needs
-    to be. the user needs their game closed"). The hub opens the game itself when a match is
-    found, and has to: the lobby pak gets one lobby search per launch, so a game that was already
-    running has spent it. Telling the player "Running - OK" was steering them into the one branch
-    that cannot be recovered."""
+    """Account and server connectivity still reflect whether the player is ready."""
     i18n.set_language("en")
     panel, s = _panel()
     s.connected = True
     items = {it["key"]: it for it in _slice(panel)["readiness"]}
-    assert set(items) == {"steam", "bodycam", "servers"}, "Location should be gone"
+    assert set(items) == {"steam", "servers"}
     assert items["steam"]["state"] == "ok"
     assert items["servers"]["state"] == "ok"
 
@@ -573,7 +563,7 @@ _TESTS = [
     test_settings_snapshot_shape,
     test_settings_strings_cover_every_language,
     test_settings_readiness_reflects_state,
-    test_readiness_says_CLOSED_is_ready,
+    test_readiness_does_not_require_bodycam_closed,
     test_settings_sound_slice_follows_persisted_volume,
     test_settings_verbs_are_registered,
     test_settings_set_volume_persists_and_reemits,

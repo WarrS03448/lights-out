@@ -62,8 +62,8 @@
     return JSON.stringify([a.signed_in,a.player_id||a.steam_id||"",state.lang,c.phase,c.match_id,
       (c.lobby||{}).match_id,(c.connect||{}).match_id,a.account_step]);
   }
-  var retained = ".ranked-mode-bar,.comp-network-row,.chat-row,.join-row,.account-field,.account-remember,.ranked-history-modes,.match-recovery-control";
-  function nodeKey(n) { return n.nodeType===1 ? n.tagName+":"+(n.id||n.classList[0]||"") : "#text"; }
+  var retained = ".ranked-mode-bar,.comp-network-row,.chat-row,.join-row,.account-field,.account-remember,.ranked-history-modes,.match-recovery-control,[data-lobby-choice]";
+  function nodeKey(n) { return n.nodeType===1 ? n.tagName+":"+(n.id||n.dataset.lobbyChoice||n.classList[0]||"") : "#text"; }
   function syncAttrs(oldNode,newNode) {
     Array.from(oldNode.attributes).forEach(function(a){if(!newNode.hasAttribute(a.name))oldNode.removeAttribute(a.name);});
     Array.from(newNode.attributes).forEach(function(a){if(oldNode.getAttribute(a.name)!==a.value)oldNode.setAttribute(a.name,a.value);});
@@ -85,7 +85,7 @@
         syncAttrs(old,next);
         if(old.matches(".account-form"))old.onsubmit=next.onsubmit;
         if(old.matches(".ranked-mode-bar"))syncModeBar(old,latestModeContext.state);
-        else if(old.matches(".match-recovery-control"))old.textContent=next.textContent;
+        else if(old.matches(".match-recovery-control,[data-lobby-choice]"))old.textContent=next.textContent;
         else if(old.matches(".ranked-history-modes")){
           Array.from(old.children).forEach(function(button,i){if(next.children[i])syncAttrs(button,next.children[i]);});
         }else if(old.matches(".comp-network-row")){
@@ -118,8 +118,8 @@
   var recoveryTimer = null;
   function clearRecoveryTimer() { if (recoveryTimer) { clearInterval(recoveryTimer); recoveryTimer = null; } }
 
-  // The hub closes Bodycam once it has registered the match as complete, because the game has to be
-  // shut before the player can queue again. "armed" is deliberately absent: it draws nothing, so the
+  // The hub closes Bodycam once it has registered the match as complete, ready for a fresh launch
+  // into the next match. "armed" is deliberately absent: it draws nothing, so the
   // scoreboard is not sharing the screen with a countdown to a shutdown.
   //
   // MODULE SCOPE, AND THAT IS THE WHOLE FIX. This used to sit inside render(), BELOW the call that
@@ -896,10 +896,6 @@
       // sit above Find match as a bordered card, which pushed the button - the thing the player
       // came here to press - a long way down the panel whenever it appeared.
       if (comp.outdated) { box.appendChild(outdatedBox(comp.outdated)); }
-      // NO PARAGRAPH ABOUT THE GAME BEING OPEN. It used to sit right here, asking the player to
-      // remember to keep Bodycam closed. The rule is enforced now instead: find_match does
-      // nothing while the game is up and cues "close your game" for three seconds (Python,
-      // Session.find_match), so the only people who ever read it are the ones it applies to.
       if (comp.penalty && comp.penalty.left) {
         var pen = comp.penalty;
         var until = +pen.until || 0;   // absolute epoch-seconds deadline; 0 on an older snapshot
@@ -959,7 +955,7 @@
       fill.style.animationDelay = heldPhase(SWEEP_MS);      // survive the once-a-second rebuild
       bar.appendChild(fill);
       box.appendChild(bar);
-      box.appendChild(el("div", "search-reminder", t("comp_search_keep_closed")));
+      box.appendChild(el("div", "search-reminder", t("comp_search_game_notice")));
       var meta = el("div", "search-meta");
       meta.appendChild(el("span", "", t(comp.mode_id === "BB1" ? "comp_queue_mode_duel" : "comp_queue_mode")));
       if (comp.party_size > 1) {
@@ -989,7 +985,7 @@
     // On it (lobby / connecting / live) the party gives way to the match: teams, veto, chat, the
     // connect roster, the live/vote panel — the wide half of what CompetitivePanel drew.
     // Reuse the existing checks and translations from the settings snapshot.
-    // Only shown before queueing; game-running warnings do not belong in a live match.
+    // Only account and server readiness belong here; closing the game is a lobby reminder.
     function readinessStrip() {
       var settings = state.settings || {};
       var strings = settings.strings || {};
@@ -1072,6 +1068,13 @@
       return (result === "tails" ? t("comp_tails") : t("comp_heads")).slice(0, 1).toUpperCase();
     }
 
+    function lobbyChoice(text, verb, value) {
+      var button = ui.btn("btn-choice", text, function () { call(verb, value); }, { tag: "button" });
+      // Stable only for the same decision. A new lobby stage must get its own action handler.
+      button.dataset.lobbyChoice = verb + ":" + value;
+      return button;
+    }
+
     function lobbyAction(comp) {
       var lb = comp.lobby || {}, coin = lb.coin || {}, stage = lb.stage;
       var box = el("div", "found-box lobby-action");
@@ -1105,8 +1108,8 @@
           // The ONE designated captain flips for everyone; the server decides the result.
           box.appendChild(el("div", "found-count", t("comp_coin_pick")));
           box.appendChild(actionRow([
-            ui.btn("btn-choice", t("comp_heads"), function () { call("pick_coin", "heads"); }, { tag: "button" }),
-            ui.btn("btn-choice", t("comp_tails"), function () { call("pick_coin", "tails"); }, { tag: "button" })
+            lobbyChoice(t("comp_heads"), "pick_coin", "heads"),
+            lobbyChoice(t("comp_tails"), "pick_coin", "tails")
           ]));
           addAll(box, stageClock(lb));
         } else {
@@ -1119,8 +1122,8 @@
         if (coin.i_won_toss && lb.i_am_captain) {
           box.appendChild(el("div", "found-count", t("comp_choice_title")));
           box.appendChild(actionRow([
-            ui.btn("btn-choice", t("comp_choose_side"), function () { call("choose", "side"); }, { tag: "button" }),
-            ui.btn("btn-choice", t("comp_choose_ban"), function () { call("choose", "ban"); }, { tag: "button" })
+            lobbyChoice(t("comp_choose_side"), "choose", "side"),
+            lobbyChoice(t("comp_choose_ban"), "choose", "ban")
           ]));
         } else {
           box.appendChild(el("div", "found-count", t("comp_choice_wait", { name: coin.toss_winner_name })));
@@ -1133,8 +1136,8 @@
         if (lb.i_pick_side) {
           box.appendChild(el("div", "found-count", t("comp_side_pick")));
           box.appendChild(actionRow([
-            ui.btn("btn-choice", t("comp_side_attack"), function () { call("choose_side", "attack"); }, { tag: "button" }),
-            ui.btn("btn-choice", t("comp_side_defend"), function () { call("choose_side", "defend"); }, { tag: "button" })
+            lobbyChoice(t("comp_side_attack"), "choose_side", "attack"),
+            lobbyChoice(t("comp_side_defend"), "choose_side", "defend")
           ]));
         } else {
           box.appendChild(el("div", "found-count", t("comp_side_wait", { name: lb.side_picker_name })));
@@ -1156,6 +1159,7 @@
           box.appendChild(el("div", "found-count", t("comp_veto_last_ban", { name: lb.ban_advantage_name })));
         }
       }
+      box.appendChild(el("div", "found-count lobby-game-notice", t("comp_lobby_close_game")));
       return box;
     }
 

@@ -102,7 +102,6 @@ def make(name, token, steam_id):
     s = C.LiveSession(p)
     s._network_config = None  # Hardware relay admission has its own integration suite.
     # These simulated players have no game; the developer may be playing while tests run.
-    s.game_is_open = lambda: False
     s.adopt_account({"steam_id": steam_id, "persona": name, "token": token})
     s.phase = "idle"
     s._start_watchdog()

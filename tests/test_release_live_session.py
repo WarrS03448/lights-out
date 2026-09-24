@@ -58,7 +58,7 @@ def test_live_roster_uses_only_reported_rank_and_ping():
 
 def test_live_queue_does_not_run_simulated_integrity_steps(monkeypatch):
     _, session = _panel()
-    for name, value in (("game_is_open", False), ("banned_left", 0),
+    for name, value in (("banned_left", 0),
                         ("gamemode_installed", True), ("update_needed", None)):
         monkeypatch.setattr(session, name, lambda v=value: v)
     passed = []

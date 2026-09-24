@@ -5655,64 +5655,39 @@ def test_the_idle_screen_disables_find_match_when_behind():
 
 
 
-def test_find_match_does_nothing_while_bodycam_is_open():
-    """Pressing Find match with the game up queues nothing and says why for three seconds.
-
-    The hub opens Bodycam ITSELF when the match is found and puts the player straight into the
-    lobby; a game that was already running has spent its one BeginPlay before the match existed
-    and cannot be put into one (that is what `game_was_open` is for on the connect screen). The
-    screen used to carry a paragraph asking the player to work this out and remember it. This is
-    the rule enforced instead: the button is live, the press is a no-op, and the cue is the whole
-    message - no error line left sitting under the button afterwards.
-    """
-    from hub import competitive as C
+def test_find_match_queues_while_bodycam_is_open():
+    """Both ranked modes can search with Bodycam open, without a close-game refusal."""
+    from unittest.mock import patch
     from hub import game as game_mod
     from hub import i18n
+    from hub.webui.screens.competitive import comp_snapshot
     i18n.set_language("en")
-    panel, s = _web_panel()
-    real = game_mod.game_running
-    game_mod.game_running = lambda: True
-    try:
+    for mode in ("BB1", "BB5"):
+        panel, s = _web_panel()
+        s.ranked_mode = mode
+        panel.app.state["installed"][mode] = {"version": "1.0"}
         before = len(panel.events_since(0))
-        s.find_match()
-        assert s.phase == "idle", s.phase                  # not even the integrity check
-        assert s.client.calls.count("join") == 0, s.client.calls
-        assert not s.error, s.error                        # the toast is the whole message
+        with patch.object(game_mod, "game_running", return_value=True):
+            assert comp_snapshot(s, panel)["can_find"]
+            s.find_match()
+        assert s.phase == "queued", (mode, s.phase)
+        assert s.client.calls.count("join") == 1, s.client.calls
+        assert not s.error, s.error
         cues = [c for c in panel.events_since(0)[before:] if c["type"] == "toast"]
-        assert len(cues) == 1, cues
-        assert cues[0]["text"] == i18n.STRINGS["en"]["comp_close_game_queue"], cues
-        assert cues[0]["ms"] == C.CLOSE_GAME_CUE_MS == 3000, cues
-
-        # close the game and the very same press goes through: this gates, it does not latch
-        game_mod.game_running = lambda: False
-        s.find_match()
-        assert s.phase == "queued", s.phase
-    finally:
-        game_mod.game_running = real
+        assert not cues, cues
 
 
-def test_a_panel_without_toasts_still_says_close_your_game():
-    """The classic Tk window has no cue channel, so the sentence goes on its error line and is
-    taken back off on a one-shot. Without this its Find match button would look broken."""
-    from hub import competitive as C
+def test_classic_panel_queues_while_bodycam_is_open():
+    """The classic panel shares the open-game queue behavior without leaving an error."""
+    from unittest.mock import patch
     from hub import game as game_mod
-    from hub import i18n
-    i18n.set_language("en")
     s, panel = _live_session()                 # the Tk-shaped fake panel: no push_event
     assert not hasattr(panel, "push_event")
-    real = game_mod.game_running
-    game_mod.game_running = lambda: True
-    try:
+    with patch.object(game_mod, "game_running", return_value=True):
         s.find_match()
-        assert s.phase == "idle", s.phase
-        assert s.error == i18n.STRINGS["en"]["comp_close_game_queue"], s.error
-        assert panel.pending, "the line must be scheduled to come back off"
-        while panel.pending:
-            panel.pump()
+        assert s.phase == "queued", s.phase
+        assert s.client.calls.count("join") == 1
         assert not s.error, s.error
-        assert C.CLOSE_GAME_CUE_MS == 3000
-    finally:
-        game_mod.game_running = real
 
 
 # ------------------------------------------------------------------ runner
@@ -5723,8 +5698,8 @@ def main():
         test_friends_invite_makes_a_party_when_there_is_none,
         test_friends_invite_reports_a_failure_and_never_lies_about_it,
         test_party_invite_toast_reaches_any_screen,
-        test_find_match_does_nothing_while_bodycam_is_open,
-        test_a_panel_without_toasts_still_says_close_your_game,
+        test_find_match_queues_while_bodycam_is_open,
+        test_classic_panel_queues_while_bodycam_is_open,
         test_friends_slice_and_verbs,
         test_plan_truth_table,
         test_state_roundtrip,

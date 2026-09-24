@@ -5,7 +5,7 @@ contributes the ``settings`` slice of the state snapshot and registers the verbs
 (static/screens/settings.js) calls. It reconciles the design deltas the plan calls out
 (docs/ui-redesign-plan.md turn-2): the match-found sound, the Bodycam game path / Browse, the
 language picker and Sign-out all live HERE now, and the old shooting-range warning is rendered as
-an inline readiness checklist (Steam · Bodycam · Servers · Location).
+an inline readiness checklist (Account · Servers).
 
 Nothing here is authoritative and nothing new lives in the backend: every verb reuses an existing
 session / game / state method on the UI thread (``panel.post``), exactly as the Tk panel did:
@@ -540,21 +540,10 @@ def _readiness_slice(session, panel) -> list:
     ``state`` is "ok" (green) | "warn" (gold, advisory) | "bad" (accent, blocking)."""
     signed_in = bool(getattr(session, "me", None))
     connected = bool(getattr(session, "connected", True))
-    # CACHED: a checklist row, redrawn on every state change. See game.game_running_cached.
-    running = bool(game_mod.game_running_cached(game_mod.SNAPSHOT_TTL_SECONDS))
     return [
         {"key": "steam", "label_key": "ready_steam",
          "state": "ok" if signed_in else "bad",
          "value_key": "ready_connected" if signed_in else "ready_signed_out"},
-        # CLOSED is the ready state, not running (Sam, 2026-09-15). The hub launches Bodycam
-        # itself at the right moment, and it has to: the lobby pak gets exactly ONE lobby search
-        # per launch, because BeginPlay fires once per level load and the lobby world has no clock
-        # to retry with. A game that was already open has spent that shot, which is the
-        # `game_was_open` branch in _maybe_launch_game and the worst screen in the tab. Telling
-        # the player "Running - OK" was steering them into it.
-        {"key": "bodycam", "label_key": "ready_bodycam",
-         "state": "warn" if running else "ok",
-         "value_key": "ready_close_it" if running else "ready_closed"},
         {"key": "servers", "label_key": "ready_servers",
          "state": "ok" if connected else "bad",
          "value_key": "ready_ok" if connected else "ready_offline"},
