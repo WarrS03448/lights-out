@@ -99,3 +99,7 @@ test('a placement draw without RR flags is excluded for that player only',()=>{
  assert.equal(rows.find(p=>p.player_id===ids[0]).history[0].reason,'placement');
  assert.equal(rows.find(p=>p.player_id===ids[5]).matches,1);
 });
+
+for(const map of ['Paintball','Airsoft','BombHouse'])test(`launch tournament counts verified 1v1 ${map} results`,()=>{
+ const r=receipt();r.publicMatch.map=map;assert.ok(api.matchEntry(r));
+});

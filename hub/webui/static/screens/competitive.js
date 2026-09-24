@@ -43,7 +43,7 @@
     latestModeContext = {state:state, ctx:ctx};
     var bar=ctx.ui.el("div","ranked-mode-bar");
     ["BB5","BB1"].forEach(function (mode) {
-      var button=ctx.ui.el("button","ranked-mode-choice",mode==="BB5"?"5v5 Bodybomb":"1v1 Bodybomb (Paintball)");
+      var button=ctx.ui.el("button","ranked-mode-choice",mode==="BB5"?"5v5 Bodybomb":"1v1 Bodybomb");
       button.type="button";button.dataset.mode=mode;
       button.addEventListener("click",function(){if(latestModeContext)latestModeContext.ctx.call("select_ranked_mode",mode);});
       bar.appendChild(button);
@@ -1271,9 +1271,8 @@
       });
       box.appendChild(el("div", "found-map", t("comp_map", { map: lv.map || "?" })));
       box.appendChild(el("div", "found-count", t("comp_host", { name: host.name || "?", ping: host.ping == null ? "-" : (host.estimated ? "≈" : "") + host.ping })));
-      // Relaunch is for everyone in a live match: their game should be running, and this re-runs it
-      // (guarded, safe if it is already up).
-      box.appendChild(ui.btn("btn-ghost-light", t(isHost ? "comp_relaunch" : "comp_reconnect"),
+      // A cold host must claim recovery before opening a replacement world.
+      if (!isHost) box.appendChild(ui.btn("btn-ghost-light", t("comp_reconnect"),
         function () { call("relaunch_game"); }, { tag: "button" }));
       if (!isHost) {
         box.appendChild(el("div", "found-count", t("comp_join_hint", { name: host.name || "?" })));
@@ -1413,7 +1412,7 @@
       top.appendChild(teamsBlock(lb.teams, lb.stage === "veto" || lb.stage === "ready", lb));
       restoreScroll.push(keepScroll(top, "lobby-top", false));
       wrap.appendChild(top);
-      if (comp.mode_id !== "BB1" && (lb.stage === "veto" || lb.stage === "ready")) { wrap.appendChild(vetoList(lb)); }
+      if (((lb.veto || {}).pool || []).length > 1 && (lb.stage === "veto" || lb.stage === "ready")) { wrap.appendChild(vetoList(lb)); }
       wrap.appendChild(chatBlock(lb, matchId));
       return wrap;
     }

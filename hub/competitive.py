@@ -1270,6 +1270,15 @@ class MockSession(Session):
         if self.phase not in ("connecting", "live"):
             return
         recovery = getattr(self, "recovery", {}) or {}
+        # Arrival spends the host travel permit. A cold host needs a new server
+        # recovery claim, including when the first health response has not arrived.
+        if (self._i_am_host() and recovery.get("phase") != "restoring" and
+                (self.phase == "live" or getattr(self, "host_ready", False))):
+            from . import match_recovery
+            self.error = t("comp_recovery_wait")
+            match_recovery.poll(self)
+            self._changed()
+            return
         if recovery:
             from . import match_recovery
             match_recovery.relaunch(self)
@@ -5690,7 +5699,7 @@ class CompetitivePanel:
         """The ranked map pool: the gamemode's maps (from the catalogue when it lists them),
         minus COMPETITIVE_EXCLUDED_MAPS."""
         if getattr(self.session, "ranked_mode", COMPETITIVE_MODE_ID) == "BB1":
-            return ["Paintball"]
+            return ["Paintball", "Airsoft", "BombHouse"]
         for e in ((self.app.catalogue or {}).get("gamemodes") or []):
             if e.get("id") == getattr(self.session, "ranked_mode", COMPETITIVE_MODE_ID):
                 maps = e.get("maps") or (e.get("manifest") or {}).get("maps")
@@ -6775,9 +6784,8 @@ class CompetitivePanel:
                     return_button.pack(pady=(0, 8))
                 if recovery["busy"]:
                     tk.Label(inner,text=t("comp_recovery_working"),bg=WHITE,fg=GREY,wraplength=520).pack(pady=(0,8))
-            else:
-                self._button(inner, t("comp_relaunch" if s._i_am_host() else "comp_reconnect"),
-                             s.relaunch_game).pack(pady=(0, 8))
+            elif not s._i_am_host():
+                self._button(inner, t("comp_reconnect"), s.relaunch_game).pack(pady=(0, 8))
             if s.error:
                 tk.Label(inner, text=s.error, bg=WHITE, fg=RED,
                          wraplength=520, justify="center").pack(pady=(0, 8))

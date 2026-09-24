@@ -281,6 +281,8 @@ class WebPanel:
     def map_pool(self):
         """The ranked pool: the gamemode's maps (from the catalogue when listed), minus the
         excluded maps — the same rule as CompetitivePanel.map_pool."""
+        if getattr(self.session, 'ranked_mode', competitive_mod.COMPETITIVE_MODE_ID) == 'BB1':
+            return ['Paintball', 'Airsoft', 'BombHouse']
         cat = getattr(self.app, "catalogue", None) or {}
         for e in (cat.get("gamemodes") or []):
             if e.get("id") == competitive_mod.COMPETITIVE_MODE_ID:

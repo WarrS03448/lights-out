@@ -230,3 +230,23 @@ def test_delayed_normal_roster_snapshot_cannot_resurrect_a_departed_member():
         recovery={'phase':'playing','revision':6},roster_revision=2)
     assert recovery.stale_event(s,{'match_id':s.match_id,'session_key':s.session_key,'host_epoch':1,
         'recovery':dict(s.recovery),'roster_revision':1})
+
+@pytest.mark.parametrize("phase,host_ready", [("live",False),("live",True),("connecting",True)])
+def test_cold_host_cannot_relaunch_without_new_authority(phase,host_ready):
+    from hub.competitive import LiveSession
+    launched=[]
+    s=object.__new__(LiveSession)
+    s.phase=phase;s.host_ready=host_ready;s.recovery={};s.client=None;s.match_id="0123456789abcdef"
+    s._i_am_host=lambda:True;s._changed=lambda:None
+    s._relaunch_closed_game=lambda:launched.append(True)
+    LiveSession.relaunch_game(s)
+    assert launched==[]
+
+def test_first_host_arrival_can_still_retry_launch():
+    from hub.competitive import LiveSession
+    launched=[]
+    s=object.__new__(LiveSession)
+    s.phase="connecting";s.host_ready=False;s.recovery={};s._i_am_host=lambda:True
+    s._relaunch_closed_game=lambda:launched.append(True)
+    LiveSession.relaunch_game(s)
+    assert launched==[True]

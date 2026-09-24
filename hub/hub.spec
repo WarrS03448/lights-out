@@ -109,6 +109,7 @@ PAK_MODULES = [
     "udstruct.py",
     "unversioned.py",
     "recovery_config.py",
+    "single_site.py",
 ]
 _PAK_SET = set(PAK_MODULES)
 _ALL_PAK = {f for f in os.listdir(PAK_DIR) if f.endswith(".py")}

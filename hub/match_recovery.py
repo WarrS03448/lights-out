@@ -55,6 +55,9 @@ def note_clock(session, value):
 
 def launch_allowed(session):
     restore = getattr(session, "recovery", {}) or {}
+    if (session._i_am_host() and restore.get("phase") != "restoring" and
+            (getattr(session, "phase", "") == "live" or getattr(session, "host_ready", False))):
+        return False
     if restore.get("can_rejoin") is False:
         return False
     if (restore.get("phase") == "restoring" and not restore.get("roster") and
@@ -170,7 +173,7 @@ def public_status(session):
     restoring = restore.get("phase") == "restoring"
     is_host = getattr(session,"_i_am_host",lambda:False)()
     observed = health.get("observation", "unknown")
-    host_wait = restore.get("phase") == "playing" and is_host and observed == "closed"
+    host_wait = is_host and not restoring and observed == "closed"
     stale = health.get("session_stale") is True
     visible = restoring or host_wait or stale or (health.get("checkpoint_round") is not None and
                             observed == "closed" and not health.get("connected"))

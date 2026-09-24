@@ -3,9 +3,9 @@
 const identity=require('./player-identity.cjs');
 const EVENT=Object.freeze({id:'launch-2026',title:'Lights Out 1v1 Launch Tournament',
  start_at:Date.parse('2026-09-26T16:00:00Z'),end_at:Date.parse('2026-09-28T16:00:00Z'),
- timezone:'America/Chicago',currency:'USD',prize_pool:150,prizes:[100,35,15],mode:'BB1',map:'Paintball',
- payout_methods:['Zelle','Venmo','PayPal'],minimum_matches:5,dispute_deadline:Date.parse('2026-09-29T16:00:00Z'),payout_days:7,rules_version:4});
-const BACKFILL_VERSION='tournament-launch-2026-bb1-v2';
+ timezone:'America/Chicago',currency:'USD',prize_pool:150,prizes:[100,35,15],mode:'BB1',maps:Object.freeze(['Paintball','Airsoft','BombHouse']),
+ payout_methods:['Zelle','Venmo','PayPal'],minimum_matches:5,dispute_deadline:Date.parse('2026-09-29T16:00:00Z'),payout_days:7,rules_version:5});
+const BACKFILL_VERSION='tournament-launch-2026-bb1-v3';
 const ledgerBase=prefix=>prefix+'tournament:'+EVENT.id+':'+EVENT.mode+':';
 const eventMode=receipt=>{const m=receipt?.publicMatch||receipt?.full;return !!m&&(receipt.mode||m.mode)===EVENT.mode&&(!receipt.mode||receipt.mode===EVENT.mode)&&(!m.mode||m.mode===EVENT.mode);};
 const currentFinal=final=>final?.rules_version===EVENT.rules_version&&final?.mode===EVENT.mode;
@@ -52,7 +52,7 @@ return {redis.call('HVALS',KEYS[1]),redis.call('HVALS',KEYS[2]),redis.call('GET'
 function matchEntry(receipt,includeCandidates=false){
  includeCandidates=includeCandidates===true;
  const m=receipt?.publicMatch||receipt?.full,id=receipt?.matchId||receipt?.match_id;
- if(!eventMode(receipt)||receipt.voided||receipt.data_collected!==true||m.outcome!=='played'||m.size!==2||m.map!==EVENT.map||
+ if(!eventMode(receipt)||receipt.voided||receipt.data_collected!==true||m.outcome!=='played'||m.size!==2||!EVENT.maps.includes(m.map)||
     !Number.isSafeInteger(m.started)||!Number.isSafeInteger(m.ended)||m.ended<EVENT.start_at||(!includeCandidates&&(m.started<EVENT.start_at||m.ended>=EVENT.end_at))||m.ended<m.started||
     typeof id!=='string'||!/^[A-Za-z0-9_.:-]{1,80}$/.test(id)||m.id!==id||m.players?.length!==2||receipt.rows?.length!==2)return null;
  const people=new Map(m.players.map(p=>[p.player_id,p]));
@@ -121,7 +121,7 @@ function create({store,prefix='hub:',now=Date.now,finalizationHealth,notifySuppo
      if(!m||!Number.isSafeInteger(m.ended)||m.ended<EVENT.start_at||typeof id!=='string'||!/^[A-Za-z0-9_.:-]{1,80}$/.test(id)||!Array.isArray(m.players)||m.players.length>20)return;
      const rows=m.players.filter(p=>identity.validPlayer(p.player_id)&&identity.validSteam(p.game_steam_id)).map(p=>({player_id:p.player_id,game_steam_id:p.game_steam_id,delta:0,won:false}));
      if(!rows.length)return;
-     entry={id,started:Number.isSafeInteger(m.started)?m.started:0,ended:m.ended,reason:receipt.voided?'voided':m.size!==2||m.map!==EVENT.map?'not_ranked':'unverified',rows:rows.sort((a,b)=>a.player_id.localeCompare(b.player_id))};
+     entry={id,started:Number.isSafeInteger(m.started)?m.started:0,ended:m.ended,reason:receipt.voided?'voided':m.size!==2||!EVENT.maps.includes(m.map)?'not_ranked':'unverified',rows:rows.sort((a,b)=>a.player_id.localeCompare(b.player_id))};
    }
    const opsRaw=await call(['GET',base+'operations']),ops=opsRaw?JSON.parse(opsRaw):{};
    if(ops.finalized&&entry.ended>=ops.finalized.event_end)return;

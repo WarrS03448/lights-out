@@ -87,7 +87,7 @@ def test_failed_handoff_does_not_launch_and_cold_retry_prepares_again(monkeypatc
     session.match_id = 'a' * 16
     session.map = 'Rome'
     session.host = session.me if host else {'steam_id': '76561198000000042'}
-    session.host_ready = True
+    session.host_ready = not host  # A host can retry only before its first native arrival.
     attempts, launches = [], []
     def prepare(*args, **kwargs):
         attempts.append(kwargs.get('role', 'host'))

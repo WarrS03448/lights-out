@@ -273,7 +273,7 @@ class Builder:
         later run happily returned, and the error surfaced as an unrelated struct.error hundreds of
         lines away (2026-09-14). A partial write now leaves no cache entry at all."""
         p = os.path.join(self.stock_dir, full.replace("/", "__"))
-        if os.path.exists(p) and os.path.getsize(p) > 0:
+        if not getattr(self, 'single_site_maps', False) and os.path.exists(p) and os.path.getsize(p) > 0:
             return p
         tmp = p + ".part"
         try:
@@ -528,6 +528,9 @@ class Builder:
             lvl = f"{base['level_dir']}/{base['prefix']}{level_name}"
             if not self.stock_available(C + lvl[len('/Game/'):] + ".umap"): raise FileNotFoundError(f"stock level {lvl} not available in the given paks or in <work>/stock (see tools/ps/extract_levels.bat)")
             metas.append((key, self.map_assets(m, base, cls_pkg, cls, key, meta_pkg, level_name)))
+            if m['id'] == 'BB1' and key in ('Airsoft', 'BombHouse'):
+                from single_site import apply_map
+                apply_map(self, key, level_name)
         table_pkg, table_name = self.maps_table(m, base, metas)
         self.table_rows["ui"].append((m, base, table_pkg, table_name)); self.table_rows["gmd"].append((m, base, da_pkg, da_name)); self.table_rows["gmi"].append((m, base))
         print(f"mode {m['id']}: base {m.get('base', 'DeathMatch')}, enum {m['_enum']}"
@@ -702,6 +705,7 @@ def build_from_packs(paks_dir, work_dir, pack_dirs, out_path, log=print, progres
         loc_path = os.path.join(p, "loc.json")
         m["_loc"] = json.load(open(loc_path, encoding="utf-8")) if os.path.exists(loc_path) else None
         modes.append(m)
+    b.single_site_maps = any(m['id'] == 'BB1' and any(k in m.get('maps', []) for k in ('Airsoft', 'BombHouse')) for m in modes)
     # a monotonic 0..1 across the weighted steps: `at` is where the current step starts, and a step
     # reports its own 0..1 inside its share
     base = [0.0]

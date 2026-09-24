@@ -322,7 +322,7 @@
       var ladders=el("div","profile-section ranked-profile-ranks");
       ["BB5","BB1"].forEach(function(mode){
         var rank=(prof.ranked_ranks||{})[mode],card=el("div","profile-section");
-        card.appendChild(el("div","profile-section-title",mode==="BB1"?"1v1 Bodybomb (Paintball)":"5v5 Bodybomb"));
+        card.appendChild(el("div","profile-section-title",mode==="BB1"?"1v1 Bodybomb":"5v5 Bodybomb"));
         if(rank&&!rank.placing){var badge=ui.rankBadge(rank,ranks);if(badge)card.appendChild(badge);card.appendChild(el("div","",rankName(rank)));card.appendChild(el("div","",String(rank.rr||0)+" RR"));}
         else card.appendChild(el("div","",pt("profile_unranked")));
         ladders.appendChild(card);

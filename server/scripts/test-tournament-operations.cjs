@@ -77,7 +77,7 @@ test('confirmation freezes results, retries are idempotent, and late evidence bl
  const regs=Array.from({length:5},(_,i)=>({player_id:String(76561198000000001n+BigInt(i)),game_steam_id:String(76561198000000001n+BigInt(i)),registered_at:start-1,persona:'Player '+i}));
  for(const r of regs)await raw(['HSET',base+'registrations',r.player_id,JSON.stringify(r)]);
  for(let i=0;i<5;i++)await raw(['HSET',base+'BB1:matches','m'+i,JSON.stringify({id:'m'+i,started:start,ended:start+1000+i,rows:regs.map((r,j)=>({...r,delta:100-j,won:true}))})]);
- await raw(['SET','hub:analytics:backfill_done:tournament-launch-2026-bb1-v2-BB1','1']);
+ await raw(['SET','hub:analytics:backfill_done:tournament-launch-2026-bb1-v3-BB1','1']);
  const store=async args=>{if(inject&&args[0]==='EVAL'&&String(args[1]).startsWith('-- tournament-operations')){inject=false;await raw(['HSET',base+'BB1:matches','late',JSON.stringify({id:'late',started:start,ended:start+9000,rows:regs.map((r,j)=>({...r,delta:j===4?1000:-1000,won:j===4}))})]);}return raw(args);};
  const svc=api.create({store,now:()=>end+86400001}),confirm={action:'confirm',operation_id:require('node:crypto').randomUUID()};
  assert.equal((await svc.adminAction(id,confirm)).ok,true);assert.equal((await svc.adminAction(id,confirm)).replayed,true);
@@ -105,7 +105,7 @@ test('a smaller qualified field can confirm and award the published places',asyn
  const regs=Array.from({length:2},(_,i)=>({player_id:String(76561198000000001n+BigInt(i)),game_steam_id:String(76561198000000001n+BigInt(i)),registered_at:start-1}));
  for(const r of regs)await store(['HSET',base+'registrations',r.player_id,JSON.stringify(r)]);
  for(let i=0;i<5;i++)await store(['HSET',base+'BB1:matches','m'+i,JSON.stringify({id:'m'+i,started:start,ended:start+1000+i,rows:regs.map((r,j)=>({...r,delta:100-j,won:true}))})]);
- await store(['SET','hub:analytics:backfill_done:tournament-launch-2026-bb1-v2-BB1','1']);
+ await store(['SET','hub:analytics:backfill_done:tournament-launch-2026-bb1-v3-BB1','1']);
  const svc=api.create({store,now:()=>end+86400001});
  assert.equal((await svc.adminAction(admin,{action:'confirm'})).ok,true);
  assert.deepEqual((await svc.view(regs[0].player_id)).winners.map(w=>w.prize_usd),[100,35]);
@@ -117,7 +117,7 @@ test('all players tied at third receive the full prize, confirmation, badges and
  const gains=[100,90,80,80,80,70,60,50];
  for(const r of regs)await store(['HSET',base+'registrations',r.player_id,JSON.stringify(r)]);
  for(let i=0;i<5;i++)await store(['HSET',base+'BB1:matches','m'+i,JSON.stringify({id:'m'+i,started:start,ended:start+1000+i,rows:regs.map((r,j)=>({...r,delta:gains[j],won:true}))})]);
- await store(['SET','hub:analytics:backfill_done:tournament-launch-2026-bb1-v2-BB1','1']);
+ await store(['SET','hub:analytics:backfill_done:tournament-launch-2026-bb1-v3-BB1','1']);
  const svc=api.create({store,now:()=>end+86400001});
  const preview=await svc.view(regs[4].player_id);
  assert.deepEqual(preview.winners.map(w=>w.rank),[1,2,3,3,3]);
@@ -152,7 +152,7 @@ test('cheater corrections and pending correction jobs block stale winner confirm
  const regs=Array.from({length:5},(_,i)=>({player_id:String(76561198000000001n+BigInt(i)),game_steam_id:String(76561198000000001n+BigInt(i)),registered_at:start-1,persona:'Player '+i}));
  for(const r of regs)await raw(['HSET',base+'registrations',r.player_id,JSON.stringify(r)]);
  for(let i=0;i<6;i++)await raw(['HSET',base+'BB1:matches','m'+i,JSON.stringify({id:'m'+i,started:start,ended:start+1000+i,rows:regs.map((r,j)=>({...r,delta:100-j,won:true}))})]);
- await raw(['SET','hub:analytics:backfill_done:tournament-launch-2026-bb1-v2-BB1','1']);
+ await raw(['SET','hub:analytics:backfill_done:tournament-launch-2026-bb1-v3-BB1','1']);
  const store=async args=>{if(inject&&args[0]==='EVAL'&&String(args[1]).startsWith('-- tournament-operations')){inject=false;await raw(['SADD',base+'BB1:reverted','m0']);}return raw(args);};
  const svc=api.create({store,now:()=>end+86400001});
  await raw(['SADD','hub:ranked:BB1:cheater:jobs','unfinished-job']);

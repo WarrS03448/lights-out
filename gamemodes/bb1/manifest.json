@@ -1,27 +1,27 @@
 {
   "id": "BB1",
   "base": "BB1",
-  "title": "Bodybomb 1v1 (Paintball)",
-  "display_name": "Bodybomb 1v1 (Paintball)",
+  "title": "Bodybomb 1v1",
+  "display_name": "Bodybomb 1v1",
   "display_names": {
-    "de": "Bodybomb 1v1 (Paintball)",
-    "en": "Bodybomb 1v1 (Paintball)",
-    "es": "Bodybomb 1v1 (Paintball)",
-    "fr": "Bodybomb 1v1 (Paintball)",
-    "pt": "Bodybomb 1v1 (Paintball)",
-    "ru": "Bodybomb 1v1 (Paintball)",
-    "zh": "Bodybomb 1v1 (Paintball)"
+    "de": "Bodybomb 1v1",
+    "en": "Bodybomb 1v1",
+    "es": "Bodybomb 1v1",
+    "fr": "Bodybomb 1v1",
+    "pt": "Bodybomb 1v1",
+    "ru": "Bodybomb 1v1",
+    "zh": "Bodybomb 1v1"
   },
   "rulesets": {
-    "de": "Bodybomb 1v1 (Paintball)\n\nGewertetes 1v1 Bodybomb auf Paintball. Zuerst 5 Siege, maximal 9 Runden. Runden dauern 2 Minuten. Seiten und Spawns wechseln jede Runde. Drohnen-Abklingzeit 3x. Keine Zuschauer-Drohnen oder Bots. Der Münzwurf-Sieger wählt seine Startseite. Keine Kartenbanns.",
-    "en": "Bodybomb 1v1 (Paintball)\n\nRanked 1v1 Bodybomb on Paintball. First to 5 wins, 9 rounds maximum. Two-minute rounds. Sides and spawns switch every round. Drone cooldown 3x. No spectator drones or bots. The coin-flip winner chooses their starting side. No map bans.",
-    "es": "Bodybomb 1v1 (Paintball)\n\nBodybomb 1v1 clasificatorio en Paintball. Primero en ganar 5 rondas, máximo 9. Rondas de 2 minutos. Cambio de bandos y apariciones cada ronda. Recarga del dron 3x. Sin drones de espectador ni bots. El ganador del sorteo elige el bando inicial. Sin vetos de mapas.",
-    "fr": "Bodybomb 1v1 (Paintball)\n\nBodybomb classé 1v1 sur Paintball. Premier à 5 victoires, 9 manches maximum. Manches de 2 minutes. Camps et points de départ changent chaque manche. Recharge du drone 3x. Aucun drone spectateur ni bot. Le gagnant du tirage choisit son camp initial. Aucun bannissement de carte.",
-    "pt": "Bodybomb 1v1 (Paintball)\n\nBodybomb ranqueado 1v1 em Paintball. Primeiro a vencer 5 rounds, máximo de 9. Rounds de 2 minutos. Lados e spawns trocam a cada round. Recarga do drone 3x. Sem drones espectadores ou bots. O vencedor do sorteio escolhe o lado inicial. Sem vetos de mapas.",
-    "ru": "Bodybomb 1v1 (Paintball)\n\nРейтинговый Bodybomb 1 на 1 на Paintball. До 5 побед, максимум 9 раундов. Раунд длится 2 минуты. Стороны и точки появления меняются каждый раунд. Перезарядка дрона 3x. Без дронов-наблюдателей и ботов. Победитель жеребьёвки выбирает начальную сторону. Без запрета карт.",
-    "zh": "Bodybomb 1v1 (Paintball)\n\nPaintball 地图上的 1v1 排位 Bodybomb。率先赢得 5 回合获胜，最多 9 回合。每回合 2 分钟，每回合交换阵营和出生点。无人机冷却时间为 3 倍。无观战无人机或机器人。掷硬币获胜者选择起始阵营。没有地图禁选。"
+    "en": "Bodybomb 1v1\n\nRanked 1v1 Bodybomb on Paintball, Airsoft and Bomb House. One bombsite per map; Bomb House uses the downstairs site. First to 5 wins, 9 rounds maximum. Two-minute rounds. Sides and spawns switch every round. Drone cooldown 3x. No spectator drones or bots. The coinflip winner chooses starting-side selection or the last map ban. Each player bans one map; the remaining map is played.",
+    "de": "Bodybomb 1v1\n\nGewertetes 1v1 Bodybomb auf Paintball, Airsoft und Bomb House. Ein Bombenplatz pro Karte; in Bomb House wird der untere verwendet. Zuerst 5 Siege, maximal 9 Runden. Runden dauern 2 Minuten. Seiten und Spawns wechseln jede Runde. Drohnen-Abklingzeit 3x. Keine Zuschauer-Drohnen oder Bots. Der Münzwurf-Sieger wählt die Startseitenwahl oder den letzten Kartenbann. Jeder Spieler bannt eine Karte; die übrige wird gespielt.",
+    "es": "Bodybomb 1v1\n\nBodybomb 1v1 clasificatorio en Paintball, Airsoft y Bomb House. Un punto de bomba por mapa; Bomb House usa el de la planta baja. Primero en ganar 5 rondas, máximo 9. Rondas de 2 minutos. Cambio de bandos y apariciones cada ronda. Recarga del dron 3x. Sin drones de espectador ni bots. El ganador del sorteo elige seleccionar el bando inicial o realizar el último veto. Cada jugador veta un mapa y se juega el restante.",
+    "fr": "Bodybomb 1v1\n\nBodybomb classé 1v1 sur Paintball, Airsoft et Bomb House. Un site de bombe par carte ; Bomb House utilise celui du rez-de-chaussée. Premier à 5 victoires, 9 manches maximum. Manches de 2 minutes. Camps et points de départ changent chaque manche. Recharge du drone 3x. Aucun drone spectateur ni bot. Le gagnant du tirage choisit la sélection du camp initial ou le dernier bannissement. Chaque joueur bannit une carte ; la carte restante est jouée.",
+    "pt": "Bodybomb 1v1\n\nBodybomb ranqueado 1v1 em Paintball, Airsoft e Bomb House. Um local de bomba por mapa; Bomb House usa o andar inferior. Primeiro a vencer 5 rounds, máximo de 9. Rounds de 2 minutos. Lados e spawns trocam a cada round. Recarga do drone 3x. Sem drones espectadores ou bots. O vencedor do sorteio escolhe a seleção do lado inicial ou o último veto. Cada jogador veta um mapa; o restante é jogado.",
+    "ru": "Bodybomb 1v1\n\nРейтинговый Bodybomb 1 на 1 на Paintball, Airsoft и Bomb House. На каждой карте одна точка установки; в Bomb House используется нижний этаж. До 5 побед, максимум 9 раундов. Раунд длится 2 минуты. Стороны и точки появления меняются каждый раунд. Перезарядка дрона 3x. Без дронов-наблюдателей и ботов. Победитель жеребьёвки выбирает право выбора начальной стороны или последнего запрета карты. Каждый игрок запрещает одну карту; игра проходит на оставшейся.",
+    "zh": "Bodybomb 1v1\n\n在 Paintball、Airsoft 和 Bomb House 上进行 1v1 排位 Bodybomb。每张地图只有一个爆破点，Bomb House 使用楼下爆破点。率先赢得 5 回合获胜，最多 9 回合。每回合 2 分钟，每回合交换阵营和出生点。无人机冷却时间为 3 倍。无观战无人机或机器人。掷硬币获胜者选择优先选边或最后禁图权。每位玩家禁用一张地图，在剩余地图上比赛。"
   },
-  "description": "Ranked 1v1 Bodybomb on Paintball. First to 5 wins, 9 rounds maximum. Two-minute rounds. Sides and spawns switch every round. Drone cooldown 3x. No spectator drones or bots. The coin-flip winner chooses their starting side. No map bans.",
+  "description": "Ranked 1v1 Bodybomb on Paintball, Airsoft and Bomb House. One bombsite per map; Bomb House uses the downstairs site. First to 5 wins, 9 rounds maximum. Two-minute rounds. Sides and spawns switch every round. Drone cooldown 3x. No spectator drones or bots. The coinflip winner chooses starting-side selection or the last map ban. Each player bans one map; the remaining map is played.",
   "players": {
     "min": 2,
     "max": 2
@@ -37,8 +37,10 @@
   },
   "drone_class": "spectator",
   "maps": [
-    "Paintball"
+    "Paintball",
+    "Airsoft",
+    "BombHouse"
   ],
   "enum": 15,
-  "version": "1.0.3"
+  "version": "1.0.4"
 }

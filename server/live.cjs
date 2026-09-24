@@ -776,7 +776,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   const TEAM_SIZE = duel ? mode.teamSize : LEGACY_COMPETITION.TEAM_SIZE;
   const MAX_PARTY = duel ? mode.maxParty : LEGACY_COMPETITION.MAX_PARTY;
   const GATED_MODE_ID = duel ? mode.id : LEGACY_COMPETITION.GATED_MODE_ID;
-  const COMP_MAP_POOL = duel ? [mode.fixedMap] : LEGACY_COMPETITION.COMP_MAP_POOL;
+  const COMP_MAP_POOL = duel ? [...mode.maps] : LEGACY_COMPETITION.COMP_MAP_POOL;
+  // Persisted one-map lobbies finish with their original rules during rollout.
+  const singleMapDuel = match => duel && (match?.lobby?.pool || COMP_MAP_POOL).length === 1;
   const DEFAULT_SCORE_LIMIT = duel ? mode.scoreLimit : LEGACY_COMPETITION.DEFAULT_SCORE_LIMIT;
   const soloMatch=match=>Boolean(privateSoloSteam&&identity.validSteam(privateSoloSteam)&&match?.players?.length===1&&
     identity.gameFor(match,match.host)===privateSoloSteam&&match.players[0].player_id===match.host);
@@ -2906,8 +2908,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   function landCoin(match) {
     const L = match.lobby;
     if (L.stage !== 'flipping') return;
-    L.stage = duel ? 'side' : 'choice';
-    if (duel) { L.side_picker = L.toss_winner; L.advantage = 'side'; L.map = mode.fixedMap; }
+    L.stage = singleMapDuel(match) ? 'side' : 'choice';
+    if (singleMapDuel(match)) { L.side_picker = L.toss_winner; L.advantage = 'side'; L.map = L.pool[0]; }
     armStageTurn(match);
     broadcastLobby(match);
   }
@@ -2916,9 +2918,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * selector) or the last BAN. The other team gets whatever is left. The ban ORDER is set so
    * the advantage team bans LAST whatever the pool size. */
   function chooseAdvantage(steamId, body) {
-    if (duel) return {ok:false,error:'This mode has no advantage choice.'};
     const match = matches.get(inMatch.get(steamId));
     if (!match || match.state !== 'ready' || !match.lobby) return { ok: false, error: 'No lobby.' };
+    if (singleMapDuel(match)) return {ok:false,error:'This mode has no advantage choice.'};
     const L = match.lobby;
     if (L.stage !== 'choice') return { ok: false, error: 'The advantage has already been chosen.' };
     const winner = L.toss_winner;
@@ -2964,8 +2966,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const other = L.side_picker === 1 ? 2 : 1;
     L.sides = { [L.side_picker]: side, [other]: side === 'attack' ? 'defend' : 'attack' };
     L.side_auto = Boolean(auto);
-    L.stage = duel ? 'ready' : 'veto';
-    if (duel) { L.map = mode.fixedMap; match.map = mode.fixedMap; clearStageTurn(match); }
+    L.stage = singleMapDuel(match) ? 'ready' : 'veto';
+    if (singleMapDuel(match)) { L.map = L.pool[0]; match.map = L.map; clearStageTurn(match); }
     else armStageTurn(match);         // the first turn is on the clock like every other stage
     broadcastLobby(match);
   }
@@ -2973,9 +2975,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   /** One veto ban, by the captain whose turn it is. When one map is left it is the match map and
    * the lobby is decided (stage 'ready'); a client then opens the connect window. */
   function banMap(steamId, body) {
-    if (duel) return {ok:false,error:'This mode has no map bans.'};
     const match = matches.get(inMatch.get(steamId));
     if (!match || match.state !== 'ready' || !match.lobby) return { ok: false, error: 'No lobby.' };
+    if (singleMapDuel(match)) return {ok:false,error:'This mode has no map bans.'};
     const L = match.lobby;
     if (L.stage !== 'veto') return { ok: false, error: 'It is not the veto yet.' };
     if (!isLobbyCaptain(match, steamId, L.ban_turn)) return { ok: false, error: 'It is not your turn to ban.' };

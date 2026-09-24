@@ -40,7 +40,7 @@ for(const legacy of [false,true])test(`BB1 ${legacy?'legacy':'new'} lobby retain
  const match=I.reviveMatch(JSON.parse(JSON.stringify(raw)));I.matches.set(match.id,match);clearTimeout(original.timer);
  for(const p of match.players)I.acceptMatch(p.player_id);
  I.flipCoin(match.lobby.coin_captain,{side:'heads'});I.expireStageTurn(match.id);
- I.pickSide(match.lobby.captains[match.lobby.toss_winner],{side:'defend'});
+ for(let n=0;n<4;n++)I.expireStageTurn(match.id);
  assert.equal(I.beginConnect(A,{host:A,map:'Paintball'}).ok,true);
  assert.equal(match.expected_score_limit,legacy?7:5);assert.equal(match.expected_max_rounds,legacy?13:9);
  assert.equal(match.agreedScoreLimit,legacy?7:5);
@@ -56,11 +56,12 @@ test('BB1 freezes the served rules including an operator test override',t=>{
  I.enqueue([A],'',Date.now());I.enqueue([B],'',Date.now());const match=I.tryFormMatch();
  assert.equal(match.expected_score_limit,3);assert.equal(match.expected_max_rounds,5);
 });
-test('BB1 coin winner picks a side directly and cannot enter map bans',t=>{
+test('persisted one-map BB1 lobby still picks a side directly without map bans',t=>{
   const svc=service('BB1');t.after(()=>svc.shutdown());const I=svc._internals;
   I.enqueue([A],'',Date.now());I.enqueue([B],'',Date.now());const match=I.tryFormMatch();
   assert.ok(match,'two-player mode forms a match');
   for(const p of match.players)I.acceptMatch(p.player_id);
+  match.lobby.pool=['Paintball']; // Lobby saved before the three-map rollout.
   assert.equal(match.lobby.stage,'coin');
   assert.deepEqual(match.lobby.pool,['Paintball']);
   I.flipCoin(match.lobby.coin_captain,{side:'heads'});
