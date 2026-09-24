@@ -19,7 +19,7 @@ Map ids are the row keys of DT_UI_DeathmatchMaps (BombHouse, CQB, Hospital, Pain
 
 Usage: python3 build_gamemode.py --paks <Bodycam/Content/Paks> --work <workdir> --out <Name_P.pak> manifest.json [manifest2.json ...]
 Only base "DeathMatch" is implemented (the only stock pattern verified so far).
-Each mode gets its OWN GameMode enum value (13, 14, ...; override with "enum"): the game keys the post-match map vote,
+Each mode gets its OWN GameMode enum value (13..15; override with "enum"): the game keys the post-match map vote,
 max players, win info and the lobby label off the enum (first matching row wins), so reusing DeathMatch's value would hand
 all of that to the stock mode (found 2026-09-14: the vote after a community match offered stock maps).
 
@@ -107,6 +107,22 @@ CDO_SIZES = {4: 1, 11: lambda d, p: 4 + 8 * struct.unpack_from("<i", d, p)[0], 1
 TAG = b"\xc1\x83\x2a\x9e"
 ENUM_PKG = "/Game/GM/DATA/Enum/GameMode"
 FIRST_FREE_ENUM = 13   # stock GameMode enum: None=0 ... Wingman=12, GameMode_MAX=13
+LAST_COMPATIBLE_ENUM = 15  # stock replicated FByteProperty uses four bits, including MAX
+
+
+def mode_enum(manifest, index):
+    """Keep menu identities within the retail game's four-bit network format.
+
+    Released BB1 packs used 16. Translate those cached manifests as well as new
+    ones, so rebuilding an existing installation fixes it without a redownload.
+    This does not alter the separate in-match Bodybomb identity (3).
+    """
+    value = int(manifest.get("enum", FIRST_FREE_ENUM + index))
+    if manifest.get("id") == "BB1" and value == 16:
+        value = 15
+    if not FIRST_FREE_ENUM <= value <= LAST_COMPATIBLE_ENUM:
+        raise ValueError(f"{manifest['id']}: no stock-compatible gamemode identity for {value}")
+    return value
 
 # ------------------------------------------------------------------ small helpers (from the test builders)
 def rename(pk, new_pkg, old_name, new_name):
@@ -288,6 +304,11 @@ class Builder:
 
     # ---- the GameMode enum: one new enumerator per community mode (so every enum-keyed lookup finds OUR rows) ----
     def enum_asset(self, modes):
+        values = [m["_enum"] for m in modes]
+        if not values or any(not FIRST_FREE_ENUM <= value <= LAST_COMPATIBLE_ENUM for value in values):
+            raise ValueError("No stock-compatible gamemode enum layout")
+        if len(set(values)) != len(values):
+            raise ValueError("Cannot install modes with duplicate stock-compatible gamemode identities")
         ua, ue = self.stock_pkg(ENUM_PKG); pk = CookedPackage.load(ua); u = open(ue, "rb").read(); names = [n[0] for n in pk.names]
         assert u[:2] == b"\x00\x03" and u[2:6] == b"\0\0\0\0", u[:8].hex()
         p = 6; n_disp = struct.unpack_from("<i", u, p)[0]; p += 4; disp_start = p
@@ -308,7 +329,13 @@ class Builder:
             v = m["_enum"]; short = f"NewEnumerator{v}"
             new_disp += struct.pack("<ii", pk.add_name(short), 0) + base_text(m.get("enum_name", m["id"]))
             new_entries.append((pk.add_name(f"GameMode::{short}"), 0, v))
-        entries = entries[:max_idx] + new_entries + [(entries[max_idx][0], entries[max_idx][1], max(mm["_enum"] for mm in modes) + 1)]
+        # MAX is a terminal enum entry, not an entry count. At the last available
+        # four-bit value it aliases the preceding real value. Unreal's value/name
+        # lookup selects the first entry, so BB1 remains a named, valid value 15.
+        # Giving MAX its usual value 16 would change ALL replicated GameMode
+        # fields to five bits, even in an ordinary stock Bodycam match.
+        terminal = min(max(values) + 1, LAST_COMPATIBLE_ENUM)
+        entries = entries[:max_idx] + new_entries + [(entries[max_idx][0], entries[max_idx][1], terminal)]
         out = u[:6] + struct.pack("<i", n_disp + len(modes)) + u[disp_start:disp_end] + new_disp + b"\0\0\0\0" + struct.pack("<i", len(entries))
         for idx, num, val in entries: out += struct.pack("<iiq", idx, num, val)
         out += tail + TAG
@@ -666,7 +693,7 @@ def build_from_packs(paks_dir, work_dir, pack_dirs, out_path, log=print, progres
     for i, p in enumerate(packs):
         m = json.load(open(os.path.join(p, "manifest.json"), encoding="utf-8"))
         assert m["id"].isidentifier() and m["id"] not in ids, m["id"]; ids.add(m["id"])
-        m["_enum"] = int(m.get("enum", FIRST_FREE_ENUM + i)); assert FIRST_FREE_ENUM <= m["_enum"] < 256 and m["_enum"] not in [x["_enum"] for x in modes], m["id"]
+        m["_enum"] = mode_enum(m, i)
         m["_cooked"] = os.path.join(p, "cooked")
         over = (rules_override or {}).get(m["id"])
         if over:
@@ -711,7 +738,7 @@ def main():
     ids = set(); modes = []
     for i, mf in enumerate(args.manifests):
         m = json.load(open(mf, encoding="utf-8")); assert m["id"].isidentifier() and m["id"] not in ids, m["id"]; ids.add(m["id"])
-        m["_enum"] = int(m.get("enum", FIRST_FREE_ENUM + i)); assert FIRST_FREE_ENUM <= m["_enum"] < 256 and m["_enum"] not in [x["_enum"] for x in modes]
+        m["_enum"] = mode_enum(m, i)
         loc_path = os.path.join(os.path.dirname(os.path.abspath(mf)), "loc.json")
         m["_loc"] = json.load(open(loc_path, encoding="utf-8")) if os.path.exists(loc_path) else None
         modes.append(m)
