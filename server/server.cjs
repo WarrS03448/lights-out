@@ -64,7 +64,7 @@ function analytics() {
     store: process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN ? (args,options)=>upstashCmd(args,{...options,timeout:5000}) : null,
     prefix: STORE_PREFIX,
     projectTournament:async receipt=>{await live().correctCheaterMatches(receipt);await tournament().project(receipt);},
-    backfillVersion:'tournament-launch-2026-v1',
+    backfillVersion:require('./tournament.cjs').BACKFILL_VERSION,
   });
   return analyticsService;
 }

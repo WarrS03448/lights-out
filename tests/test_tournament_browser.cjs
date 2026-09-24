@@ -29,11 +29,14 @@ const server=http.createServer((req,res)=>{
  const event=require('../server/tournament.cjs').EVENT;
  async function show(data,lang='en'){state=structuredClone(snapshots[lang]);state.tournament.data={ok:true,event,server_now:event.start_at-2000,leaders:[],...data};await page.evaluate(s=>window.__hub.onState(s),state);}
  await show({});
- assert.equal(await page.locator('.tournament-pool').textContent(),'$500 USD');
- assert.deepEqual(await page.locator('.tournament-prize strong').allTextContents(),['$250 USD','$125 USD','$75 USD','$35 USD','$15 USD']);
+ assert.equal(await page.locator('#tournament-format-notice').textContent(),snapshots.en.tournament.strings.format_notice);
+ assert.equal(await page.locator('#tournament-format-notice').evaluate(e=>getComputedStyle(e).color),'rgb(255, 79, 88)');
+ assert.equal(await page.locator('.tournament-pool').textContent(),'$150 USD');
+ assert.deepEqual(await page.locator('.tournament-prize strong').allTextContents(),['$100 USD','$35 USD','$15 USD']);
  // The bridge advances server_now on every snapshot, even between standings polls.
  for(const width of [1400,800])for(const lang of Object.keys(snapshots))for(const at of [event.start_at-60000,event.start_at+60000,event.end_at+60000]){
    await page.setViewportSize({width,height:950});await show({server_now:at},lang);
+   assert.equal(await page.locator('#tournament-format-notice').textContent(),snapshots[lang].tournament.strings.format_notice);
    await page.evaluate(()=>document.fonts.ready);await page.clock.runFor(100);
    await page.locator('.tournament').evaluate(n=>{n.scrollTop=500;});await page.clock.runFor(50);
    const readingPosition=await page.locator('.tournament').evaluate(n=>n.scrollTop);assert(readingPosition>0,'unable to scroll fixture at '+width+'/'+lang+'/'+at+': '+JSON.stringify(await page.locator('.tournament').evaluate(n=>({top:n.scrollTop,height:n.clientHeight,content:n.scrollHeight}))));
@@ -54,11 +57,11 @@ const server=http.createServer((req,res)=>{
  await show({server_now:event.end_at-1000,registered_at:event.start_at-10,leaders:[{rank:1,persona:'<script>bad</script>',net_rr:120,wins:4,matches:5}],you:{rank:15,net_rr:20,gained_rr:30,lost_rr:10,wins:2,matches:4}});
  assert.equal(await page.locator('#tournament-leaders tbody tr').count(),1);assert((await page.locator('#tournament-you').textContent()).includes('15'));assert.equal(await page.locator('#tournament-leaders script').count(),0);
  await page.clock.runFor(1500);assert.equal(await page.locator('#tournament-phase').textContent(),'Event ended');assert.equal(await page.locator('#tournament-register').isVisible(),false);
- const tiedWinners=[250,125,75,35,15,15].map((prize_usd,i)=>({rank:Math.min(i+1,5),persona:'Winner '+i,net_rr:100-Math.min(i,4),prize_usd}));
+ const tiedWinners=[100,35,15,15].map((prize_usd,i)=>({rank:Math.min(i+1,3),persona:'Winner '+i,net_rr:100-Math.min(i,2),prize_usd}));
  for(const lang of Object.keys(snapshots)){
    await show({server_now:event.end_at,winners:tiedWinners,results_provisional:false},lang);
-   assert.equal(await page.locator('.tournament-winner').count(),6);
-   assert.deepEqual(await page.locator('.tournament-winner-prize').allTextContents(),['$250 USD','$125 USD','$75 USD','$35 USD','$15 USD','$15 USD']);
+   assert.equal(await page.locator('.tournament-winner').count(),4);
+   assert.deepEqual(await page.locator('.tournament-winner-prize').allTextContents(),['$100 USD','$35 USD','$15 USD','$15 USD']);
    assert.equal(await page.locator('.tournament-rules').first().textContent(),snapshots[lang].tournament.strings.rules);
  }
  await show({registered_at:event.start_at-10,history:[{match_id:'receipt',ended:event.start_at+1,delta:25,counted:true}]});

@@ -21,6 +21,12 @@ const server=http.createServer(async(req,res)=>{const u=new URL(req.url,'http://
     const context=await browser.newContext();await context.addCookies([{name:'hubadmin',value:'fixture',url}]);
     const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
     fs.mkdirSync('work/analytics-browser',{recursive:true});
+    const linked=page.waitForResponse(r=>r.url().includes('/admin/analytics/matches?'));
+    await page.goto(url+'/admin/analytics?mode=BB1&size=2&player_id='+sid);
+    const linkedQuery=new URL((await linked).url()).searchParams;
+    assert.equal(linkedQuery.get('mode'),'BB1');assert.equal(linkedQuery.get('size'),'2');
+    assert.equal(await page.locator('[name=mode]').inputValue(),'BB1');
+    assert.equal(await page.locator('[name=size]').inputValue(),'2');
     for(const width of [1440,390]){
       await page.setViewportSize({width,height:1000});await page.goto(url+'/admin/analytics');await page.locator('.card').first().waitFor();
       assert.equal(await page.locator('.card').filter({hasText:'Completed matches'}).locator('.value').innerText(),'65');

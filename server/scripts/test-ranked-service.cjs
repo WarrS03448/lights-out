@@ -6,8 +6,15 @@ const A='76561198000000001',B='76561198000000002';
 function make(options={}){return ranked.create({prefix:'dual-test:',whoami:async token=>({steam_id:token}),bearer:req=>req.token||A,
   sendJson:(res,status,body)=>Object.assign(res,{status,body}),badRequest(){},readBody:async req=>Buffer.from(JSON.stringify(req.body||{})),...options});}
 async function request(s,id,path,mode='BB1',body={}){
- const res={};await s.route({token:id,body,headers:{'x-ranked-mode':mode}},res,'POST',path,new URL('http://test'+path));return res;
+ const res={setHeader(){}};await s.route({token:id,body,headers:{'x-ranked-mode':mode}},res,'POST',path,new URL('http://test'+path));return res;
 }
+test('tournament registration uses the event ladder regardless of selected client mode',async t=>{
+ let registered=0;const s=make({tournament:{register:async()=>{registered++;return {ok:true};}}});t.after(()=>s.shutdown());await s._internals.ready;
+ const visits=[];
+ for(const mode of ['BB5','BB1']){const e=s.forMode(mode),route=e.route;e.route=(...args)=>{visits.push(mode);return route(...args);};}
+ for(const selected of ['BB5','BB1'])assert.equal((await request(s,A,'/api/tournament/register',selected)).status,200);
+ assert.equal(registered,2);assert.deepEqual(visits,['BB1','BB1']);
+});
 
 test('one-person party blocks BB1 through the API until the player leaves it',async t=>{
  const s=make();t.after(()=>s.shutdown());

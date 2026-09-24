@@ -23,7 +23,7 @@ for i,entry in ipairs(entries) do
  if entry.operation_id then redis.call('HSET',KEYS[9],entry.actor..':'..entry.operation_id,additions[i]) end
 end
 redis.call('SET',KEYS[1],ARGV[2]);return 'saved'`;
-function create({call,base,prefix,now}){
+function create({call,base,prefix,ledger=base,rankedPrefix=prefix,backfillVersion,now}){
  function resultOf(entry,operation){return entry?entry.fingerprint===operation.hash?{ok:true,...entry.result,replayed:true}:{ok:false,error:'operation_conflict'}:null;}
  async function prior(state,actor,operation){if(!operation)return null;const raw=await call(['HGET',base+'operation-receipts',actor+':'+operation.id]);return resultOf(raw?JSON.parse(raw):state.audit.find(a=>a.actor===actor&&a.operation_id===operation.id),operation);}
  async function replay(actor,operation){if(!operation)return null;const raw=await call(['GET',base+'operations']);return prior(raw?JSON.parse(raw):initial(),actor,operation);}
@@ -34,7 +34,7 @@ function create({call,base,prefix,now}){
    const result=await fn(state);if(result?.ok===false)return result;if(result?.noop)return {ok:true,...result};
    state.revision++;state.audit.push({id:crypto.randomUUID(),at:now(),actor,action,player_id:result?.player_id||null,reason:result?.reason||'',details:result?.details||null,...(operation?{operation_id:operation.id,fingerprint:operation.hash,result}: {})});
    const additions=(state.audit_archived?state.audit.slice(-1):state.audit).map(a=>JSON.stringify(a));state.audit=state.audit.slice(-100);state.audit_archived=true;
-   const saved=await call(['EVAL',CAS,'9',base+'operations',base+'matches',prefix+'analytics:outbox',prefix+'analytics:backfill_done:tournament-launch-2026-v1',prefix+'live:matches',base+'reverted',prefix+'cheater:jobs',base+'audit',base+'operation-receipts',raw,JSON.stringify(state),guard?String(guard.count):'',prefix+'live:match:',String(guard?.start||0),String(guard?.end||0),String(guard?.reverted||0),JSON.stringify(additions)]);
+   const saved=await call(['EVAL',CAS,'9',base+'operations',ledger+'matches',prefix+'analytics:outbox',prefix+'analytics:backfill_done:'+backfillVersion,rankedPrefix+'live:matches',ledger+'reverted',rankedPrefix+'cheater:jobs',base+'audit',base+'operation-receipts',raw,JSON.stringify(state),guard?String(guard.count):'',rankedPrefix+'live:match:',String(guard?.start||0),String(guard?.end||0),String(guard?.reverted||0),JSON.stringify(additions)]);
    if(saved==='saved')return {ok:true,...result};if(saved!=='retry')return {ok:false,error:saved};
    if(guard)return {ok:false,error:'state_changed'};
   }

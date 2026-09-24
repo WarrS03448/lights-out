@@ -25,6 +25,10 @@ const server=http.createServer(async(req,res)=>{try{const u=new URL(req.url,'htt
     const context=await browser.newContext();await context.addCookies([{name:'hubadmin',value:'fixture',url}]);
     const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
     fs.mkdirSync('work/admin-queue-browser',{recursive:true});
+    const linked=page.waitForResponse(r=>r.url().includes('/admin/players/data?'));
+    await page.goto(url+'/admin/players?mode=BB1&player_id='+PLAYER);
+    assert.equal(new URL((await linked).url()).searchParams.get('mode'),'BB1');
+    assert.equal(await page.locator('#ranked-mode').inputValue(),'BB1');
     for(const width of [1440,390]){
       await page.setViewportSize({width,height:1000});
       assert.ok(duel.enqueue([PLAYER],'',Date.now()));

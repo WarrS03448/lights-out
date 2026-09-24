@@ -911,6 +911,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
 
   const store = typeof upstashCmd === 'function' ? upstashCmd : null;
   const restitution = require('./cheater-restitution.cjs').create({store,prefix,modeId:mode.id,
+    tournamentLedger:mode.id===require('./tournament.cjs').EVENT.mode?require('./tournament.cjs').ledgerBase(socialPrefix):undefined,
     notifyRefund:async correction=>{
       if(!correction.refunds?.length)return;
       const cheaters=await Promise.all(correction.cheaters.map(async id=>{

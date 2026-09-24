@@ -18,6 +18,7 @@
 .tournament-muted {color:var(--muted);font-size:12px;line-height:1.6;}
 .tournament-rules {color:var(--muted);line-height:1.7;font-size:13px;margin:20px 0;}
 .tournament-agreement {border-left:2px solid #ff4f58;padding:8px 12px;font-size:12px;line-height:1.6;color:var(--text);}
+.tournament-format-notice {color:#ff4f58;font-size:14px;font-weight:700;margin:0;}
 .tournament-register {border:1px solid #ff4f58;background:#e13e49;color:white;font:inherit;font-weight:750;padding:12px 20px;border-radius:0;cursor:pointer;}
 .tournament-register:hover {background:#f34b56;}
 .tournament-register:disabled {opacity:.55;cursor:default;}
@@ -36,7 +37,7 @@
 .tournament th:nth-child(2) {width:40%;}
 .tournament-you-row {background:#292126;}
 .tournament-winners {border-color:#665236;}
-.tournament-winner-list {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;}
+.tournament-winner-list {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;}
 .tournament-winner {display:flex;flex-direction:column;gap:10px;padding:16px 12px;background:var(--panel-2);border-radius:0;overflow-wrap:anywhere;}
 .tournament-winner-name {font-size:18px;}
 .tournament-winner-prize {color:#ffcb7d;font-size:17px;font-weight:750;}

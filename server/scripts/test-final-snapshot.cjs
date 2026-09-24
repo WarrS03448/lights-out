@@ -70,7 +70,7 @@ test('final receipt contains effective analytical rules and a durable export ref
 });
 
 test('a result decided before the event cutoff remains eligible when final evidence arrives later',async t=>{
- const f=fixture(t,10),event=require('../tournament.cjs').EVENT;
+ const f=fixture(t,2,'BB1'),event=require('../tournament.cjs').EVENT;f.match.map='Paintball';
  const originalNow=Date.now;let clock=event.end_at-1000;Date.now=()=>clock;t.after(()=>Date.now=originalNow);
  f.match.live_at=event.start_at+1000;f.match.created=f.match.live_at;
  f.L._internals.beginCollection(f.match,1,{1:7,2:2},7);

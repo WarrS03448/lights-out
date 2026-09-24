@@ -19,6 +19,43 @@ function fixture(t){
  child.on('exit',()=>{for(const p of pending.values())p.reject(Error('Redis test bridge stopped'));pending.clear();});t.after(()=>child.kill());
  return args=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});child.stdin.write(JSON.stringify({id,command:args})+'\n');});
 }
+test('the BB1 reformat preserves registrations and support while isolating legacy BB5 scores',async t=>{
+ const store=fixture(t),base='hub:tournament:launch-2026:',id='76561198000000001',opponent='76561198000000002';
+ const registration={player_id:id,game_steam_id:id,persona:'Existing player',registered_at:start-1000,rules_version:3};
+ await store(['HSET',base+'registrations',id,JSON.stringify(registration)]);
+ await store(['HSET',base+'identities',id,id]);
+ const ops=require('../tournament-ops.cjs').initial();ops.tickets.push({id:'old-ticket',player_id:id,category:'other',message:'Saved support request',status:'open',replies:[]});
+ await store(['SET',base+'operations',JSON.stringify(ops)]);
+ await store(['HSET',base+'matches','same-id',JSON.stringify({id:'same-id',started:start,ended:start+1000,rows:[{...registration,delta:999,won:true}]})]);
+ await store(['SADD',base+'reverted','same-id']);
+ const svc=api.create({store,now:()=>start+2000});
+ assert.equal((await svc.register(registration)).registered_at,registration.registered_at);
+ const before=await svc.view(id);assert.equal(before.you.net_rr,0);assert.equal(before.tickets[0].id,'old-ticket');
+ const receipt={mode:'BB1',matchId:'same-id',data_collected:true,publicMatch:{id:'same-id',mode:'BB1',map:'Paintball',size:2,outcome:'played',started:start,ended:start+1000,players:[id,opponent].map((p,i)=>({player_id:p,game_steam_id:p,team:i+1}))},rows:[id,opponent].map((p,i)=>({steamId:p,won:i===0,rr:{delta:i===0?20:-20}}))};
+ await svc.project(receipt);await svc.project(receipt);
+ const after=await svc.view(id);assert.equal(after.you.net_rr,20);assert.equal(after.history.length,1);assert.equal(after.registered_at,registration.registered_at);
+ assert.equal(await store(['HLEN',base+'BB1:matches']),1);
+ for(const change of [r=>{r.mode='BB5';r.publicMatch.mode='BB5';},r=>r.publicMatch.mode='BB5',r=>{delete r.mode;delete r.publicMatch.mode;}]){
+  const wrong=structuredClone(receipt);wrong.matchId='wrong';wrong.publicMatch.id='wrong';change(wrong);await svc.project(wrong);
+ }
+ assert.equal(await store(['HLEN',base+'BB1:matches']),1,'other modes never enter this ledger');
+});
+test('confirmation waits for BB1 backfill, terminal evidence and correction jobs',async t=>{
+ const store=fixture(t),base='hub:tournament:launch-2026:',ranked='hub:ranked:BB1:',id='76561198000000001';
+ const reg={player_id:id,game_steam_id:id,registered_at:start-1};
+ await store(['HSET',base+'registrations',id,JSON.stringify(reg)]);
+ for(let i=0;i<5;i++)await store(['HSET',base+'BB1:matches','m'+i,JSON.stringify({id:'m'+i,started:start,ended:start+1000+i,rows:[{...reg,delta:20,won:true}]})]);
+ await store(['SET','hub:analytics:backfill_done:tournament-launch-2026-v1','1']);
+ const svc=api.create({store,now:()=>end+86400001}),confirm=()=>svc.adminAction(id,{action:'confirm'});
+ assert.equal((await confirm()).error,'evidence_pending');
+ await store(['SET','hub:analytics:backfill_done:'+api.BACKFILL_VERSION+'-BB1','1']);
+ await store(['SADD',ranked+'live:matches','pending']);await store(['SET',ranked+'live:match:pending',JSON.stringify({final_ended_at:end-1})]);
+ assert.equal((await confirm()).error,'evidence_pending');
+ await store(['DEL',ranked+'live:matches']);await store(['SADD',ranked+'cheater:jobs','pending']);
+ assert.equal((await confirm()).error,'evidence_pending');
+ await store(['DEL',ranked+'cheater:jobs']);
+ assert.equal((await confirm()).ok,true);
+});
 test('support, audited exclusion, confirmation and payout tracking persist and fail closed',async t=>{
  const store=fixture(t),id='76561198000000001',base='hub:tournament:launch-2026:';let clock=start+1000;
  const service=api.create({store,now:()=>clock});
@@ -39,9 +76,9 @@ test('confirmation freezes results, retries are idempotent, and late evidence bl
  const raw=fixture(t),base='hub:tournament:launch-2026:',id='76561198000000001';let inject=false;
  const regs=Array.from({length:5},(_,i)=>({player_id:String(76561198000000001n+BigInt(i)),game_steam_id:String(76561198000000001n+BigInt(i)),registered_at:start-1,persona:'Player '+i}));
  for(const r of regs)await raw(['HSET',base+'registrations',r.player_id,JSON.stringify(r)]);
- for(let i=0;i<5;i++)await raw(['HSET',base+'matches','m'+i,JSON.stringify({id:'m'+i,started:start,ended:start+1000+i,rows:regs.map((r,j)=>({...r,delta:100-j,won:true}))})]);
- await raw(['SET','hub:analytics:backfill_done:tournament-launch-2026-v1','1']);
- const store=async args=>{if(inject&&args[0]==='EVAL'&&String(args[1]).startsWith('-- tournament-operations')){inject=false;await raw(['HSET',base+'matches','late',JSON.stringify({id:'late',started:start,ended:start+9000,rows:regs.map((r,j)=>({...r,delta:j===4?1000:-1000,won:j===4}))})]);}return raw(args);};
+ for(let i=0;i<5;i++)await raw(['HSET',base+'BB1:matches','m'+i,JSON.stringify({id:'m'+i,started:start,ended:start+1000+i,rows:regs.map((r,j)=>({...r,delta:100-j,won:true}))})]);
+ await raw(['SET','hub:analytics:backfill_done:tournament-launch-2026-bb1-v2-BB1','1']);
+ const store=async args=>{if(inject&&args[0]==='EVAL'&&String(args[1]).startsWith('-- tournament-operations')){inject=false;await raw(['HSET',base+'BB1:matches','late',JSON.stringify({id:'late',started:start,ended:start+9000,rows:regs.map((r,j)=>({...r,delta:j===4?1000:-1000,won:j===4}))})]);}return raw(args);};
  const svc=api.create({store,now:()=>end+86400001}),confirm={action:'confirm',operation_id:require('node:crypto').randomUUID()};
  assert.equal((await svc.adminAction(id,confirm)).ok,true);assert.equal((await svc.adminAction(id,confirm)).replayed,true);
  const fixed=await svc.view(id);assert.equal(fixed.you.net_rr,500);assert.equal(fixed.results_provisional,false);
@@ -65,34 +102,34 @@ test('support replies survive delivery failures, retain one conversation message
 
 test('a smaller qualified field can confirm and award the published places',async t=>{
  const store=fixture(t),base='hub:tournament:launch-2026:',admin='76561198000000099';
- const regs=Array.from({length:4},(_,i)=>({player_id:String(76561198000000001n+BigInt(i)),game_steam_id:String(76561198000000001n+BigInt(i)),registered_at:start-1}));
+ const regs=Array.from({length:2},(_,i)=>({player_id:String(76561198000000001n+BigInt(i)),game_steam_id:String(76561198000000001n+BigInt(i)),registered_at:start-1}));
  for(const r of regs)await store(['HSET',base+'registrations',r.player_id,JSON.stringify(r)]);
- for(let i=0;i<5;i++)await store(['HSET',base+'matches','m'+i,JSON.stringify({id:'m'+i,started:start,ended:start+1000+i,rows:regs.map((r,j)=>({...r,delta:100-j,won:true}))})]);
- await store(['SET','hub:analytics:backfill_done:tournament-launch-2026-v1','1']);
+ for(let i=0;i<5;i++)await store(['HSET',base+'BB1:matches','m'+i,JSON.stringify({id:'m'+i,started:start,ended:start+1000+i,rows:regs.map((r,j)=>({...r,delta:100-j,won:true}))})]);
+ await store(['SET','hub:analytics:backfill_done:tournament-launch-2026-bb1-v2-BB1','1']);
  const svc=api.create({store,now:()=>end+86400001});
  assert.equal((await svc.adminAction(admin,{action:'confirm'})).ok,true);
- assert.deepEqual((await svc.view(regs[0].player_id)).winners.map(w=>w.prize_usd),[250,125,75,35]);
+ assert.deepEqual((await svc.view(regs[0].player_id)).winners.map(w=>w.prize_usd),[100,35]);
 });
 
-test('all players tied at fifth receive the full prize, confirmation, badges and payout tracking',async t=>{
+test('all players tied at third receive the full prize, confirmation, badges and payout tracking',async t=>{
  const store=fixture(t),base='hub:tournament:launch-2026:',admin='76561198000000099';
  const regs=Array.from({length:8},(_,i)=>({player_id:String(76561198000000001n+BigInt(i)),game_steam_id:String(76561198000000001n+BigInt(i)),registered_at:start-1,persona:'Player '+i}));
- const gains=[100,90,80,70,60,60,60,50];
+ const gains=[100,90,80,80,80,70,60,50];
  for(const r of regs)await store(['HSET',base+'registrations',r.player_id,JSON.stringify(r)]);
- for(let i=0;i<5;i++)await store(['HSET',base+'matches','m'+i,JSON.stringify({id:'m'+i,started:start,ended:start+1000+i,rows:regs.map((r,j)=>({...r,delta:gains[j],won:true}))})]);
- await store(['SET','hub:analytics:backfill_done:tournament-launch-2026-v1','1']);
+ for(let i=0;i<5;i++)await store(['HSET',base+'BB1:matches','m'+i,JSON.stringify({id:'m'+i,started:start,ended:start+1000+i,rows:regs.map((r,j)=>({...r,delta:gains[j],won:true}))})]);
+ await store(['SET','hub:analytics:backfill_done:tournament-launch-2026-bb1-v2-BB1','1']);
  const svc=api.create({store,now:()=>end+86400001});
- const preview=await svc.view(regs[6].player_id);
- assert.deepEqual(preview.winners.map(w=>w.rank),[1,2,3,4,5,5,5]);
- assert.deepEqual(preview.winners.map(w=>w.prize_usd),[250,125,75,35,15,15,15]);
- assert.equal(preview.winners.reduce((sum,w)=>sum+w.prize_usd,0),530);
+ const preview=await svc.view(regs[4].player_id);
+ assert.deepEqual(preview.winners.map(w=>w.rank),[1,2,3,3,3]);
+ assert.deepEqual(preview.winners.map(w=>w.prize_usd),[100,35,15,15,15]);
+ assert.equal(preview.winners.reduce((sum,w)=>sum+w.prize_usd,0),180);
  assert.equal((await svc.adminAction(admin,{action:'confirm'})).ok,true);
  // Read through a fresh service to verify the durable confirmation includes every shared place.
  const restored=api.create({store,now:()=>end+86400001});
- for(const r of regs.slice(4,7)){
+ for(const r of regs.slice(2,5)){
    const confirmed=await restored.view(r.player_id);
    assert.equal(confirmed.results_provisional,false);assert.deepEqual(confirmed.winners,preview.winners.map(w=>({...w,is_you:w.persona===r.persona})));
-   assert(confirmed.badges.some(b=>b.type==='winner'&&b.rank===5));assert.equal(confirmed.payout.status,'awaiting_details');
+   assert(confirmed.badges.some(b=>b.type==='winner'&&b.rank===3));assert.equal(confirmed.payout.status,'awaiting_details');
    assert.equal((await restored.adminAction(admin,{action:'payout',player_id:r.player_id,method:'PayPal',status:'details_received'})).ok,true);
    assert.equal((await restored.adminAction(admin,{action:'payout',player_id:r.player_id,method:'PayPal',status:'paid'})).ok,true);
  }
@@ -103,7 +140,7 @@ test('all players tied at fifth receive the full prize, confirmation, badges and
 test('outage extensions recalculate previously excluded matches and finalization waits for evidence',async t=>{
  const store=fixture(t),base='hub:tournament:launch-2026:',id='76561198000000001',svc=api.create({store,now:()=>end+9000});
  await store(['HSET',base+'registrations',id,JSON.stringify({player_id:id,game_steam_id:id,registered_at:start-1})]);
- await store(['HSET',base+'matches','extended',JSON.stringify({id:'extended',started:end-1000,ended:end+5000,rows:[{player_id:id,game_steam_id:id,delta:25,won:true}]})]);
+ await store(['HSET',base+'BB1:matches','extended',JSON.stringify({id:'extended',started:end-1000,ended:end+5000,rows:[{player_id:id,game_steam_id:id,delta:25,won:true}]})]);
  assert.equal((await svc.view(id)).you.net_rr,0);
  assert.equal((await svc.adminAction(id,{action:'outage',start:start+10000,end:start+20000,reason:'Match service outage.'})).ok,true);
  const view=await svc.view(id);assert.equal(view.event.end_at,end+10000);assert.equal(view.phase,'live');assert.equal(view.you.net_rr,25);
@@ -114,13 +151,13 @@ test('cheater corrections and pending correction jobs block stale winner confirm
  const raw=fixture(t),base='hub:tournament:launch-2026:',id='76561198000000001';let inject=false;
  const regs=Array.from({length:5},(_,i)=>({player_id:String(76561198000000001n+BigInt(i)),game_steam_id:String(76561198000000001n+BigInt(i)),registered_at:start-1,persona:'Player '+i}));
  for(const r of regs)await raw(['HSET',base+'registrations',r.player_id,JSON.stringify(r)]);
- for(let i=0;i<6;i++)await raw(['HSET',base+'matches','m'+i,JSON.stringify({id:'m'+i,started:start,ended:start+1000+i,rows:regs.map((r,j)=>({...r,delta:100-j,won:true}))})]);
- await raw(['SET','hub:analytics:backfill_done:tournament-launch-2026-v1','1']);
- const store=async args=>{if(inject&&args[0]==='EVAL'&&String(args[1]).startsWith('-- tournament-operations')){inject=false;await raw(['SADD',base+'reverted','m0']);}return raw(args);};
+ for(let i=0;i<6;i++)await raw(['HSET',base+'BB1:matches','m'+i,JSON.stringify({id:'m'+i,started:start,ended:start+1000+i,rows:regs.map((r,j)=>({...r,delta:100-j,won:true}))})]);
+ await raw(['SET','hub:analytics:backfill_done:tournament-launch-2026-bb1-v2-BB1','1']);
+ const store=async args=>{if(inject&&args[0]==='EVAL'&&String(args[1]).startsWith('-- tournament-operations')){inject=false;await raw(['SADD',base+'BB1:reverted','m0']);}return raw(args);};
  const svc=api.create({store,now:()=>end+86400001});
- await raw(['SADD','hub:cheater:jobs','unfinished-job']);
+ await raw(['SADD','hub:ranked:BB1:cheater:jobs','unfinished-job']);
  assert.equal((await svc.adminAction(id,{action:'confirm'})).ok,false);
- await raw(['DEL','hub:cheater:jobs']);
+ await raw(['DEL','hub:ranked:BB1:cheater:jobs']);
  assert.equal((await svc.adminAction(id,{action:'confirm'})).ok,true);
  assert.equal((await svc.adminAction(id,{action:'payout',player_id:id,method:'PayPal',status:'details_received'})).ok,true);
  inject=true;assert.equal((await svc.adminAction(id,{action:'payout',player_id:id,method:'PayPal',status:'paid'})).ok,false);
@@ -159,7 +196,7 @@ test('event activity remains writable beyond 2000 entries with durable retry rec
 test('live leaders appear after the first eligible match while cash prizes still require five',async t=>{
  const store=fixture(t),base='hub:tournament:launch-2026:',id='76561198000000001';
  await store(['HSET',base+'registrations',id,JSON.stringify({player_id:id,game_steam_id:id,persona:'First player',registered_at:start-1})]);
- await store(['HSET',base+'matches','m0',JSON.stringify({id:'m0',started:start,ended:start+1000,rows:[{player_id:id,game_steam_id:id,delta:25,won:true}]})]);
+ await store(['HSET',base+'BB1:matches','m0',JSON.stringify({id:'m0',started:start,ended:start+1000,rows:[{player_id:id,game_steam_id:id,delta:25,won:true}]})]);
  const svc=api.create({store,now:()=>start+2000}),view=await svc.view(id);
  assert.equal(view.leaders.length,1);assert.equal(view.leaders[0].rank,1);assert.equal(view.leaders[0].eligible,false);assert.equal(view.matches_needed,4);assert.equal(view.you.rank,null);assert.equal(view.winners.length,0);
 });

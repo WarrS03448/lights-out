@@ -31,7 +31,7 @@ function create(options){
     return {status,online,queue_mode:status==='queued'?queueMode:''};
   }
   for(const modeId of ['BB5','BB1'])engines.set(modeId,live.create({...options,modeId,competitionGuard:guard,sharedNetworkRegistry,directoryPresence,
-    socialPrefix:options.prefix||'hub:',tournament:modeId==='BB5'?options.tournament:null,
+    socialPrefix:options.prefix||'hub:',tournament:options.tournament,
     requiredVersions:()=>options.requiredVersions?.(modeId)||null,
     rankedRules:()=>options.rankedRules?.(modeId)||modes.rulesOf(modeId),
     expectedRules:()=>options.expectedRules?.(modeId)||modes.rulesOf(modeId)}));
@@ -120,7 +120,11 @@ function create(options){
       }
       return true;
     }
-    const shared=/^\/api\/(friends|party|messages|tournament)(\/|$)/.test(pathname)||pathname==='/api/bug';
+    if(/^\/api\/tournament(\/|$)/.test(pathname)){
+      const eventMode=require('./tournament.cjs').EVENT.mode;
+      return forMode(eventMode).route(stampedRequest(req,eventMode),res,method,pathname,url);
+    }
+    const shared=/^\/api\/(friends|party|messages)(\/|$)/.test(pathname)||pathname==='/api/bug';
     if(pathname.startsWith('/api/match/')&&pathname!=='/api/match/history'){
       const account=await options.whoami(options.bearer(req)),player=identity.playerOf(account);
       if(identity.validPlayer(player)){

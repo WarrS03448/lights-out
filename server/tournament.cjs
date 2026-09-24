@@ -1,10 +1,14 @@
 // Server-owned event rules and an immutable ledger projected from settlement receipts.
 'use strict';
 const identity=require('./player-identity.cjs');
-const EVENT=Object.freeze({id:'launch-2026',title:'Lights Out Launch Tournament',
+const EVENT=Object.freeze({id:'launch-2026',title:'Lights Out 1v1 Launch Tournament',
  start_at:Date.parse('2026-09-26T16:00:00Z'),end_at:Date.parse('2026-09-28T16:00:00Z'),
- timezone:'America/Chicago',currency:'USD',prize_pool:500,prizes:[250,125,75,35,15],
- payout_methods:['Zelle','Venmo','PayPal'],minimum_matches:5,dispute_deadline:Date.parse('2026-09-29T16:00:00Z'),payout_days:7,rules_version:3});
+ timezone:'America/Chicago',currency:'USD',prize_pool:150,prizes:[100,35,15],mode:'BB1',map:'Paintball',
+ payout_methods:['Zelle','Venmo','PayPal'],minimum_matches:5,dispute_deadline:Date.parse('2026-09-29T16:00:00Z'),payout_days:7,rules_version:4});
+const BACKFILL_VERSION='tournament-launch-2026-bb1-v2';
+const ledgerBase=prefix=>prefix+'tournament:'+EVENT.id+':'+EVENT.mode+':';
+const eventMode=receipt=>{const m=receipt?.publicMatch||receipt?.full;return !!m&&(receipt.mode||m.mode)===EVENT.mode&&(!receipt.mode||receipt.mode===EVENT.mode)&&(!m.mode||m.mode===EVENT.mode);};
+const currentFinal=final=>final?.rules_version===EVENT.rules_version&&final?.mode===EVENT.mode;
 const phase=(at=Date.now(),event=EVENT)=>at<event.start_at?'scheduled':at<event.end_at?'live':'ended';
 const compareScore=(a,b)=>b.net_rr-a.net_rr||b.wins-a.wins||a.reached_at-b.reached_at;
 // Shared places each receive the full prize, including every tie at the last prize place.
@@ -48,18 +52,18 @@ return {redis.call('HVALS',KEYS[1]),redis.call('HVALS',KEYS[2]),redis.call('GET'
 function matchEntry(receipt,includeCandidates=false){
  includeCandidates=includeCandidates===true;
  const m=receipt?.publicMatch||receipt?.full,id=receipt?.matchId||receipt?.match_id;
- if(!m||(receipt.mode||m.mode||'BB5')!=='BB5'||receipt.voided||!receipt.data_collected||m.outcome!=='played'||m.size!==10||
+ if(!eventMode(receipt)||receipt.voided||receipt.data_collected!==true||m.outcome!=='played'||m.size!==2||m.map!==EVENT.map||
     !Number.isSafeInteger(m.started)||!Number.isSafeInteger(m.ended)||m.ended<EVENT.start_at||(!includeCandidates&&(m.started<EVENT.start_at||m.ended>=EVENT.end_at))||m.ended<m.started||
-    typeof id!=='string'||!/^[A-Za-z0-9_.:-]{1,80}$/.test(id)||m.players?.length!==10||receipt.rows?.length!==10)return null;
+    typeof id!=='string'||!/^[A-Za-z0-9_.:-]{1,80}$/.test(id)||m.id!==id||m.players?.length!==2||receipt.rows?.length!==2)return null;
  const people=new Map(m.players.map(p=>[p.player_id,p]));
- if(people.size!==10||m.players.filter(p=>p.team===1).length!==5||m.players.filter(p=>p.team===2).length!==5)return null;
+ if(people.size!==2||m.players.filter(p=>p.team===1).length!==1||m.players.filter(p=>p.team===2).length!==1)return null;
  const rows=[];
  for(const r of receipt.rows){
    const p=people.get(r.steamId),delta=r.rr?.delta;
    if(!p||!identity.validPlayer(r.steamId)||!identity.validSteam(p.game_steam_id)||!Number.isSafeInteger(delta))return null;
    rows.push({player_id:r.steamId,game_steam_id:p.game_steam_id,delta,placement:Boolean(r.rr.placing||r.rr.placed||(r.before&&require('./rating.cjs').isPlacing(r.before))),won:!receipt.draw&&r.won===true});
  }
- if(new Set(rows.map(r=>r.player_id)).size!==10||new Set(rows.map(r=>r.game_steam_id)).size!==10)return null;
+ if(new Set(rows.map(r=>r.player_id)).size!==2||new Set(rows.map(r=>r.game_steam_id)).size!==2)return null;
  return {id,started:m.started,ended:m.ended,rows:rows.sort((a,b)=>a.player_id.localeCompare(b.player_id))};
 }
 function standings(registrations,matches,event=EVENT,exclusions={},reverted=new Set()){
@@ -81,9 +85,9 @@ function standings(registrations,matches,event=EVENT,exclusions={},reverted=new 
  return rows;
 }
 function create({store,prefix='hub:',now=Date.now,finalizationHealth,notifySupport}={}){
- const base=prefix+'tournament:'+EVENT.id+':';let cache=null,pending=null;
+ const base=prefix+'tournament:'+EVENT.id+':',ledger=ledgerBase(prefix),rankedPrefix=require('./ranked-modes.cjs').rankedPrefix(prefix,EVENT.mode);let cache=null,pending=null;
  async function call(args){if(!store)throw Error('Event storage unavailable');return store(args,{strict:true,timeout:5000});}
- const operations=require('./tournament-ops.cjs').create({call,base,prefix,now});
+ const operations=require('./tournament-ops.cjs').create({call,base,prefix,ledger,rankedPrefix,backfillVersion:BACKFILL_VERSION+'-'+EVENT.mode,now});
  async function modify(actor,action,fn,guard,operation){const result=await operations.modify(actor,action,fn,guard,operation);cache=null;return result;}
  let flushing=null,deliveryCursor='';
  async function flushNotifications(){
@@ -110,22 +114,23 @@ function create({store,prefix='hub:',now=Date.now,finalizationHealth,notifySuppo
    cache=null;return {ok:true,registered_at:saved.registered_at};
  }
  async function project(receipt){
+   if(!eventMode(receipt))return;
    let entry=matchEntry(receipt,true);
    if(!entry){
      const m=receipt?.publicMatch||receipt?.full,id=receipt?.matchId||receipt?.match_id;
      if(!m||!Number.isSafeInteger(m.ended)||m.ended<EVENT.start_at||typeof id!=='string'||!/^[A-Za-z0-9_.:-]{1,80}$/.test(id)||!Array.isArray(m.players)||m.players.length>20)return;
      const rows=m.players.filter(p=>identity.validPlayer(p.player_id)&&identity.validSteam(p.game_steam_id)).map(p=>({player_id:p.player_id,game_steam_id:p.game_steam_id,delta:0,won:false}));
      if(!rows.length)return;
-     entry={id,started:Number.isSafeInteger(m.started)?m.started:0,ended:m.ended,reason:receipt.voided?'voided':m.size!==10?'not_ranked':'unverified',rows:rows.sort((a,b)=>a.player_id.localeCompare(b.player_id))};
+     entry={id,started:Number.isSafeInteger(m.started)?m.started:0,ended:m.ended,reason:receipt.voided?'voided':m.size!==2||m.map!==EVENT.map?'not_ranked':'unverified',rows:rows.sort((a,b)=>a.player_id.localeCompare(b.player_id))};
    }
    const opsRaw=await call(['GET',base+'operations']),ops=opsRaw?JSON.parse(opsRaw):{};
    if(ops.finalized&&entry.ended>=ops.finalized.event_end)return;
-   await call(['EVAL',PROJECT,'3',base+'matches',base+'reverted',prefix+'cheater:match:'+entry.id,entry.id,JSON.stringify(entry)]);cache=null;
+   await call(['EVAL',PROJECT,'3',ledger+'matches',ledger+'reverted',rankedPrefix+'cheater:match:'+entry.id,entry.id,JSON.stringify(entry)]);cache=null;
  }
  async function read(){
    if(cache&&now()-cache.at<5000)return cache;
    if(pending)return pending;
-   pending=(async()=>{const data=await call(['EVAL',READ,'4',base+'registrations',base+'matches',base+'operations',base+'reverted']);
+   pending=(async()=>{const data=await call(['EVAL',READ,'4',base+'registrations',ledger+'matches',base+'operations',ledger+'reverted']);
      if(!Array.isArray(data)||data.length!==4||!Array.isArray(data[0])||!Array.isArray(data[1]))throw Error('Invalid event snapshot');
      const registrations=data[0].map(JSON.parse),matches=data[1].map(JSON.parse);
      const ops=data[2]?JSON.parse(data[2]):require('./tournament-ops.cjs').initial(),event=effectiveEvent(ops);
@@ -136,7 +141,7 @@ function create({store,prefix='hub:',now=Date.now,finalizationHealth,notifySuppo
  async function view(playerId){
    if(playerId)await flushNotifications();
    const data=await read(),at=now(),state=phase(at,data.event),registration=data.registrations.find(r=>r.player_id===playerId),you=data.rows.find(r=>r.player_id===playerId);
-   const eligible=data.rows.filter(p=>p.eligible),final=data.ops.finalized,reviewRequired=!!final&&(final.ledger_count!==data.matches.length||(final.reverted_count||0)!==data.reverted.size);
+   const eligible=data.rows.filter(p=>p.eligible),savedFinal=data.ops.finalized,final=currentFinal(savedFinal)?savedFinal:null,reviewRequired=!!savedFinal&&(!final||(final.ledger_count!==data.matches.length||(final.reverted_count||0)!==data.reverted.size));
    const winners=final?final.winners:prizeWinners(data.rows);
    const displayed=final?.standings||data.rows,displayYou=displayed.find(p=>p.player_id===playerId),mine=final?.winners.find(p=>p.player_id===playerId);
    const leaders=state==='live'?displayed.filter(p=>p.matches>0&&!p.disqualified).sort((a,b)=>compareScore(a,b)||a.player_id.localeCompare(b.player_id)).map(p=>({...p})):displayed.filter(p=>p.eligible);
@@ -146,7 +151,7 @@ function create({store,prefix='hub:',now=Date.now,finalizationHealth,notifySuppo
      winners:state==='ended'?winners.map(p=>({...publicRow(p,playerId),prize_usd:p.prize_usd})):[],results_provisional:state==='ended'&&(!final||reviewRequired),
      confirmed_at:final?.at||null,review_required:reviewRequired,announcement:data.ops.announcement,outages:data.ops.outages.map(o=>({start:o.start,end:o.end})),
      history:you?.history||[],disqualified:!!you?.disqualified,exclusion_reason:data.ops.exclusions[playerId]?.reason||'',
-     matches_needed:Math.max(0,EVENT.minimum_matches-(you?.matches||0)),gap_to_fifth:you&&eligible.length>=5?Math.max(0,eligible[4].net_rr-you.net_rr):null,
+     matches_needed:Math.max(0,EVENT.minimum_matches-(you?.matches||0)),gap_to_prize:you&&eligible.length>=EVENT.prizes.length?Math.max(0,eligible[EVENT.prizes.length-1].net_rr-you.net_rr):null,
      tickets:data.ops.tickets.filter(t=>t.player_id===playerId).map(t=>({id:t.id,category:t.category,match_id:t.match_id,message:t.message,at:t.at,status:t.status,resolved_at:t.resolved_at,replies:t.replies.map(r=>({id:r.id,at:r.at,message:r.message,notified:r.notified}))})),
      badges:you&&you.matches>0&&!you.disqualified?[{type:'participant',event_id:EVENT.id},...(mine&&!reviewRequired?[{type:'winner',event_id:EVENT.id,rank:mine.rank}]:[])]:[],
      payout:mine?data.ops.payouts[playerId]||{status:'awaiting_details'}:null};
@@ -157,7 +162,7 @@ function create({store,prefix='hub:',now=Date.now,finalizationHealth,notifySuppo
    const backlog=await call(['SCARD',prefix+'analytics:outbox']);
    return {ok:true,event:data.event,server_now:now(),phase:phase(now(),data.event),updated_at:data.at,entrant_count:data.registrations.length,match_count:data.matches.length,backlog,
     rows:data.registrations.map(r=>ranked.get(r.player_id)||{...r,rank:null,net_rr:0,wins:0,matches:0,history:[]}).sort((a,b)=>(a.rank||Infinity)-(b.rank||Infinity)||a.registered_at-b.registered_at),...data.ops,
-    results_provisional:!data.ops.finalized||data.ops.finalized.ledger_count!==data.matches.length||(data.ops.finalized.reverted_count||0)!==data.reverted.size};
+    results_provisional:!currentFinal(data.ops.finalized)||data.ops.finalized.ledger_count!==data.matches.length||(data.ops.finalized.reverted_count||0)!==data.reverted.size};
  }
  async function support(playerId,body){
    const data=await read();if(!data.registrations.some(r=>r.player_id===playerId))return {ok:false,error:'registration_required'};
@@ -186,7 +191,7 @@ function create({store,prefix='hub:',now=Date.now,finalizationHealth,notifySuppo
      if(data.ops.finalized)return {ok:false,error:'already_confirmed'};
      return modify(actor,action,ops=>{
        if(ops.revision!==data.ops.revision)return {ok:false,error:'state_changed'};
-       ops.finalized={id:require('node:crypto').randomUUID(),at:now(),by:actor,event_end:data.event.end_at,ledger_count:data.matches.length,reverted_count:data.reverted.size,standings:data.rows.map(r=>({...r,history:undefined})),winners:winners.map(r=>({...r,history:undefined,prize_usd:EVENT.prizes[r.rank-1]}))};
+       ops.finalized={rules_version:EVENT.rules_version,mode:EVENT.mode,id:require('node:crypto').randomUUID(),at:now(),by:actor,event_end:data.event.end_at,ledger_count:data.matches.length,reverted_count:data.reverted.size,standings:data.rows.map(r=>({...r,history:undefined})),winners:winners.map(r=>({...r,history:undefined,prize_usd:EVENT.prizes[r.rank-1]}))};
        (ops.confirmations||=[]).push(ops.finalized);
        for(const winner of ops.finalized.winners){if(ops.payouts[winner.player_id]?.status==='paid')return {ok:false,error:'prior_payment_review_required'};ops.payouts[winner.player_id]={status:'awaiting_details',confirmation_id:ops.finalized.id};}return {};
      },{count:data.matches.length,reverted:data.reverted.size,start:EVENT.start_at,end:data.event.end_at},operation);
@@ -212,7 +217,7 @@ function create({store,prefix='hub:',now=Date.now,finalizationHealth,notifySuppo
        if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>=end||end>now()||start>=effectiveEvent(ops).end_at||end<=EVENT.start_at||ops.outages.length>=100)return {ok:false,error:'invalid_outage'};
        ops.outages.push({start,end,reason,by:actor,at:now()});
      }else if(action==='payout'){
-       if(!ops.finalized?.winners.some(r=>r.player_id===player_id)||ops.finalized.ledger_count!==data.matches.length||(ops.finalized.reverted_count||0)!==data.reverted.size)return {ok:false,error:'winner_not_confirmed'};
+       if(!currentFinal(ops.finalized)||!ops.finalized?.winners.some(r=>r.player_id===player_id)||ops.finalized.ledger_count!==data.matches.length||(ops.finalized.reverted_count||0)!==data.reverted.size)return {ok:false,error:'winner_not_confirmed'};
        if(!EVENT.payout_methods.includes(body.method))return {ok:false,error:'invalid_payout_method'};
        const existing=ops.payouts[player_id]||{};
        if(body.status==='details_received'){
@@ -226,4 +231,4 @@ function create({store,prefix='hub:',now=Date.now,finalizationHealth,notifySuppo
  }
  return {register,project,view,adminView,support,adminAction,flushNotifications};
 }
-module.exports={EVENT,phase,effectiveEvent,matchEntry,standings,create,REGISTER,PROJECT,READ};
+module.exports={EVENT,BACKFILL_VERSION,ledgerBase,phase,effectiveEvent,matchEntry,standings,create,REGISTER,PROJECT,READ};

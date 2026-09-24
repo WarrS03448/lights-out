@@ -170,7 +170,7 @@ const PLAYERS_JS = `
   COLUMNS.forEach(function (c) { byKey[c.key] = c; });
 
   var state = {
-    mode: 'BB5',
+    mode: new URLSearchParams(location.search).get('mode') === 'BB1' ? 'BB1' : 'BB5',
     q: new URLSearchParams(location.search).get('q') || '',
     player_id: new URLSearchParams(location.search).get('player_id') || '',
     sort: 'last_seen',
@@ -526,6 +526,7 @@ const PLAYERS_JS = `
   }
 
   // ---------------------------------------------------------------- the server
+  document.getElementById('ranked-mode').value=state.mode;
   document.getElementById('ranked-mode').addEventListener('change',function(){state.mode=this.value;state.rows=[];load();});
   var pending = null;
   function load() {

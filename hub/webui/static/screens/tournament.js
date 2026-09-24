@@ -19,7 +19,7 @@
     renderedKey=screenKey(s);renderedContext=context(s);
     if(draftIdentity!==s.identity){draftIdentity=s.identity;draftSeq=null;draft={};ledgerOpen=false;scrollTop=0;lastPoll=-Infinity;}
     if(draftSeq!==s.ticket_seq){draftSeq=s.ticket_seq;draft={};}
-    var event = data.event || {start_at: 1790438400000, end_at: 1790611200000, prize_pool:500, prizes: [250,125,75,35,15]};
+    var event = data.event || {start_at: 1790438400000, end_at: 1790611200000, prize_pool:150, prizes: [100,35,15]};
     var el = ctx.ui.el, anchor = performance.now(), serverNow = data.server_now || Date.now();
     function st(key) { return strings[key] || key; }
     function money(amount) { return '$'+Number(amount).toFixed(Number.isInteger(Number(amount))?0:2)+' USD'; }
@@ -37,6 +37,7 @@
     var clockLabel = node('div', 'tournament-clock-label', '', 'tournament-clock-label');
     var digits = node('div', 'tournament-digits', '', 'tournament-countdown');
     clock.appendChild(clockLabel); clock.appendChild(digits);clock.appendChild(node('div','tournament-clock-units',st('clock_units')));hero.appendChild(clock);wrap.appendChild(hero);
+    wrap.appendChild(node('p','tournament-agreement tournament-format-notice',st('format_notice'),'tournament-format-notice'));
     var winners=node('section','tournament-card tournament-winners',null,'tournament-winners');
     winners.appendChild(node('h2','',st('winners')));winners.appendChild(node('p','tournament-muted',st(data.results_provisional?'review':'confirmed')));
     var winnerList=node('div','tournament-winner-list');
@@ -69,7 +70,7 @@
     (data.badges||[]).forEach(function(b){personal.appendChild(node('span','tournament-badge',st(b.type)+(b.rank?' #'+b.rank:'')));});
     if(data.disqualified)personal.appendChild(node('p','tournament-error',st('disqualified')+': '+data.exclusion_reason));
     else if(data.registered_at&&data.matches_needed)personal.appendChild(node('p','tournament-muted',st('qualification').replace('{count}',data.matches_needed)));
-    if(data.gap_to_fifth>0)personal.appendChild(node('p','tournament-muted',st('gap').replace('{count}',data.gap_to_fifth)));
+    if(data.gap_to_prize>0)personal.appendChild(node('p','tournament-muted',st('gap').replace('{count}',data.gap_to_prize)));
     var stats=node('div','tournament-stats'),you=data.you;
     ['place','net','gained','lost','wins','matches'].forEach(function(key){var field={place:'rank',net:'net_rr',gained:'gained_rr',lost:'lost_rr',wins:'wins',matches:'matches'}[key],value=you?you[field]:(data.registered_at&&key!=='place'?0:'-');var tile=node('div','');tile.appendChild(node('span','tournament-muted',st(key)));tile.appendChild(node('strong','',String(value==null?'-':value)));stats.appendChild(tile);});personal.appendChild(stats);wrap.appendChild(personal);
     var board=node('section','tournament-card tournament-board');var head=node('div','tournament-board-head');var boardTitle=node('h2','',st('leaders'));head.appendChild(boardTitle);
