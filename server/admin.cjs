@@ -247,7 +247,8 @@ const PLAYERS_JS = `
       history.className = 'player-analytics';
       td.appendChild(history);
     } else if (column.type === 'status') {
-      td.appendChild(tag(v, v === 'offline' ? '' : 'ok'));
+      var queueName = {BB1:'Bodybomb 1v1', BB5:'Bodybomb 5v5'}[row.queue_mode];
+      td.appendChild(tag(v === 'queued' && queueName ? v + ' · ' + queueName : v, v === 'offline' ? '' : 'ok'));
     } else if (column.type === 'rank') {
       td.textContent = row.placing ? 'placing'
         : (v ? v + (row.division ? ' ' + row.division : '') : '');

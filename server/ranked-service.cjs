@@ -18,7 +18,19 @@ function create(options){
     }
     return true;
   }};
-  for(const modeId of ['BB5','BB1'])engines.set(modeId,live.create({...options,modeId,competitionGuard:guard,sharedNetworkRegistry,
+  // Presence is account-wide in the Players directory; ranks and admin actions stay mode-specific.
+  function directoryPresence(id){
+    let status='offline',online=false,queueMode='';
+    for(const [mode,engine]of engines){
+      const I=engine._internals;
+      online=online||I.bySteam.has(id);
+      if(I.inMatch.has(id))status='match';
+      else if(status!=='match'&&I.queueOf.has(id)){status='queued';queueMode=mode;}
+    }
+    if(status==='offline'&&online)status='online';
+    return {status,online,queue_mode:status==='queued'?queueMode:''};
+  }
+  for(const modeId of ['BB5','BB1'])engines.set(modeId,live.create({...options,modeId,competitionGuard:guard,sharedNetworkRegistry,directoryPresence,
     socialPrefix:options.prefix||'hub:',tournament:modeId==='BB5'?options.tournament:null,
     requiredVersions:()=>options.requiredVersions?.(modeId)||null,
     rankedRules:()=>options.rankedRules?.(modeId)||modes.rulesOf(modeId),

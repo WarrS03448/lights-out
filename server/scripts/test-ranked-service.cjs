@@ -53,6 +53,40 @@ test('invalid mode is rejected by request router',async t=>{
   await s.route({headers:{'x-ranked-mode':'oops'}},res,'GET','/api/leaderboard',new URL('http://test/api/leaderboard'));
   assert.equal(res.status,400);assert.equal(res.body.ok,false);
 });
+test('Players directory tracks either queue across ladder selections and clears it on leave',async t=>{
+  const s=make();t.after(()=>s.shutdown());await s._internals.ensureRecovery();
+  for(const mode of ['BB5','BB1']){
+    const I=s.forMode(mode)._internals;
+    I.ADMIN_IDS.add(A);I.noteSeen(A,'Duel player');I.noteSeen(B,'Team player');
+    I.bySteam.set(A,new Set(['duel-connection']));I.bySteam.set(B,new Set(['team-connection']));
+    I.saveCareer(A,{...I.careerOf(A),mmr:mode==='BB5'?1200:1800});
+  }
+  assert.equal((await request(s,A,'/api/queue/join','BB1')).status,200);
+  assert.equal((await request(s,B,'/api/queue/join','BB5')).status,200);
+  const row=async(mode,id)=>{
+    const result=await s.forMode(mode).adminPlayers(A,{player_id:id,include_suspicion:false});
+    assert.equal(result.rows.length,1);return result.rows[0];
+  };
+  for(const mode of ['BB5','BB1']){
+    const duel=await row(mode,A),team=await row(mode,B);
+    assert.equal(duel.status,'queued');assert.equal(duel.queue_mode,'BB1');assert.equal(duel.online,true);
+    assert.equal(team.status,'queued');assert.equal(team.queue_mode,'BB5');
+    assert.equal(duel.mmr,mode==='BB5'?1200:1800,'ranks remain specific to the selected ladder');
+  }
+  await request(s,A,'/api/queue/leave','BB1');
+  for(const mode of ['BB5','BB1']){
+    assert.equal((await row(mode,A)).status,'online');assert.equal((await row(mode,A)).queue_mode,'');
+  }
+  // Starting a match must not leave a stale queue label on the other ladder.
+  s.forMode('BB1')._internals.inMatch.set(A,'duel-match');
+  for(const mode of ['BB5','BB1']){
+    assert.equal((await row(mode,A)).status,'match');assert.equal((await row(mode,A)).queue_mode,'');
+  }
+  s.forMode('BB1')._internals.inMatch.delete(A);
+  for(const mode of ['BB5','BB1'])s.forMode(mode)._internals.bySteam.delete(A);
+  assert.equal((await row('BB5',A)).status,'offline');
+  assert.equal((await s.forMode('BB5').adminPlayers(B)).ok,false);
+});
 test('a mode ban cannot close the shared connection or block the other ladder',async t=>{
   const {EventEmitter}=require('node:events'),s=make();t.after(()=>s.shutdown());
   await s._internals.ensureRecovery();s.forMode('BB5')._internals.bans.set(A,{reason:'Cheating',until:0});

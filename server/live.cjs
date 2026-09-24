@@ -767,7 +767,7 @@ const LEGACY_COMPETITION = {MATCH_SIZE,TEAM_SIZE,MAX_PARTY,GATED_MODE_ID,COMP_MA
 
 function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, upstashCmd, prefix, analytics, tournament, accountDirectory, admitGameplay, activityGate,
                  collectSeconds, requiredVersions, profileOf, relayIssuer, expectedRules, rankedRules, privateSoloSteam='',
-                 modeId, competitionGuard, socialPrefix, sharedNetworkRegistry }) {
+                 modeId, competitionGuard, socialPrefix, sharedNetworkRegistry, directoryPresence }) {
   const mode = rankedModes.modeOf(modeId);
   const duel = mode.id === 'BB1';
   socialPrefix = socialPrefix || prefix || 'hub:';
@@ -4592,6 +4592,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
                      progress: c.progress };
     const rank = progressLib.publicProgress(mirror, { top: isReaper(id, c.progress) });
     const live = reports.get(id) || null;
+    const presence = directoryPresence ? directoryPresence(id) : {
+      status: statusOf(id), online: bySteam.has(id), queue_mode: isQueued(id) ? mode.id : '',
+    };
     const ratio = (a, b) => (b > 0 ? Math.round((a / b) * 100) / 100 : (a > 0 ? a : 0));
     return {
       player_id: id,
@@ -4599,8 +4602,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       account_type:'Unknown', account_id:'', account_created:0, steam_login_id:'', linked_steam_id:'',
       game_steam_id: verifiedPlayers.get(id)?.game_steam_id || c.game_steam_id || '',
       auth_method: c.auth_method || '',
-      status: statusOf(id),
-      online: bySteam.has(id),
+      status: presence.status,
+      online: presence.online,
+      queue_mode: presence.queue_mode,
       rank_name: rank.placing ? '' : (rank.rank_name || ''),
       division: rank.placing ? null : rank.division,
       placing: rank.placing,
