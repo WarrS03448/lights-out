@@ -24,6 +24,7 @@ session must post to app.q and let _pump() call panel.on_change().
 """
 import copy
 import random
+import re
 import threading
 import time
 import tkinter as tk
@@ -426,6 +427,26 @@ def kd_ratio(kills, deaths):
     if deaths <= 0:
         return float(kills)
     return round(kills / deaths, 2)
+
+
+def history_score(value):
+    """A history row's score as [mine, theirs], or None when there is no score to show.
+
+    Shared rather than copied, like kd_ratio: the web UI's Match History (hub/webui/screens/
+    history.py) and the Tk fallback's list draw the same rows, and through 2.8.5 both read "no
+    score" on every real match because each kept lists alone. The service writes a row's score as
+    a STRING, this player's side first - "7-4", and "4-7" on the loser's row (server/live.cjs
+    applyReceiptRow and the settlement's history rows). Only the preview's own locally recorded
+    rows hold a list. Anything else - the null a match carries until it settles, a list that is
+    not a pair, or junk - stays None, never a 0 : 0.
+    """
+    if isinstance(value, (list, tuple)):
+        return list(value) if len(value) == 2 else None
+    if isinstance(value, str):
+        m = re.fullmatch(r"\s*(\d+)\s*-\s*(\d+)\s*", value)
+        if m:
+            return [int(m.group(1)), int(m.group(2))]
+    return None
 
 
 def profile_stats(rows):
@@ -7134,8 +7155,8 @@ class CompetitivePanel:
         if elo:
             tk.Label(line, text=t("comp_history_elo", n=elo), bg=striped, fg=RED,
                      font=self.f_small, padx=8).pack(side="right")
-        score = row.get("score")
-        if isinstance(score, (list, tuple)) and len(score) == 2:
+        score = history_score(row.get("score"))
+        if score is not None:
             tk.Label(line, text="%s : %s" % (score[0], score[1]), bg=striped, fg=BLACK,
                      font=self.f_head, padx=8).pack(side="right")
         elif not row.get("preview"):

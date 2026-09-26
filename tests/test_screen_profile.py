@@ -9,6 +9,7 @@ webui snapshot tests in tests/test_hub.py but target only this screen's slice.
 """
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -185,6 +186,42 @@ def test_a_placing_player_is_never_given_a_tier_they_have_not_earned():
     assert "(!auth.placing && tier) ? tier : pt(\"profile_unranked\")" in js
 
 
+def test_the_per_mode_badges_have_a_size():
+    """2.8.5: the 5v5/1v1 emblems buildMain() puts in each ranked card drew about 340px wide.
+    `.rank-badge` carries no size of its own - every surface sizes its own (competitive.css) - and
+    profile.css had no rule for these cards, so the SVG stretched to the width of its card."""
+    js = (REPO / "hub" / "webui" / "static" / "screens" / "profile.js").read_text(encoding="utf-8")
+    css = (REPO / "hub" / "webui" / "static" / "screens" / "profile.css").read_text(encoding="utf-8")
+    assert '"profile-section ranked-profile-ranks"' in js, "the cards moved; re-point this test"
+    rule = re.search(r"\.ranked-profile-ranks\s+\.rank-badge\s*\{([^}]*)\}",
+                     re.sub(r"/\*.*?\*/", "", css, flags=re.S))
+    assert rule, "no size rule for the ranked cards' badges"
+    for prop in ("width", "height"):
+        assert re.search(r"(?<![-\w])%s\s*:\s*\d+px" % prop, rule.group(1)), prop
+
+
+def test_recent_rows_carry_the_rr_the_match_moved():
+    """2.8.5: every ordinary recent match on Profile read "Unavailable". The line printed `elo`,
+    which a history row carries only as a penalty debt (server/live.cjs historyRow; measured null
+    on settled wins, losses and placements alike). The RR the match moved is `rr_delta`."""
+    rows = [
+        {"won": True, "map": "Rome", "outcome": "played", "ended": 3000, "score": "7-4",
+         "delta": 2, "rr_delta": 25, "placement": False, "elo": None},
+        {"won": False, "map": "Rome", "outcome": "played", "ended": 2000, "score": "4-7",
+         "delta": 0, "rr_delta": 0, "placement": True, "elo": None},
+        {"outcome": "cancelled", "blamed": True, "reason": "no_show", "rr_delta": None, "elo": -30},
+    ]
+    recent = _slice(_FakeSession(me=ME, history=rows))["recent"]
+    assert [r["rr_delta"] for r in recent] == [25, 0, None]
+    assert [r["placement"] for r in recent] == [False, True, False]
+    assert recent[2]["elo"] == -30, "a penalty debt still rides along for the no-show row"
+    js = (REPO / "hub" / "webui" / "static" / "screens" / "profile.js").read_text(encoding="utf-8")
+    assert "rrText(m)" in js and "eloText" not in js
+    assert re.search(r"value\s*=\s*m\.rr_delta", js), "the line must print the RR the match moved"
+    for lang, table in P.PROFILE_STRINGS.items():
+        assert table.get("profile_rr_placement", "").strip(), lang
+
+
 def test_registered_with_the_core():
     """The screen registers its snapshot contributor and its one refresh verb."""
     assert "profile" in SCREEN_SNAPSHOTS
@@ -246,6 +283,8 @@ def main():
         test_strings_shipped_for_every_language,
         test_the_level_numeral_is_gone_and_the_emblem_is_beside_the_name,
         test_a_placing_player_is_never_given_a_tier_they_have_not_earned,
+        test_the_per_mode_badges_have_a_size,
+        test_recent_rows_carry_the_rr_the_match_moved,
         test_registered_with_the_core,
         test_refresh_verb_forces_a_history_fetch,
         test_slice_merges_into_the_full_snapshot,

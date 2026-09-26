@@ -45,6 +45,7 @@ PROFILE_STRINGS = {
         "profile_unranked": "Unranked",
         "profile_rank_rating": "Rank rating",
         "profile_not_tracked": "Unavailable",
+        "profile_rr_placement": "Placement",
         "profile_peak": "Peak",
         "profile_rank_ladder": "Rank ladder",
         "profile_back_to_profile": "Back to profile",
@@ -87,6 +88,7 @@ PROFILE_STRINGS = {
         "profile_unranked": "Ohne Rang",
         "profile_rank_rating": "Rangwertung",
         "profile_not_tracked": "Nicht verfügbar",
+        "profile_rr_placement": "Platzierung",
         "profile_peak": "Höchstwert",
         "profile_rank_ladder": "Rangleiter",
         "profile_back_to_profile": "Zurück zum Profil",
@@ -129,6 +131,7 @@ PROFILE_STRINGS = {
         "profile_unranked": "Sin rango",
         "profile_rank_rating": "Puntos de rango",
         "profile_not_tracked": "No disponible",
+        "profile_rr_placement": "Colocación",
         "profile_peak": "Máximo",
         "profile_rank_ladder": "Escala de rangos",
         "profile_back_to_profile": "Volver al perfil",
@@ -171,6 +174,7 @@ PROFILE_STRINGS = {
         "profile_unranked": "Sans rang",
         "profile_rank_rating": "Points de rang",
         "profile_not_tracked": "Indisponible",
+        "profile_rr_placement": "Placement",
         "profile_peak": "Record",
         "profile_rank_ladder": "Échelle des rangs",
         "profile_back_to_profile": "Retour au profil",
@@ -213,6 +217,7 @@ PROFILE_STRINGS = {
         "profile_unranked": "Sem classificação",
         "profile_rank_rating": "Pontos de rank",
         "profile_not_tracked": "Indisponível",
+        "profile_rr_placement": "Colocação",
         "profile_peak": "Máximo",
         "profile_rank_ladder": "Escala de ranks",
         "profile_back_to_profile": "Voltar ao perfil",
@@ -255,6 +260,7 @@ PROFILE_STRINGS = {
         "profile_unranked": "Без ранга",
         "profile_rank_rating": "Рейтинг ранга",
         "profile_not_tracked": "Недоступно",
+        "profile_rr_placement": "Калибровка",
         "profile_peak": "Пик",
         "profile_rank_ladder": "Лестница рангов",
         "profile_back_to_profile": "Вернуться в профиль",
@@ -297,6 +303,7 @@ PROFILE_STRINGS = {
         "profile_unranked": "无排名",
         "profile_rank_rating": "段位积分",
         "profile_not_tracked": "暂无数据",
+        "profile_rr_placement": "定级赛",
         "profile_peak": "最高",
         "profile_rank_ladder": "段位阶梯",
         "profile_back_to_profile": "返回个人资料",
@@ -364,13 +371,18 @@ def _recent(rows, limit=5) -> list:
     """A short, honest recent-matches list straight from the player's own history rows.
 
     Nothing is invented: ``won`` stays True/False/None exactly as the row carries it, so the JS
-    draws a win, a loss, or a neutral "played" mark accordingly. ``elo`` may be null (the preview
-    and unscored matches carry none)."""
+    draws a win, a loss, or a neutral "played" mark accordingly.
+
+    THE RR IS ``rr_delta``, NOT ``elo``. On a history row ``elo`` is only ever a penalty debt
+    (server/live.cjs historyRow), null on every ordinary match, so a line drawn from it alone read
+    "Unavailable" under each one through 2.8.5. The JS reads these the way History's RR column
+    does: placement first, then the RR the match moved, then a debt."""
     out = []
     for row in (rows or [])[:limit]:
         if not isinstance(row, dict):
             continue
         cancelled = (row.get("outcome") or "") == "cancelled"
+        rr = row.get("rr_delta")
         out.append({
             "id": str(row.get("id") or ""),
             "map": str(row.get("map") or ""),
@@ -379,7 +391,9 @@ def _recent(rows, limit=5) -> list:
             "cancelled": cancelled,
             "cheater_reverted": bool(row.get("cheater_reverted")),
             "blamed": bool(row.get("blamed")),
-            "elo": row.get("elo"),                    # may be null
+            "elo": row.get("elo"),                    # a penalty debt, else null
+            "rr_delta": rr if isinstance(rr, (int, float)) and not isinstance(rr, bool) else None,
+            "placement": bool(row.get("placement")),  # a placement match moves no RR by design
             "ended": row.get("ended"),                # ms epoch or null; JS formats it
         })
     return out

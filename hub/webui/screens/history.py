@@ -24,7 +24,7 @@ from . import register_snapshot, register_verbs
 from ..combat import player_damage_rows, player_damage_strings
 from ..rounds import round_details, round_strings
 from ... import i18n
-from ...competitive import kd_ratio, profile_stats
+from ...competitive import history_score, kd_ratio, profile_stats
 
 
 # ---------------------------------------------------------------- strings (this screen's own)
@@ -527,7 +527,6 @@ def _row(row: dict) -> dict:
     ``score``, ``delta`` until a scoreboard exists) stay null so JS can show an honest placeholder
     rather than a 0 that would read as a real result."""
     side = row.get("side") or ""
-    score = row.get("score")
     return {
         "id": str(row.get("id") or ""),
         "ended": _int_or_none(row.get("ended")) or 0,
@@ -542,7 +541,7 @@ def _row(row: dict) -> dict:
         "host": bool(row.get("host")),
         "players": _int_or_none(row.get("players")) or 0,
         "won": row.get("won") if isinstance(row.get("won"), bool) else None,
-        "score": list(score) if isinstance(score, (list, tuple)) else None,
+        "score": history_score(row.get("score")),
         "delta": _int_or_none(row.get("delta")),
         # THE RR THE MATCH MOVED - the RR column's number. `delta` above is an arrow count, and
         # printing it as RR is what made every match read "+1 RR" (2026-09-16). Null on rows the

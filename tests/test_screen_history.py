@@ -127,12 +127,33 @@ def test_won_and_score_round_trip_when_present():
     assert out["score"] == [13, 9] and out["delta"] == 21 and out["preview"] is True
 
 
+def test_the_services_score_string_reaches_the_row():
+    """2.8.5: no real history row ever showed a score. server/live.cjs writes a row's score as a
+    STRING, this player's side first (`${a}-${b}` in applyReceiptRow and the settlement's rows;
+    its own test-result.mjs pins '7-4'), and _row kept lists only - so every settled match drew
+    "no score" while the preview rows, which hold a list, looked fine."""
+    assert H._row({"score": "7-4"})["score"] == [7, 4]
+    assert H._row({"score": "4-7"})["score"] == [4, 7], "the player's own side stays first"
+    assert H._row({"score": "13-0"})["score"] == [13, 0], "a real zero is a score, not a gap"
+    assert H._row({"score": [13, 9]})["score"] == [13, 9], "a preview row's list still works"
+    for junk in (None, "", "7", "7-", "-4", "a-b", "7-4-1", "undefined-undefined", 74, True):
+        assert H._row({"score": junk})["score"] is None, junk
+    # and through the whole slice, from a row in the shape the service sends
+    row = {"id": "m7", "ended": 5000, "map": "Rome", "outcome": "played", "reason": "",
+           "blamed": False, "team": 2, "side": "defend", "host": False, "players": 2,
+           "won": False, "score": "4-7", "delta": -2, "rr_delta": -21, "placement": False,
+           "elo": None, "connected": True}
+    out = H.snapshot(FakeSession(history=[row]), None)["history"]["rows"][0]
+    assert out["score"] == [4, 7] and out["result"] == "loss"
+    json.dumps(out)
+
+
 def test_the_rr_column_is_the_rr_the_match_moved_not_the_arrows():
     """SAM, 2026-09-16: "we are only gaining and losing 1-3 RR". The RR column printed `delta` - an
     arrow count, drawn from the matchmaking rating - with "RR" after it."""
     row = {"id": "m9", "ended": 5000, "map": "Rome", "outcome": "played", "reason": "",
            "blamed": False, "team": 1, "side": "attack", "host": False, "players": 2,
-           "won": True, "score": [7, 4], "delta": 2, "rr_delta": 23, "placement": False,
+           "won": True, "score": "7-4", "delta": 2, "rr_delta": 23, "placement": False,
            "elo": None, "connected": True}
     out = H.snapshot(FakeSession(history=[row]), None)["history"]["rows"][0]
     assert out["rr_delta"] == 23 and out["delta"] == 2 and out["placement"] is False
@@ -144,7 +165,7 @@ def test_the_rr_column_is_the_rr_the_match_moved_not_the_arrows():
 def test_a_placement_row_is_labelled_and_old_rows_carry_no_rr():
     placement = {"id": "m8", "ended": 4000, "map": "Rome", "outcome": "played", "reason": "",
                  "blamed": False, "team": 1, "side": "attack", "host": False, "players": 2,
-                 "won": False, "score": [4, 7], "delta": 0, "rr_delta": 0, "placement": True,
+                 "won": False, "score": "4-7", "delta": 0, "rr_delta": 0, "placement": True,
                  "elo": None, "connected": True}
     rows = H.snapshot(FakeSession(history=[placement] + sample_rows()), None)["history"]["rows"]
     assert rows[0]["placement"] is True and rows[0]["rr_delta"] == 0
@@ -509,6 +530,7 @@ def main():
         test_never_asked_is_distinct_from_empty,
         test_rows_serialize_with_honest_nulls,
         test_won_and_score_round_trip_when_present,
+        test_the_services_score_string_reaches_the_row,
         test_the_rr_column_is_the_rr_the_match_moved_not_the_arrows,
         test_a_placement_row_is_labelled_and_old_rows_carry_no_rr,
         test_summary_counts_are_honest,

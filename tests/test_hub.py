@@ -3974,6 +3974,71 @@ def test_match_history_rows_read_correctly():
     assert panel._history_when({"ended": 1789000000000}).startswith("20")
 
 
+def test_a_settled_history_row_shows_its_score():
+    """The service writes a history row's score as a STRING, this player's side first.
+
+    server/live.cjs sets `row.score = `${a}-${b}`` (applyReceiptRow and the settlement's history
+    rows; server/scripts/test-result.mjs pins '7-4' for the winner and '4-7' for the loser). The Tk
+    row drew lists only, so every real match read "no score" - only the preview's own rows hold a
+    list.
+    """
+    from hub import competitive as C
+    from hub import i18n
+    i18n.set_language("en")
+
+    assert C.history_score("7-4") == [7, 4]
+    assert C.history_score("4-7") == [4, 7], "own side first: the loser's row is not flipped back"
+    assert C.history_score(" 13 - 0 ") == [13, 0]
+    assert C.history_score("0-0") == [0, 0], "a real 0-0 is a score, not a gap"
+    assert C.history_score([7, 3]) == [7, 3], "the preview's own rows still hold a list"
+    assert C.history_score((2, 7)) == [2, 7]
+    # everything else is the honest "no score", never a 0 : 0 the match did not end on
+    for junk in (None, "", "7", "7-", "-4", "7:4", "7-4-1", "a-b", "-1-4", "7.5-4",
+                 [], [7], [7, 4, 1], {"1": 7, "2": 4}, 74, True):
+        assert C.history_score(junk) is None, junk
+
+    # ...and the row must draw through it: a right answer the row never asks for is the same bug.
+    # No display here, so the row is built out of stand-ins that only remember their text.
+    class _Widget:
+        def __init__(self, parent=None, **kw):
+            self.text, self.children = str(kw.get("text", "")), []
+            if parent is not None:
+                parent.children.append(self)
+
+        def pack(self, **kw):
+            pass
+
+        def bind(self, *a):
+            pass
+
+        def winfo_children(self):
+            return list(self.children)
+
+    panel = C.CompetitivePanel.__new__(C.CompetitivePanel)
+    panel.f_head = panel.f_small = None
+
+    def drawn(**kw):
+        row = {"id": "m1", "outcome": "played", "reason": "", "blamed": False, "won": True}
+        row.update(kw)
+        holder = _Widget()
+        panel._draw_history_row(holder, row, 0)
+        return [w.text for w in holder.children[0].children]
+
+    pending = i18n.t("comp_history_pending")
+    real_tk = C.tk
+    C.tk = type("tk", (), {"Frame": _Widget, "Label": _Widget})
+    try:
+        texts = drawn(score="7-4")
+        assert "7 : 4" in texts and pending not in texts, texts
+        texts = drawn(won=False, score="4-7")
+        assert "4 : 7" in texts and pending not in texts, texts
+        assert "7 : 3" in drawn(score=[7, 3], preview=True)
+        assert pending in drawn(won=None, score=None), "an unsettled match still says so"
+        assert pending in drawn(won=None, score="pending")
+    finally:
+        C.tk = real_tk
+
+
 def test_a_replayed_match_does_not_reopen_the_game():
     """A reconnect must not open Bodycam a second time for a match it already opened.
 
@@ -5800,6 +5865,7 @@ def main():
         test_competitive_strings_exist_in_every_language,
         test_match_history_session,
         test_match_history_rows_read_correctly,
+        test_a_settled_history_row_shows_its_score,
         test_game_opens_host_first_then_everybody_else,
         test_a_replayed_match_does_not_reopen_the_game,
         test_game_closes_only_after_the_hub_registers_the_match_complete,

@@ -1312,7 +1312,11 @@
       // THE PEOPLE YOU JUST PLAYED. The result screen carried the score and nobody's name, so
       // there was no way to report (or remember) anyone from the one screen where you have just
       // decided whether you want to.
-      var roster = comp.roster || [];
+      //
+      // OFF THE RESULT SLICE. Every phase ships its roster inside its own slice
+      // (competitive.py result_snapshot) and `comp` itself never carries one, so reading
+      // comp.roster here drew nobody at all, on every result screen.
+      var roster = r.roster || [];
       if (roster.length) {
         var who = el("div", "res-roster");
         who.appendChild(el("div", "section-title", t("comp_result_roster")));
@@ -1821,8 +1825,9 @@
     // history used to fall all the way through to the raw steam id - a 17-digit number standing
     // where the name of the person being accused should be. The opener passes the name it already
     // has on screen (open_report's third argument -> comp.report_name); the roster lookup stays as
-    // the fallback for any surface that does not, and the id stays as the last resort.
-    var who = (comp.roster || []).concat(
+    // the fallback for any surface that does not, and the id stays as the last resort. The roster
+    // rides inside whichever phase slice is live - only one ever is - and never on comp itself.
+    var who = ((comp.result || comp.live || comp.connect || comp.lobby || {}).roster || []).concat(
       ((comp.lobby || {}).teams || []).reduce(function (acc, tm) {
         return acc.concat(tm.members || []);
       }, []));

@@ -363,7 +363,7 @@
           leading: el("span", "recent-res " + res.cls, res.letter),
           children: [
             el("div", "recent-map", (m.mode==="BB1"?"1v1":"5v5")+" · "+(m.map || "-")),
-            el("div", m.cheater_reverted ? "cheater-reverted-notice" : "recent-meta", m.cheater_reverted ? pt("profile_cheater_reverted") : eloText(m.elo) + (m.ended ? " · " + whenText(m.ended) : ""))
+            el("div", m.cheater_reverted ? "cheater-reverted-notice" : "recent-meta", m.cheater_reverted ? pt("profile_cheater_reverted") : rrText(m) + (m.ended ? " · " + whenText(m.ended) : ""))
           ]
         });
         if (m.id) {
@@ -412,9 +412,15 @@
     }
     function letter(kind) { var f = FORM[kind]; return { letter: f.letter, cls: f.cls }; }
 
-    function eloText(elo) {
-      if (elo === null || elo === undefined) { return pt("profile_not_tracked"); }
-      var n = Number(elo);
+    // THE RR THE MATCH MOVED, read the way History's RR column reads it (history.js rrCell).
+    // `elo` on a history row is only ever a penalty debt, so reading it alone put "Unavailable"
+    // under every ordinary match.
+    function rrText(m) {
+      if (m.placement) { return pt("profile_rr_placement"); }
+      var value = m.rr_delta;
+      if (value === null || value === undefined) { value = m.elo; }
+      if (value === null || value === undefined) { return pt("profile_not_tracked"); }
+      var n = Number(value);
       return (n > 0 ? "+" + n : String(n)) + " RR";
     }
 

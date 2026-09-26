@@ -950,6 +950,47 @@ def test_result_snapshot_carries_what_became_of_the_game():
         assert state_snapshot(s, panel)["comp"]["result"]["game_close"] == state, state
 
 
+def test_the_result_screen_reads_its_roster_off_the_result_slice():
+    """2.8.5: the result screen's "people you just played" list never drew. The roster ships
+    INSIDE the result slice (result_snapshot) and competitive.js read it off `comp` itself, where
+    it has never been - so the one screen built for reporting someone showed nobody."""
+    i18n.set_language("en")
+    panel, s = _panel()
+    s.players = [dict(ME), dict(P2), dict(P3), dict(P4)]
+    s.teams = {1: [dict(ME), dict(P2)], 2: [dict(P3), dict(P4)]}
+    s.phase = "result"
+    s.result = {"won": True, "score": (7, 4), "delta": 2, "voided": False}
+    comp = state_snapshot(s, panel)["comp"]
+    assert "roster" not in comp, "the roster rides inside the phase slice, never on comp"
+    roster = comp["result"]["roster"]
+    assert [p["name"] for p in roster] == ["Sam", "Ravi", "Wario", "Toad"]
+    assert [p["is_me"] for p in roster] == [True, False, False, False]
+    assert all(p["steam_id"] for p in roster), "the Report button hangs off the steam id"
+    js = JS_PATH.read_text(encoding="utf-8")
+    result_action = js[js.index("function resultAction(comp)"):js.index("function pips(")]
+    assert re.search(r"\bvar roster = r\.roster\b", result_action), (
+        "resultAction must read the roster off the result slice (r = comp.result)")
+
+
+def test_every_comp_key_the_screen_reads_is_one_the_snapshot_sends():
+    """The general form of the roster bug. A `comp.<key>` that no phase of comp_snapshot sends is
+    silently undefined, and the `|| []` after it turns that into an empty list instead of an
+    error - nothing on screen, nothing in the console. So every key competitive.js reads off comp
+    must come out of at least one phase."""
+    i18n.set_language("en")
+    panel, s = _panel()
+    sent = set(state_snapshot(s, panel)["comp"])
+    _seat_a_lobby(s, "coin")
+    sent |= set(state_snapshot(s, panel)["comp"])
+    for phase in ("connecting", "live", "result"):
+        s.phase = phase
+        sent |= set(state_snapshot(s, panel)["comp"])
+    js = re.sub(r"/\*.*?\*/|//[^\n]*", "", JS_PATH.read_text(encoding="utf-8"), flags=re.S)
+    read = set(re.findall(r"\bcomp\.([A-Za-z_]\w*)", js))
+    assert {"phase", "result", "report_target"} <= read, "the scan no longer sees the comp reads"
+    assert not read - sent, "competitive.js reads comp keys no phase sends: %s" % sorted(read - sent)
+
+
 # ---------------------------------------------------------------- verb mapping
 def test_matchflow_verbs_map_to_session():
     """Each new js_api verb is a 1:1 passthrough to the matching session verb (run on the UI
@@ -1304,6 +1345,8 @@ def main():
         test_result_snapshot_win_loss_void,
         test_result_snapshot_carries_the_rr_not_just_the_arrows,
         test_result_snapshot_carries_what_became_of_the_game,
+        test_the_result_screen_reads_its_roster_off_the_result_slice,
+        test_every_comp_key_the_screen_reads_is_one_the_snapshot_sends,
         test_found_rings_once_per_entry,
         test_found_cue_follows_the_slider,
         test_a_real_match_found_event_rings,

@@ -170,3 +170,6 @@
   .profile-ranks-head, .profile-ranks-scroll { padding: var(--sp-5); }
 }
 .ranked-profile-ranks { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+/* The per-mode emblems. With no size of their own the SVG stretched to the width of its card -
+ * about 340px of badge on every ranked profile. Same plate size as the one beside the name. */
+.ranked-profile-ranks .rank-badge { display: block; width: 56px; height: 64px; flex: none; }
