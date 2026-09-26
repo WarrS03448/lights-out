@@ -55,11 +55,11 @@
         "ru": "Bodybomb 5 на 5",
         "zh": "Bodybomb 5v5"
       },
-      "version": "1.0.30",
+      "version": "1.0.31",
       "description": "Competitive Bodybomb. 5v5, first to 7 round wins, sides and spawn bases swap after round 6. A 6–6 tie goes to a deciding round. The bomb starts on the ground at the attacker spawn. [4X DRONE COOLDOWN] [NO SPECTATOR DRONES]",
-      "pack_url": "https://play.lightsoutranked.com/packs/BB5-1.0.30.zip",
-      "sha256": "d5a4d858e53e30841ee98b475664cb830d6aa9beee14a93022d3b905149f1caf",
-      "size": 90596,
+      "pack_url": "https://play.lightsoutranked.com/packs/BB5-1.0.31.zip",
+      "sha256": "151a48d4adb2d9764b6728ae01e6aad7af7292c9a29f7e6019e6a2741fb27329",
+      "size": 90843,
       "localized": true,
       "rulesets": {
         "en": "Bodybomb 5v5\n\n• Two teams of 5: attackers plant the bomb at a bomb site, defenders stop them or defuse it.\n• One life per round – no respawns. Dead players go straight to spectating their team (no spectator drone).\n• The bomb starts on the ground in the attacker spawn; any attacker can pick it up.\n• First team to 7 round wins takes the match (13 rounds maximum). Sides and spawn bases swap after round 6; a 6–6 tie goes to a deciding round.\n• Rounds last 3 minutes; friendly fire is on, as in Bodybomb.\n• Drones are allowed; their cooldown is 4× the normal duration.\n• No bots.",
@@ -90,11 +90,11 @@
         "ru": "Bodybomb 1v1",
         "zh": "Bodybomb 1v1"
       },
-      "version": "1.0.4",
+      "version": "1.0.5",
       "description": "Ranked 1v1 Bodybomb on Paintball, Airsoft and Bomb House. One bombsite per map; Bomb House uses the downstairs site. First to 5 wins, 9 rounds maximum. Two-minute rounds. Sides and spawns switch every round. Drone cooldown 3x. No spectator drones or bots. The coinflip winner chooses starting-side selection or the last map ban. Each player bans one map; the remaining map is played.",
-      "pack_url": "https://play.lightsoutranked.com/packs/BB1-1.0.4.zip",
-      "sha256": "f29e1427626167eaf93f1da61b52abf3df87b96489981780c1747624967d3d61",
-      "size": 89944,
+      "pack_url": "https://play.lightsoutranked.com/packs/BB1-1.0.5.zip",
+      "sha256": "ce52d92bde4009945b13fc4fc66f7134a15184b4f1bd9dd02f1533d03c6eb2fe",
+      "size": 90188,
       "localized": true,
       "rulesets": {
         "en": "Bodybomb 1v1\n\nRanked 1v1 Bodybomb on Paintball, Airsoft and Bomb House. One bombsite per map; Bomb House uses the downstairs site. First to 5 wins, 9 rounds maximum. Two-minute rounds. Sides and spawns switch every round. Drone cooldown 3x. No spectator drones or bots. The coinflip winner chooses starting-side selection or the last map ban. Each player bans one map; the remaining map is played.",
