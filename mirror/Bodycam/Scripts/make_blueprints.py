@@ -399,6 +399,8 @@ def stage3_bb5(parent, mode_id="BB5"):
     add_var(rule, "BombClass", pin("class", unreal.Actor)); add_var(rule, "Attacker", pin("object", unreal.PlayerState))
     add_var(rule, "CurrentBomb", pin("object", unreal.Actor))
     add_var(rule, "DropTries", pin("int")); add_var(rule, "TeamPawns", pin("object", unreal.Actor, "array"))
+    # set once DropBombWhenReady has handed the bomb out; see bb5_graphs.rule_logic, THE CARRIER'S STALE SPECIAL SLOT
+    add_var(rule, "bBombSpawned", pin("bool"))
     add_var(rule, "TmpLocs", pin("struct", unreal.Vector.static_struct(), "array")); add_var(rule, "SpawnCentre", pin("struct", unreal.Vector.static_struct()))
     # the bomb carrier's own pawn location, and whether we have one: PlaceBomb averages only the team-mates standing near him,
     # so one player who already left the spawn cannot drag the bomb out of it (2026-09-16)

@@ -3,17 +3,19 @@
 What the mode changes against the game's Bodybomb (everything else — bomb, bomb zones, rounds, plant/defuse — is the game's own,
 driven by the native ObjectiveRuleSetComponent and the BB_ levels):
   * AC_BB5BombRule (our rule component, child of the native ObjectiveRuleSetComponent, replacing the game's AC_BombRuleComponent):
-      - AssignPlayerToObjective(Player): the game hands the bomb to Player's inventory (SpawnSpecialItem) and equips it. We spawn it
-        UNEQUIPPED, then a 0.2 s poll drops it with the inventory's own DropItem (the game's drop pipeline: item.Drop + multicast)
+      - AssignPlayerToObjective(Player): the game hands the bomb to Player's inventory (SpawnSpecialItem) and equips it. Ours
+        remembers the carrier and starts a 0.2 s poll that spawns the bomb UNEQUIPPED once the carrier's inventory is
+        initialized, drops it on a later tick with the inventory's own DropItem (the game's drop pipeline: item.Drop + multicast)
         and moves the dropped bomb to the centre of the attacking team's spawn (average of the attackers' pawn locations, floor
-        trace) — "the bomb spawns on the ground in the attacker spawn instead of equipped on a random attacker".
+        trace) — "the bomb spawns on the ground in the attacker spawn instead of equipped on a random attacker". See
+        rule_logic for why the spawn waits (THE CARRIER'S STALE SPECIAL SLOT).
       - LookUpForBomb: exactly the game's version (poll until the Bombe actor exists -> OnObjectiveReady).
   * GM_BB5: ShouldSpawnBots = false (like GM_BodyBomb), 4x drone cooldown (GE_BB5_DroneCooldown re-applied every 2 s, the CTF
     pattern), class defaults ConfigDataAsset -> DA_BB5. Rules tags / DefaultDroneClass are written by the pak builder.
   * TEMPORARY (2026-09-14): a SendAttributionEvent probe rides along in GM_BB5 — see the PROBE block below. It exists to
     prove the gamemode can talk to our backend before the competitive mode is built on that assumption, and must be
     deleted once the answer is in. It cannot affect play: a failed HTTP call does nothing.
-Stand-ins at the game's paths (referenced, never shipped): Bombe (the bomb item class), BP_InventoryComponent (the three
+Stand-ins at the game's paths (referenced, never shipped): Bombe (the bomb item class), BP_InventoryComponent (the
 functions we call, same names + parameter order as the game's, so the by-name calls resolve to the real ones at runtime).
 """
 import json
@@ -29,7 +31,7 @@ PLAYERSTATE = "/Script/Engine.PlayerState"
 GAMESTATE = "/Script/Engine.GameStateBase"
 GE_DRONECD = BB5_DIR + "/GE_BB5_DroneCooldown.GE_BB5_DroneCooldown_C"
 SPECIAL_SLOT = '(TagName="Inventory.Slots.Special")'   # the inventory slot the game's own AC_BombRuleComponent puts the bomb in
-DROP_TRIES = 50            # 0.2 s x 50 = 10 s: after that the bomb simply stays with the attacker (the game's own behaviour)
+DROP_TRIES = 50            # 0.2 s x 50 = 10 s: after that the bomb stays with the attacker (the game's own behaviour)
 DRONE_COOLDOWN_FACTOR = 4.0
 # Where the dropped bomb ends up (Sam, 2026-09-16, after the 1v1 tests: "make sure it always spawns with the attacking team and
 # that it never spawns under the ground ... you could have it spawn at the same height as a player's chest").
@@ -140,13 +142,17 @@ def inventory_signature(name):
     elif name == "GetItemForSlot":
         g.entry(params=[P("ItemSlot", "struct", struct="/Script/GameplayTags.GameplayTag")])
         g.result(params=[P("Item", "object", **{"class": ACTOR}), P("IsValid", "bool"), P("ItemIndex", "int")])
+    elif name == "IsInitialized":            # the game's: pure, one out param, body reads the native bIsInitialized
+        g.entry(); g.result(params=[P("bIsInitialized", "bool")])
+    elif name == "GetCurrentEquippedItem":   # the game's: native-event override, two out params, the item in the current slot
+        g.entry(); g.result(params=[P("Item", "object", **{"class": ACTOR}), P("IsValid", "bool")])
     else: raise KeyError(name)
     return g.json()
-INVENTORY_FUNCTIONS = ["DropItem", "GetItemForSlot"]
+INVENTORY_FUNCTIONS = ["DropItem", "GetItemForSlot", "IsInitialized", "GetCurrentEquippedItem"]
 
 # ==================================================================================================================
 # AC_BB5BombRule
-#   vars: BombClass class<Actor>, Attacker PlayerState, DropTries int, TeamPawns Actor[], SpawnCentre vector
+#   vars: BombClass class<Actor>, Attacker PlayerState, DropTries int, bBombSpawned bool, TeamPawns Actor[], SpawnCentre vector
 # ==================================================================================================================
 def rule_events():
     g = G()
@@ -157,7 +163,10 @@ def rule_events():
 
 def rule_assign():
     """Override AssignPlayerToObjective(Player) -> Actor. The game's version: pawn -> BP_InventoryComponent -> SpawnSpecialItem(Bombe,
-    equip=true); return the Bombe actor. Ours: equip=false, then start the drop poll; same return value."""
+    equip=true); return the Bombe actor. Ours hands nothing out here: it remembers the carrier and starts DropBombWhenReady,
+    which spawns the bomb once the carrier's inventory is initialized (see rule_logic). The return value is None, exactly
+    what the game's own version returns while the bomb is still pending; the native LookUpForBomb -> PollBomb path then
+    registers the bomb once it exists."""
     g = G()
     g.entry(); g.result()
     g.set("clearbomb", "CurrentBomb"); g.chain("entry", "clearbomb")
@@ -166,26 +175,39 @@ def rule_assign():
     g.set("cls", "BombClass", defaults={"BombClass": BOMBE}); g.chain("resetplace", "cls")  # SpawnSpecialItem takes a class variable by reference
     g.set("att", "Attacker"); g.link(("entry.Player", "att.Attacker")); g.chain("cls", "att")
     g.set("tries", "DropTries", defaults={"DropTries": "0"}); g.chain("att", "tries")
-    g.call("pawn", PLAYERSTATE, "GetPawn"); g.link(("entry.Player", "pawn.self"))
-    g.call("inv", ACTOR, "GetComponentByClass", {"ComponentClass": INV}); g.link(("pawn.ReturnValue", "inv.self"))
-    g.cast("asinv", INV, pure=True); g.link(("inv.ReturnValue", "asinv.cast_object"))
-    g.get("clsg", "BombClass")
-    g.call("spawn", INV, "SpawnSpecialItem", {"bShouldEquip": "false"}); g.link(("asinv.cast_result", "spawn.self"), ("clsg.BombClass", "spawn.ItemClass"))
-    g.chain("tries", "spawn")
+    g.set("unspawned", "bBombSpawned", defaults={"bBombSpawned": "false"}); g.chain("tries", "unspawned")
     g.call("timer", SYS, "K2_SetTimer", {"FunctionName": "DropBombWhenReady", "Time": "0.2", "bLooping": "true"}); g.selfnode("s1"); g.link(("s1.self", "timer.Object"))
-    g.chain("spawn", "timer")
-    # Creation may be pending while the inventory initializes. Return its actual
-    # slot item if ready; DropBombWhenReady retains it before dropping, and the
-    # native LookUpForBomb -> PollBomb path waits for that exact actor.
-    g.call("slot", INV, "GetItemForSlot", {"ItemSlot": SPECIAL_SLOT}); g.link(("asinv.cast_result", "slot.self")); g.chain("timer", "slot")
-    g.cast("bomb", BOMBE, pure=True); g.link(("slot.Item", "bomb.cast_object"), ("bomb.cast_result", "result.ReturnValue"))
-    g.set("keepbomb", "CurrentBomb"); g.link(("bomb.cast_result", "keepbomb.CurrentBomb")); g.chain("slot", "keepbomb", "result")
+    g.chain("unspawned", "timer", "result")
     return g.json()
 
 def rule_logic():
     g = G()
-    # --- DropBombWhenReady (server timer, 0.2 s): once the bomb sits in the attacker's Special slot, drop it with the game's own
-    #     DropItem; give up after DROP_TRIES (the bomb then stays with the attacker, exactly as in the stock mode) ---
+    # --- DropBombWhenReady (server timer, 0.2 s): hand the bomb to the carrier unequipped once their inventory is initialized, then
+    #     drop it with the game's own DropItem on a later tick; give up after DROP_TRIES (the bomb then stays with the attacker,
+    #     exactly as in the stock mode) ---
+    #
+    # THE CARRIER'S STALE SPECIAL SLOT (2026-09-26: "users are unable to shoot their guns or pick up the bomb until they drop
+    # their weapon", every 1v1 game). Read from the game's BP_InventoryComponent:
+    #
+    #   1. SpawnSpecialItem on an inventory that is not initialized yet does not spawn anything. It queues the CLASS, and
+    #      BroadcastInitialization later spawns every queued class with SpawnSpecialItem(class, bShouldEquip = TRUE). Our
+    #      `false` is thrown away, the bomb is equipped (CurrentEquippedItemSlot = Special), and because a slot is now
+    #      equipped, InternalInitializeInventory skips its own swap to the Primary weapon. The round-start hand-out lands
+    #      here nearly every time; the game's own AC_BombRuleComponent polls for the bomb for exactly this reason.
+    #   2. DropItem is the low-level half of a drop: item.Drop + HandleDropItem + empty the slot. Its callers
+    #      (InternalDropItemSlot) swap to the best remaining weapon afterwards; DropItem itself never touches
+    #      CurrentEquippedItemSlot. Dropping the equipped bomb with it leaves the carrier empty-handed on an EMPTY current slot.
+    #   3. Picking the bomb back up then goes to the Special slot, which "is" the current slot, so InternalGrabItemBasedOnRules
+    #      takes the swap-by-drop path: apply GE_State_Dropping (Weapon.State.Dropping blocks fire, reload and weapon
+    #      animations), play the drop animation, and finish the grab in HandleItemDropped once the held item has dropped.
+    #      Nothing is held, the drop never happens, and the player stays in the dropping state with the grab pending. Dropping
+    #      any real weapon later runs InternalDropItemSlot with the tag present, which calls HandleItemDropped, clears the
+    #      state and completes the stuck grab: the reported workaround, step for step.
+    #
+    # So the bomb is only handed out once IsInitialized() is true. SpawnSpecialItem(false) then spawns it straight into the
+    # Special slot with no swap, and the current slot stays on the carrier's weapon. The drop waits for a later tick, as it
+    # always has, so the new actor has replicated before the drop multicast names it. If the bomb is nevertheless the item in
+    # the carrier's hands, it is left there (the stock hand-out) rather than dropped out from under the inventory.
     g.existing("drop", "DropBombWhenReady")
     g.get("t0", "DropTries"); g.call("inc", MATH, "Add_IntInt", {"B": "1"}); g.link(("t0.DropTries", "inc.A"))
     g.set("t1", "DropTries"); g.link(("inc.ReturnValue", "t1.DropTries")); g.chain("drop", "t1")
@@ -194,14 +216,36 @@ def rule_logic():
     g.call("stop_a", SYS, "K2_ClearTimer", {"FunctionName": "DropBombWhenReady"}); g.selfnode("s2"); g.link(("s2.self", "stop_a.Object"), ("br_over.then", "stop_a.exec"))
     g.get("att", "Attacker"); g.call("pawn", PLAYERSTATE, "GetPawn"); g.link(("att.Attacker", "pawn.self"))
     g.call("pv", SYS, "IsValid"); g.link(("pawn.ReturnValue", "pv.Object"))
-    g.branch("br_pawn"); g.link(("pv.ReturnValue", "br_pawn.condition"), ("br_over.else", "br_pawn.exec"))
     g.call("inv", ACTOR, "GetComponentByClass", {"ComponentClass": INV}); g.link(("pawn.ReturnValue", "inv.self"))
     g.cast("asinv", INV, pure=True); g.link(("inv.ReturnValue", "asinv.cast_object"))
-    g.call("slot", INV, "GetItemForSlot", {"ItemSlot": SPECIAL_SLOT}); g.link(("asinv.cast_result", "slot.self"), ("br_pawn.then", "slot.exec"))
+    # out of tries without ever handing it out: the game's own hand-out, bomb equipped, and no drop
+    g.get("spawned0", "bBombSpawned")
+    g.branch("br_late"); g.link(("spawned0.bBombSpawned", "br_late.condition")); g.chain("stop_a", "br_late")
+    g.branch("br_latepawn"); g.link(("pv.ReturnValue", "br_latepawn.condition"), ("br_late.else", "br_latepawn.exec"))
+    g.get("clslate", "BombClass")
+    g.call("latespawn", INV, "SpawnSpecialItem", {"bShouldEquip": "true"})
+    g.link(("asinv.cast_result", "latespawn.self"), ("clslate.BombClass", "latespawn.ItemClass"), ("br_latepawn.then", "latespawn.exec"))
+    g.set("latemark", "bBombSpawned", defaults={"bBombSpawned": "true"}); g.chain("latespawn", "latemark")
+    g.branch("br_pawn"); g.link(("pv.ReturnValue", "br_pawn.condition"), ("br_over.else", "br_pawn.exec"))
+    g.get("spawned1", "bBombSpawned")
+    g.branch("br_spawned"); g.link(("spawned1.bBombSpawned", "br_spawned.condition"), ("br_pawn.then", "br_spawned.exec"))
+    # not handed out yet: wait for the inventory, then spawn it unequipped
+    g.call("isinit", INV, "IsInitialized"); g.link(("asinv.cast_result", "isinit.self"), ("br_spawned.else", "isinit.exec"))
+    g.branch("br_init"); g.link(("isinit.bIsInitialized", "br_init.condition")); g.chain("isinit", "br_init")
+    g.get("clsnow", "BombClass")
+    g.call("spawnnow", INV, "SpawnSpecialItem", {"bShouldEquip": "false"})
+    g.link(("asinv.cast_result", "spawnnow.self"), ("clsnow.BombClass", "spawnnow.ItemClass"), ("br_init.then", "spawnnow.exec"))
+    g.set("markspawned", "bBombSpawned", defaults={"bBombSpawned": "true"}); g.chain("spawnnow", "markspawned")
+    # handed out on an earlier tick: drop it, unless it is the item in the carrier's hands
+    g.call("slot", INV, "GetItemForSlot", {"ItemSlot": SPECIAL_SLOT}); g.link(("asinv.cast_result", "slot.self"), ("br_spawned.then", "slot.exec"))
     g.branch("br_has"); g.link(("slot.IsValid", "br_has.condition")); g.chain("slot", "br_has")
     g.cast("slotbomb", BOMBE); g.link(("slot.Item", "slotbomb.cast_object"), ("br_has.then", "slotbomb.exec"))
     g.set("retainbomb", "CurrentBomb"); g.link(("slot.Item", "retainbomb.CurrentBomb")); g.chain("slotbomb", "retainbomb")
-    g.call("dropit", INV, "DropItem", {"ItemSlot": SPECIAL_SLOT}); g.link(("asinv.cast_result", "dropit.self")); g.chain("retainbomb", "dropit")
+    g.call("held", INV, "GetCurrentEquippedItem"); g.link(("asinv.cast_result", "held.self")); g.chain("retainbomb", "held")
+    g.call("inhand", MATH, "EqualEqual_ObjectObject"); g.link(("held.Item", "inhand.A"), ("slot.Item", "inhand.B"))
+    g.branch("br_inhand"); g.link(("inhand.ReturnValue", "br_inhand.condition")); g.chain("held", "br_inhand")
+    g.call("stop_held", SYS, "K2_ClearTimer", {"FunctionName": "DropBombWhenReady"}); g.selfnode("s7"); g.link(("s7.self", "stop_held.Object"), ("br_inhand.then", "stop_held.exec"))
+    g.call("dropit", INV, "DropItem", {"ItemSlot": SPECIAL_SLOT}); g.link(("asinv.cast_result", "dropit.self"), ("br_inhand.else", "dropit.exec"))
     g.branch("br_dropped"); g.link(("dropit.WasDropped", "br_dropped.condition")); g.chain("dropit", "br_dropped")
     g.call("stop_b", SYS, "K2_ClearTimer", {"FunctionName": "DropBombWhenReady"}); g.selfnode("s3"); g.link(("s3.self", "stop_b.Object"), ("br_dropped.then", "stop_b.exec"))
     g.call("placetimer", SYS, "K2_SetTimer", {"FunctionName": "PlaceBomb", "Time": "0.3", "bLooping": "false"}); g.selfnode("s4"); g.link(("s4.self", "placetimer.Object"))
