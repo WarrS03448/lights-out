@@ -17,6 +17,7 @@ Translations were written by Claude (machine quality, not native-reviewed). Corr
 belong here : every language has the same key set (tests/test_hub.py checks it).
 """
 import locale
+import math
 import os
 import sys
 
@@ -63,6 +64,58 @@ def tr(code: str, key: str, **kw) -> str:
 def t(key: str, **kw) -> str:
     """Translate `key` into the current language."""
     return tr(_current, key, **kw)
+
+
+# ---------------------------------------------------------------- counts
+# A COUNT NEXT TO A NOUN needs the noun's form for that count ("1 more placement match", not
+# "1 more placement matches"), and the seven languages do not agree on how many forms there are.
+# English, German, Spanish and Portuguese have two: 1, and everything else. French puts 0 with 1.
+# Russian has three for whole numbers: 1, 21, 31...; 2-4, 22-24...; and the rest. Chinese has
+# one. So STRINGS keeps each such string's GENERAL form, the one most counts take, which keeps the
+# key set the same in every language and keeps t() working. PLURALS (at the end of this file)
+# holds only the forms that differ from it, and tn() picks by count. The web UI's HubUI.tn mirrors
+# plural_form; tests/test_i18n_plurals.py holds the two to the same answer.
+def plural_form(code: str, n) -> str:
+    """The CLDR cardinal category of `n` in language `code`: "one", "few" or "other".
+
+    "other" stands in for Russian "many" too, because that is the general form STRINGS holds.
+    Anything that is not a whole number (the dash for a total not known yet) is "other"."""
+    if n is None or isinstance(n, bool):
+        return "other"
+    try:
+        v = float(n)
+    except (TypeError, ValueError):
+        return "other"
+    if not math.isfinite(v) or v != int(v):
+        return "other"
+    v = abs(int(v))
+    if code == "ru":
+        if v % 10 == 1 and v % 100 != 11:
+            return "one"
+        if 2 <= v % 10 <= 4 and not 12 <= v % 100 <= 14:
+            return "few"
+        return "other"
+    if code == "fr":
+        return "one" if v <= 1 else "other"
+    if code == "zh":
+        return "other"
+    return "one" if v == 1 else "other"
+
+
+def trn(code: str, key: str, n, **kw) -> str:
+    """Translate `key` for a count of `n` into a specific language, formatted with n=n.
+
+    A form a language does not have falls back to ITS OWN general form, never to English's."""
+    code = code if code in STRINGS else DEFAULT
+    form = plural_form(code, n)
+    s = PLURALS.get(code, {}).get(key, {}).get(form) if form != "other" else None
+    s = s or STRINGS[code].get(key) or STRINGS[DEFAULT].get(key) or key
+    return s.format(n=n, **kw)
+
+
+def tn(key: str, n, **kw) -> str:
+    """t() for a string that counts something: the noun agrees with `n` in every language."""
+    return trn(_current, key, n, **kw)
 
 
 # ---------------------------------------------------------------- system language
@@ -384,7 +437,9 @@ STRINGS = {
         "topbar_offline": "Reconnecting…",
         "comp_level": "Level {n}",
         "comp_bdr": "{n} BDR",
-        "comp_record": "{played} matches · {wins} wins",
+        "comp_record": "{played} · {wins}",
+        "comp_record_played": "{n} matches",
+        "comp_record_wins": "{n} wins",
         "comp_mode_line": "Bodybomb 5v5 · ranked",
         "comp_find_match": "Find match",
         "comp_check_what": "What the hub checks",
@@ -818,7 +873,9 @@ STRINGS = {
         "topbar_offline": "Neuer Versuch…",
         "comp_level": "Level {n}",
         "comp_bdr": "{n} BDR",
-        "comp_record": "{played} Matches · {wins} Siege",
+        "comp_record": "{played} · {wins}",
+        "comp_record_played": "{n} Matches",
+        "comp_record_wins": "{n} Siege",
         "comp_mode_line": "Bodybomb 5v5 · gewertet",
         "comp_find_match": "Match suchen",
         "comp_check_what": "Was der Hub prüft",
@@ -1250,7 +1307,9 @@ STRINGS = {
         "topbar_offline": "Reconectando…",
         "comp_level": "Nivel {n}",
         "comp_bdr": "{n} BDR",
-        "comp_record": "{played} partidas · {wins} victorias",
+        "comp_record": "{played} · {wins}",
+        "comp_record_played": "{n} partidas",
+        "comp_record_wins": "{n} victorias",
         "comp_mode_line": "Bodybomb 5v5 · clasificatorio",
         "comp_find_match": "Buscar partida",
         "comp_check_what": "Qué comprueba el hub",
@@ -1682,7 +1741,9 @@ STRINGS = {
         "topbar_offline": "Reconnexion…",
         "comp_level": "Niveau {n}",
         "comp_bdr": "{n} BDR",
-        "comp_record": "{played} matchs · {wins} victoires",
+        "comp_record": "{played} · {wins}",
+        "comp_record_played": "{n} matchs",
+        "comp_record_wins": "{n} victoires",
         "comp_mode_line": "Bodybomb 5v5 · classé",
         "comp_find_match": "Chercher un match",
         "comp_check_what": "Ce que le hub vérifie",
@@ -2114,7 +2175,9 @@ STRINGS = {
         "topbar_offline": "Reconectando…",
         "comp_level": "Nível {n}",
         "comp_bdr": "{n} BDR",
-        "comp_record": "{played} partidas · {wins} vitórias",
+        "comp_record": "{played} · {wins}",
+        "comp_record_played": "{n} partidas",
+        "comp_record_wins": "{n} vitórias",
         "comp_mode_line": "Bodybomb 5v5 · ranqueado",
         "comp_find_match": "Procurar partida",
         "comp_check_what": "O que o hub verifica",
@@ -2546,7 +2609,9 @@ STRINGS = {
         "topbar_offline": "Переподключение…",
         "comp_level": "Уровень {n}",
         "comp_bdr": "{n} BDR",
-        "comp_record": "{played} матчей · {wins} побед",
+        "comp_record": "{played} · {wins}",
+        "comp_record_played": "{n} матчей",
+        "comp_record_wins": "{n} побед",
         "comp_mode_line": "Bodybomb 5v5 · рейтинговый",
         "comp_find_match": "Найти матч",
         "comp_check_what": "Что проверяет хаб",
@@ -2978,7 +3043,9 @@ STRINGS = {
         "topbar_offline": "正在重连…",
         "comp_level": "等级 {n}",
         "comp_bdr": "{n} BDR",
-        "comp_record": "{played} 场比赛 · {wins} 胜",
+        "comp_record": "{played} · {wins}",
+        "comp_record_played": "{n} 场比赛",
+        "comp_record_wins": "{n} 胜",
         "comp_mode_line": "Bodybomb 5v5 · 排位",
         "comp_find_match": "寻找比赛",
         "comp_check_what": "本程序会检查什么",
@@ -3388,3 +3455,72 @@ for _language, _copy in {"en":"Forfeit", "de":"Aufgabe", "es":"Abandono",
 for _language, _copy in {"en":("Returned","Waiting"),"de":("Zurück","Wartet"),"es":("De vuelta","Esperando"),
     "fr":("De retour","En attente"),"pt":("Retornou","Aguardando"),"ru":("Вернулся","Ожидание"),"zh":("已返回","等待中")}.items():
     STRINGS[_language].update(zip(("comp_recovery_returned","comp_recovery_waiting"),_copy))
+
+
+# ---------------------------------------------------------------- the forms a count needs
+# Only the forms that DIFFER from the general one in STRINGS: "one" wherever 1 takes a singular
+# noun (French also for 0), and Russian "few" for 2-4, 22-24... A string that reads right for
+# every count in a language has no entry for it. Every form keeps its general form's
+# placeholders. Read by tn() here, and shipped to the web UI beside the general forms as
+# "key|one" and "key|few" (hub/webui/snapshot.py strings_for).
+PLURALS = {
+    "en": {
+        "comp_placements_left": {"one": "{n} more placement match required for rank calibration"},
+        "rank_placements": {"one": "You must complete {n} placement match for your rank to properly calibrate."},
+        "comp_profile_sample": {"one": "From the last {n} match on record."},
+        "comp_record_played": {"one": "{n} match"},
+        "comp_record_wins": {"one": "{n} win"},
+    },
+    "de": {
+        "comp_placements_left": {"one": "Noch {n} Platzierungsspiel für die Rangkalibrierung"},
+        "rank_placements": {"one": "Du musst {n} Platzierungsmatch spielen, damit dein Rang richtig kalibriert wird."},
+        "comp_profile_sample": {"one": "Aus {n} gespeicherten Match."},
+        "comp_record_played": {"one": "{n} Match"},
+        "comp_record_wins": {"one": "{n} Sieg"},
+    },
+    "es": {
+        "comp_placements_left": {"one": "Falta {n} partida de colocación para calibrar tu rango"},
+        "rank_placements": {"one": "Debes completar {n} partida de colocación para que tu rango se calibre correctamente."},
+        "comp_profile_sample": {"one": "De {n} partida registrada."},
+        "comp_profile_unscored": {"one": "{n} jugada sin resultado informado."},
+        "comp_history_count": {"one": "{n} mostrada"},
+        "comp_record_played": {"one": "{n} partida"},
+        "comp_record_wins": {"one": "{n} victoria"},
+        "topbar_registered": {"one": "{n} registrado en Lights Out"},
+        "topbar_tournament": {"one": "{n} inscrito en el torneo"},
+    },
+    "fr": {
+        "comp_placements_left": {"one": "Encore {n} match de placement pour calibrer votre rang"},
+        "rank_placements": {"one": "Vous devez terminer {n} match de placement pour que votre rang se calibre correctement."},
+        "comp_profile_sample": {"one": "Sur {n} match enregistré."},
+        "comp_profile_unscored": {"one": "{n} joué sans score signalé."},
+        "comp_history_count": {"one": "{n} affiché"},
+        "comp_record_played": {"one": "{n} match"},
+        "comp_record_wins": {"one": "{n} victoire"},
+        "topbar_registered": {"one": "{n} inscrit sur Lights Out"},
+        "topbar_tournament": {"one": "{n} inscrit au tournoi"},
+    },
+    "pt": {
+        "comp_placements_left": {"one": "Falta {n} partida de colocação para calibrar o teu rank"},
+        "rank_placements": {"one": "Tens de completar {n} partida de colocação para que o teu rank calibre corretamente."},
+        "comp_profile_sample": {"one": "De {n} partida registrada."},
+        "comp_profile_unscored": {"one": "{n} jogada sem placar informado."},
+        "comp_history_count": {"one": "{n} exibida"},
+        "comp_record_played": {"one": "{n} partida"},
+        "comp_record_wins": {"one": "{n} vitória"},
+        "topbar_registered": {"one": "{n} registrado no Lights Out"},
+        "topbar_tournament": {"one": "{n} inscrito no torneio"},
+    },
+    "ru": {
+        "comp_placements_left": {"one": "Ещё {n} квалификационный матч для калибровки ранга",
+                                 "few": "Ещё {n} квалификационных матча для калибровки ранга"},
+        "rank_placements": {"one": "Нужно сыграть {n} калибровочный матч, чтобы ранг определился правильно.",
+                            "few": "Нужно сыграть {n} калибровочных матча, чтобы ранг определился правильно."},
+        "comp_profile_sample": {"one": "По {n} сохранённому матчу."},
+        "comp_record_played": {"one": "{n} матч", "few": "{n} матча"},
+        "comp_record_wins": {"one": "{n} победа", "few": "{n} победы"},
+        "topbar_registered": {"one": "{n} регистрация в Lights Out", "few": "{n} регистрации в Lights Out"},
+        "topbar_tournament": {"one": "{n} регистрация на турнир", "few": "{n} регистрации на турнир"},
+    },
+    "zh": {},
+}

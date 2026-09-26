@@ -43,7 +43,7 @@ from . import player_identity
 from . import paths
 from . import sounds as sounds_mod
 from . import state as state_mod
-from .i18n import t
+from .i18n import t, tn
 from .ranked_modes import name as ranked_name, strings as ranked_strings
 from . import catalogue as catalogue_mod
 from .version import HUB_VERSION
@@ -5287,8 +5287,8 @@ class CompetitivePanel:
         self.party_code_hidden = False   # the streamer toggle; Copy still works while hidden
         self._coin_canvas = None
         self._coin_job = None
-        self._ban_label = None       # the queue-ban countdown, ticked in place
-        self._ban_job = None
+        self._ban_labels = []        # (label, string key): every queue-ban countdown on screen
+        self._ban_job = None         # the one clock that moves them (see _ban_clock)
         self._last_phase_seen = None  # so the match-found cue fires on the EDGE, not every redraw
         # The sub-tabs (Sam, 2026-09-14: Match History has to be readable WHILE queued or
         # mid-veto "without disturbing anything"). So the view is a PANEL flag, never a session
@@ -5860,7 +5860,7 @@ class CompetitivePanel:
         """
         if me.get("placing"):
             left = me.get("placements_left")
-            return t("comp_placements_left", n=left) if left else t("comp_placements")
+            return tn("comp_placements_left", left) if left else t("comp_placements")
         name = me.get("rank_name")
         if not name:
             # No ladder from the server yet. Say nothing rather than a number from the old scale.
@@ -5950,7 +5950,10 @@ class CompetitivePanel:
         played = s.me.get("matches") or 0
         wins = s.me.get("wins") or 0
         sub = self._rank_text(s.me)
-        tk.Label(who, text=f"{sub}   ·   " + t("comp_record", played=played, wins=wins),
+        # Two counts, so two fragments: each noun agrees with its own number.
+        record = t("comp_record", played=tn("comp_record_played", played),
+                   wins=tn("comp_record_wins", wins))
+        tk.Label(who, text=f"{sub}   ·   " + record,
                  bg=WHITE, fg=GREY, anchor="w", font=self.f_small).pack(anchor="w")
 
         right = tk.Frame(self.header, bg=WHITE)
@@ -6186,40 +6189,51 @@ class CompetitivePanel:
         if reason:
             tk.Label(inner, text=reason, bg=PANEL, fg=GREY, anchor="w",
                      wraplength=520, justify="left").pack(anchor="w", pady=(2, 0))
-        self._ban_label = tk.Label(inner, text=t("comp_banned_left", time=format_clock(seconds)),
-                                   bg=PANEL, fg=BLACK, font=self.f_sub, anchor="w")
-        self._ban_label.pack(anchor="w", pady=(6, 0))
-        self._arm_ban_tick()
+        self._ban_clock(tk.Label(inner, text=t("comp_banned_left", time=format_clock(seconds)),
+                                 bg=PANEL, fg=BLACK, font=self.f_sub, anchor="w"),
+                        "comp_banned_left").pack(anchor="w", pady=(6, 0))
 
-    def _arm_ban_tick(self):
-        """Exactly one tick in flight. Redrawing the idle screen calls _draw_ban_card again,
-        and without this each redraw would leave another loop running on the same label."""
-        if self._ban_job is not None:
-            try:
-                self.root.after_cancel(self._ban_job)
-            except Exception:           # noqa: BLE001
-                pass
-        self._ban_job = self.after(1000, self._tick_ban_label)
+    def _ban_clock(self, label, key):
+        """Keep `label` printing the queue ban's time left through string `key`; returns it.
 
-    def _tick_ban_label(self):
+        A ban is the one countdown with no session tick of its own: the queue, accept and connect
+        clocks each call _changed() once a second, and nothing does for a ban. So the panel keeps
+        ONE clock for every label that shows it (the idle card, the strip over Match History and
+        the profile, the profile's Conduct card) and moves them in place. Nothing is rebuilt: the
+        idle screen carries a text entry for party codes, and the profile a scroll position.
+
+        Safe to call on every redraw. The strip is rebuilt on each on_change, which can come many
+        times a second, so this never restarts a running clock (that would postpone its tick for
+        as long as the redraws kept coming); it only starts one when none is running."""
+        self._ban_labels = [pair for pair in self._ban_labels
+                            if pair[0] is not label and self._shown(pair[0])] + [(label, key)]
+        if self._ban_job is None:
+            self._ban_job = self.after(1000, self._tick_ban_clock)
+        return label
+
+    def _tick_ban_clock(self):
         self._ban_job = None
-        label = self._ban_label
-        if label is None:
-            return
-        try:
-            if not label.winfo_exists():
-                self._ban_label = None
-                return
-        except Exception:               # noqa: BLE001 - the panel went away
-            self._ban_label = None
-            return
+        self._ban_labels = [pair for pair in self._ban_labels if self._shown(pair[0])]
+        if not self._ban_labels:
+            return                      # nothing on screen shows the ban any more
         left = self.session.banned_left()
         if left <= 0:
-            self._ban_label = None
-            self.session._changed()     # the ban is served: redraw and re-enable the button
+            self._ban_labels = []
+            self.session._changed()     # served: redraw without it, and Find match comes back
             return
-        label.configure(text=t("comp_banned_left", time=format_clock(left)))
-        self._arm_ban_tick()
+        for label, key in self._ban_labels:
+            try:
+                label.configure(text=t(key, time=format_clock(left)))
+            except Exception:           # noqa: BLE001 - torn down between the check and here
+                pass
+        self._ban_job = self.after(1000, self._tick_ban_clock)
+
+    @staticmethod
+    def _shown(widget):
+        try:
+            return bool(widget.winfo_exists())
+        except Exception:               # noqa: BLE001 - the panel went away
+            return False
 
     # ------------------------------------------------- party
     def _draw_party_card(self, parent):
@@ -6953,8 +6967,10 @@ class CompetitivePanel:
     def _history_alert(self):
         """What the match going on behind this view needs to say, or None.
 
-        (text, colour, urgent). "found" is absent on purpose: that phase never gets here,
-        because _phase_changed has already taken the player back to Play."""
+        (text, colour, urgent), plus the string key when the text is the ban's countdown, which
+        is the one clock here with no session tick to redraw it (see _ban_clock). "found" is
+        absent on purpose: that phase never gets here, because _phase_changed has already taken
+        the player back to Play."""
         s = self.session
         phase = s.phase
         # Anything the player is OWED comes first, whatever phase it happened in. These lines
@@ -6967,7 +6983,7 @@ class CompetitivePanel:
             return (s.error, RED, True)
         banned = s.banned_left()
         if banned:
-            return (t("comp_banned_left", time=format_clock(banned)), RED, True)
+            return (t("comp_banned_left", time=format_clock(banned)), RED, True, "comp_banned_left")
         if phase in ("queued", "checking"):
             return (t("comp_history_alert_queued", time=format_clock(s.queue_seconds)), ACCENT, False)
         if phase == "lobby":
@@ -7000,13 +7016,15 @@ class CompetitivePanel:
         alert = self._history_alert()
         if alert is None:
             return
-        text, colour, urgent = alert
+        text, colour, urgent, *clock = alert
         bar = tk.Frame(holder, bg=PANEL, highlightbackground=colour,
                        highlightthickness=1, bd=0)
         bar.pack(fill="x", pady=(0, 10))
-        tk.Label(bar, text=text, bg=PANEL, fg=colour,
-                 font=self.f_head if urgent else None, anchor="w").pack(
-                     side="left", padx=10, pady=6)
+        line = tk.Label(bar, text=text, bg=PANEL, fg=colour,
+                        font=self.f_head if urgent else None, anchor="w")
+        line.pack(side="left", padx=10, pady=6)
+        if clock:
+            self._ban_clock(line, clock[0])
         self._button(bar, t("comp_history_back_to_play"),
                      lambda: self._show_view("play"),
                      primary=urgent, bg=PANEL).pack(side="right", padx=8, pady=5)
@@ -7081,7 +7099,7 @@ class CompetitivePanel:
         self._button(head, t("comp_history_refresh"),
                      lambda: s.load_history(force=True)).pack(side="right")
         if rows:
-            tk.Label(head, text=t("comp_history_count", n=len(rows)), bg=WHITE, fg=GREY,
+            tk.Label(head, text=tn("comp_history_count", len(rows)), bg=WHITE, fg=GREY,
                      font=self.f_small).pack(side="right", padx=(0, 10))
 
         if s.history_error:
@@ -7325,11 +7343,17 @@ class CompetitivePanel:
         """What the profile is showing, boiled down. Redraw only when this changes.
 
         Same bargain as the history list: on_change runs once a second while queued, and this
-        page has a scroll position worth keeping."""
+        page has a scroll position worth keeping.
+
+        THE RANK GOES IN AS DRAWN: the badge's inputs, and the very line _rank_text prints. It
+        used to be a list of fields, and the list went stale - it said level/elo/bdr while the
+        head moved on to rank_name, division and rr (2e9ad13). publicProgress moves `level`
+        only with the division and sends `bdr` as null below the counting band, so an RR change
+        or a placement ticking down left the open profile showing the old figure."""
         s = self.session
         me = s.me or {}
         return (me.get("steam_id"), me.get("name"), me.get("avatar"), me.get("level"),
-                me.get("elo"), me.get("bdr"),
+                me.get("rank"), me.get("division"), bool(me.get("placing")), self._rank_text(me),
                 s.history is None, bool(s.history_loading), s.history_error,
                 len(s.history or []), getattr(s, "history_seq", 0),
                 int(getattr(s, "penalty_count", 0) or 0), bool(s.banned_left()))
@@ -7405,7 +7429,7 @@ class CompetitivePanel:
 
     def _draw_profile_stats(self, parent, stats):
         """Everything counted out of the real record."""
-        tk.Label(parent, text=t("comp_profile_sample", n=stats["recorded"]), bg=WHITE, fg=GREY,
+        tk.Label(parent, text=tn("comp_profile_sample", stats["recorded"]), bg=WHITE, fg=GREY,
                  font=self.f_small, anchor="w").pack(anchor="w", pady=(0, 8))
 
         tiles = tk.Frame(parent, bg=WHITE)
@@ -7436,7 +7460,7 @@ class CompetitivePanel:
             tk.Label(line, text="   " + t("comp_profile_winrate", n=stats["win_rate"]),
                      bg=PANEL, fg=BLACK, font=self.f_head).pack(side="left")
         if stats["undecided"]:
-            tk.Label(card, text=t("comp_profile_unscored", n=stats["undecided"]), bg=PANEL,
+            tk.Label(card, text=tn("comp_profile_unscored", stats["undecided"]), bg=PANEL,
                      fg=AMBER, font=self.f_small, anchor="w", wraplength=680,
                      justify="left").pack(fill="x", padx=10, pady=(2, 0))
         tk.Frame(card, bg=PANEL, height=8).pack()
@@ -7500,8 +7524,11 @@ class CompetitivePanel:
 
         banned = self.session.banned_left()
         if banned:
-            tk.Label(card, text=t("comp_profile_banned", time=format_clock(banned)), bg=PANEL,
-                     fg=RED, font=self.f_head, anchor="w").pack(fill="x", padx=10, pady=(0, 4))
+            # Moved each second by the ban clock: bool(banned) is all the fingerprint holds, so the
+            # page is not redrawn (and its scroll lost) once a second for as long as a ban runs.
+            self._ban_clock(tk.Label(card, text=t("comp_profile_banned", time=format_clock(banned)),
+                                     bg=PANEL, fg=RED, font=self.f_head, anchor="w"),
+                            "comp_profile_banned").pack(fill="x", padx=10, pady=(0, 4))
         if not stats["at_fault"] and not stats["elo_lost"] and not banned:
             tk.Label(card, text=t("comp_profile_conduct_clean"), bg=PANEL, fg=GREEN,
                      anchor="w").pack(fill="x", padx=10)

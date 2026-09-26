@@ -120,6 +120,11 @@ def strings_for(lang: str) -> dict:
     sync (plan: i18n)."""
     merged = dict(i18n.STRINGS.get(i18n.DEFAULT, {}))
     merged.update(i18n.STRINGS.get(lang, {}))
+    # A count's other forms, as "key|one" and "key|few", for HubUI.tn. This language's only and
+    # never English-filled: a form it does not have falls back to its own general form.
+    for key, forms in (i18n.PLURALS.get(lang) or {}).items():
+        for form, text in forms.items():
+            merged[key + "|" + form] = text
     return merged
 
 

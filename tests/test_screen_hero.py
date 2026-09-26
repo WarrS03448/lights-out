@@ -92,6 +92,8 @@ def test_the_placement_line_counts_down_to_calibration():
     line = i18n.STRINGS["en"]["comp_placements_left"]
     assert line == "{n} more placement matches required for rank calibration", line
     assert line.format(n=3) == "3 more placement matches required for rank calibration"
+    # ...and the last one is one MATCH: the hero asks for the count's form (tests/test_i18n_plurals.py)
+    assert i18n.trn("en", "comp_placements_left", 1) == "1 more placement match required for rank calibration"
     # every language keeps the number, or the hero raises KeyError in that language alone
     for code in i18n.CODES:
         assert "{n}" in i18n.STRINGS[code]["comp_placements_left"], code
@@ -179,7 +181,7 @@ def main():
         test_the_rank_comes_after_the_name_and_before_the_action,
         test_the_rank_block_is_the_big_thing_on_the_panel,
         test_no_stats_on_this_page,
-        test_the_placement_line_is_a_count_and_nothing_else,
+        test_the_placement_line_counts_down_to_calibration,
         test_the_placement_line_is_drawn_as_its_own_headline,
         test_the_version_line_sits_under_find_match,
         test_the_gap_above_the_hero_is_gone,

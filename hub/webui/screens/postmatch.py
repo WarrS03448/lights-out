@@ -282,6 +282,12 @@ def strings_for(lang: str) -> dict:
     base = i18n.STRINGS.get(i18n.DEFAULT) or {}
     for key, source in _SHARED.items():
         merged[key] = shared.get(source) or base.get(source) or merged[key]
+    # ...and a shared line's count forms with it ("placements_left|one"), so the card's reader
+    # agrees the noun with the count exactly as HubUI.tn does. See hub/i18n.py PLURALS.
+    forms = i18n.PLURALS.get(lang) or {}
+    for key, source in _SHARED.items():
+        for form, text in (forms.get(source) or {}).items():
+            merged[key + "|" + form] = text
     return merged
 
 

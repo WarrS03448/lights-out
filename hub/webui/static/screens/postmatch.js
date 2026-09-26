@@ -53,6 +53,12 @@
       return s;
     }
 
+    // ps() for a line that counts something: the noun's form for THIS count (see HubUI.tn).
+    function psn(key, n) {
+      var s = ui.plural(strings, key, n);
+      return (n === undefined || n === null) ? s : s.replace(/\{n\}/g, String(n));
+    }
+
     var children = [];
     var headline = headlineNode();
     if (headline) { children.push(headline); }
@@ -153,7 +159,7 @@
     function rrNode() {
       if (card.voided) { return null; }              // a voided match moved nobody
       // Placements pay no RR, so say how many are left, or where this one landed the player.
-      if (card.placing) { return el("div", "pm-rr flat", ps("placements_left", { n: card.placements_left })); }
+      if (card.placing) { return el("div", "pm-rr flat", psn("placements_left", card.placements_left)); }
       if (card.placed && card.placed_rank) { return el("div", "pm-rr flat", ps("placed", { rank: card.placed_rank })); }
       // THE RR THE MATCH MOVED. Not `delta`: that is an arrow count, 1 to 3, and printing it with
       // "RR" after it is what read as "only gaining and losing 1-3 RR" (2026-09-16). No figure

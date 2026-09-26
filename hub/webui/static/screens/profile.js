@@ -45,7 +45,7 @@
   function render(root, state, ctx) {
     var liveRoot=arguments[3],a=state.auth||{};
     root._rankedScope=JSON.stringify([a.signed_in,a.player_id||a.steam_id,state.lang]);
-    var ui = ctx.ui, call = ctx.call, t = ctx.t, esc = ui.esc, el = ui.el;
+    var ui = ctx.ui, call = ctx.call, t = ctx.t, tn = ui.tn, esc = ui.esc, el = ui.el;
     var auth = state.auth || {};
     var prof = state.profile || {};
     // The ladder the server sent with `hello`: the names in their real order, which is what the
@@ -139,7 +139,7 @@
       standing.appendChild(el("div", "profile-ranks-current-name", rankName(currentRank)));
       if (auth.placing) {
         standing.appendChild(el("div", "profile-ranks-status", auth.placements_left !== null && auth.placements_left !== undefined
-          ? t("comp_placements_left", { n: auth.placements_left }) : t("comp_placements")));
+          ? tn("comp_placements_left", auth.placements_left) : t("comp_placements")));
       } else if (currentRank && currentRank.rr !== null && currentRank.rr !== undefined) {
         standing.appendChild(el("div", "profile-ranks-status", currentRank.rr + " RR"));
       }

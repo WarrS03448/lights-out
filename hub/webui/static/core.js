@@ -194,6 +194,7 @@
   function render() {
     if (!state) { return; }
     HubUI.setStrings(state.strings);
+    HubUI.setLanguage(state.lang);
     if (HubUI.clickSound) {
       HubUI.clickSound.configure((state.settings || {}).click_sound);
       HubUI.clickSound.syncMapBans(state.comp);
@@ -319,7 +320,7 @@
   }
 
   // ---------------------------------------------------------------- shared chrome
-  var t = HubUI.t, esc = HubUI.esc;
+  var t = HubUI.t, tn = HubUI.tn, esc = HubUI.esc;
 
   function renderNav() {
     // Nav lives in the core so it survives i18n/state and is consistent across screens. Items map
@@ -352,8 +353,8 @@
     var st = state.status || {};
     var ok = st.connected;
     statusEl.className = "status-dot " + (ok ? "ok" : "bad");
-    registeredEl.textContent = ok ? t("topbar_registered", { n: st.players_registered == null ? "-" : st.players_registered }) : t("topbar_offline");
-    tournamentEl.textContent = ok ? t("topbar_tournament", { n: st.tournament_registered == null ? "-" : st.tournament_registered }) : "";
+    registeredEl.textContent = ok ? tn("topbar_registered", st.players_registered == null ? "-" : st.players_registered) : t("topbar_offline");
+    tournamentEl.textContent = ok ? tn("topbar_tournament", st.tournament_registered == null ? "-" : st.tournament_registered) : "";
   }
 
   // ---------------------------------------------------------------- app self-update strip

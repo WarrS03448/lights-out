@@ -238,7 +238,7 @@
     var liveRoot=arguments[3];
     root._refreshKey=refreshKey(state);
     var restoreScroll = [];
-    var ui = ctx.ui, call = ctx.call, t = ctx.t;
+    var ui = ctx.ui, call = ctx.call, t = ctx.t, tn = ui.tn;
     var esc = ui.esc, initials = ui.initials, clock = ui.clock, el = ui.el;
 
     // btn() with the pre-modular tag rule: the four solid/ghost action buttons are real <button>s;
@@ -592,7 +592,7 @@
       // thing a player is never told. rank_hidden is gone from hub/i18n.py, not just from here.
       var rest = el("div", "rank-block");
       rest.appendChild(el("div", "rank-h", t("rank_hidden_title")));
-      rest.appendChild(el("div", "rank-note", t("rank_placements", { n: ladder.placement_matches })));
+      rest.appendChild(el("div", "rank-note", tn("rank_placements", ladder.placement_matches)));
       rest.appendChild(el("div", "rank-note", t("rank_penalty")));
 
       var foot = el("div", "rank-foot");
@@ -768,7 +768,7 @@
         // line is only for the moment before the server's count has landed.
         var left = auth.placements_left;
         if (left !== null && left !== undefined && left > 0) {
-          text.appendChild(el("div", "hero-placements", t("comp_placements_left", { n: left })));
+          text.appendChild(el("div", "hero-placements", tn("comp_placements_left", left)));
         } else {
           text.appendChild(el("div", "hero-placements", t("comp_placements")));
         }
@@ -1298,7 +1298,7 @@
         box.appendChild(el("div", "result-score", score[0] + " : " + score[1]));
         // The RR the match moved - not `delta`, which is an arrow count and read as "+2 RR" here.
         if (r.placing) {
-          box.appendChild(el("div", "result-delta", t("comp_placements_left", { n: r.placements_left })));
+          box.appendChild(el("div", "result-delta", tn("comp_placements_left", r.placements_left)));
         } else if (r.rr_delta) {
           var d = r.rr_delta;
           box.appendChild(el("div", "result-delta " + (d > 0 ? "up" : "down"),

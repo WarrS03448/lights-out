@@ -252,10 +252,11 @@ def test_a_dropped_stream_empties_the_two_counts():
     assert 't("topbar_offline")' in fn, "the dot no longer says the connection is gone"
     assert 't("comp_live_lost")' not in fn, \
         "the long sentence is back in the bar, and it does not fit (see FIT_W below)"
+    # tn(), not t(): the total is a count, and its noun agrees with it (tests/test_i18n_plurals.py)
     for var in ("tournamentEl",):
-        assert re.search(re.escape(var) + r'\.textContent = ok \? t\(', fn), \
+        assert re.search(re.escape(var) + r'\.textContent = ok \? tn?\(', fn), \
             "%s is not gated on the connection: a stale count would stay on screen" % var
-        assert re.search(re.escape(var) + r'\.textContent = ok \? t\([^;]*: "";', fn), \
+        assert re.search(re.escape(var) + r'\.textContent = ok \? tn?\([^;]*: "";', fn), \
             "%s is not emptied when the connection is gone" % var
 
 

@@ -63,8 +63,11 @@ const server = http.createServer((req,res) => {
     assert.equal(await page.locator('#stattournament').textContent(),'1234 registered for tournament');
     for(const [lang,snapshot] of Object.entries(snapshots)) {
       await render(snapshot);
-      assert.equal(await page.locator('#statregistered').textContent(),snapshot.strings.topbar_registered.replace('{n}','1234567'));
-      assert.equal(await page.locator('#stattournament').textContent(),snapshot.strings.topbar_tournament.replace('{n}','1234'));
+      // 1234 ends in 4, which Russian counts with its "few" form (hub/i18n.py PLURALS); every
+      // other language, and 1234567 everywhere, takes the general form.
+      const counted=(key,n,form)=>(snapshot.strings[key+'|'+form]||snapshot.strings[key]).replace('{n}',n);
+      assert.equal(await page.locator('#statregistered').textContent(),counted('topbar_registered','1234567','other'));
+      assert.equal(await page.locator('#stattournament').textContent(),counted('topbar_tournament','1234',lang==='ru'?'few':'other'));
       for(const [width,height] of [[1600,850],[1401,760],[1400,760],[1200,760],[1135,760],[893,560],[815,560],[805,560],[800,560]]) {
         await page.setViewportSize({width,height});
         await page.evaluate(async()=>{await document.fonts.ready;await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);});
@@ -106,8 +109,9 @@ const server = http.createServer((req,res) => {
       const next=structuredClone(snapshots.en);
       next.status.players_registered=registered;next.status.tournament_registered=tournament;
       await render(next);
-      assert.equal(await page.locator('#statregistered').textContent(),`${registered ?? '—'} registered in Lights Out`);
-      assert.equal(await page.locator('#stattournament').textContent(),`${tournament ?? '—'} registered for tournament`);
+      // A plain dash since 123d54d took em dashes out of the hub's text.
+      assert.equal(await page.locator('#statregistered').textContent(),`${registered ?? '-'} registered in Lights Out`);
+      assert.equal(await page.locator('#stattournament').textContent(),`${tournament ?? '-'} registered for tournament`);
     }
     const disconnected=structuredClone(snapshots.en);disconnected.status.connected=false;
     await render(disconnected);

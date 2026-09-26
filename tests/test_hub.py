@@ -1380,6 +1380,7 @@ def test_update_strip_does_not_block_the_hub():
         "from tkinter import messagebox\n"
         "from hub.app import HubApp\n"
         "from hub import i18n, state as state_mod, update as upd\n"
+        "from hub.version import HUB_VERSION\n"
         "HubApp.tray_available = staticmethod(lambda: False)\n"
         f"upd.candidate_dirs = lambda: [{dest_dir!r}]\n"
         "launched = []\n"
@@ -1399,7 +1400,9 @@ def test_update_strip_does_not_block_the_hub():
         "slaves = root.pack_slaves()\n"
         "assert slaves[0] is app.update_bar and slaves[1] is app.outer, slaves\n"
         "assert app._banner_grown > 0, 'the window must grow by the strip instead of eating content'\n"
-        "assert '9.9.9' in app.upd_bar_label['text'] and '1' in app.upd_bar_label['text']\n"
+        # it names the new version AND the one running now (the old check looked for a '1',
+        # which only ever meant "1.x" and stopped matching at 2.0.0)
+        "assert '9.9.9' in app.upd_bar_label['text'] and HUB_VERSION in app.upd_bar_label['text'], app.upd_bar_label['text']\n"
         "assert app.btn_update_bar['text'] == 'Update', app.btn_update_bar['text']\n"
         # the tab is remembered, which is what brings a reopened hub back to a running match
         "app._show_tab('competitive'); root.update()\n"
@@ -2336,6 +2339,112 @@ def test_render_signature_ignores_live_counters():
     # a real change of screen must
     s.phase = "found"
     assert panel._render_signature() != base, "a phase change must rebuild the panel"
+
+
+def test_an_open_profile_redraws_when_the_rating_moves():
+    """The Tk profile redraws only when _profile_fingerprint changes, so the fingerprint has to
+    cover the rank the profile draws. It covered level/elo/bdr, while the head has printed
+    rank_name, division and rr since 2e9ad13. publicProgress sends a level that only moves
+    with the division and a bdr that is null below the counting band, so an open profile kept
+    the RR (and the placement count) it was opened with until it was closed and reopened.
+
+    Driven through the real `rating` event, in the shape server/progress.cjs sends."""
+    from hub import competitive as C
+    from hub import i18n
+    i18n.set_language("en")
+    s, _panel = _live_session()
+    panel = C.CompetitivePanel.__new__(C.CompetitivePanel)   # no Tk, no _build
+    panel.session = s
+    s.history = []
+
+    def rating(**over):
+        event = {"type": "rating", "level": 14, "rank": 5, "rank_name": "Operator",
+                 "division": 2, "rr": 45, "bdr": None, "counting": False, "top": False,
+                 "top_eligible": False, "placing": False, "placements_left": 0}
+        event.update(over)
+        s.on_live_event(event)
+        return panel._profile_fingerprint()
+
+    base = rating()
+    assert panel._rank_text(s.me) == "Operator II   ·   45 RR", panel._rank_text(s.me)
+    assert rating() == base, "the same rating again must not redraw"
+    assert rating(rr=62) != base, "RR moving inside a division must redraw an open profile"
+
+    placing = {"level": None, "rank": None, "rank_name": "", "division": None, "rr": None,
+               "placing": True}
+    two_left = rating(placements_left=2, **placing)
+    assert rating(placements_left=1, **placing) != two_left, "the placement count must redraw"
+
+    # The bargain the fingerprint exists for still holds: the once-a-second traffic of a
+    # queue or a stats broadcast does not redraw the page and lose the player's scroll.
+    settled = panel._profile_fingerprint()
+    s.on_live_event({"type": "stats", "online": 42, "queued": 3})
+    s.queue_seconds += 1
+    assert panel._profile_fingerprint() == settled, "stats and the queue clock must not redraw"
+
+
+def test_one_ban_clock_moves_every_ban_countdown():
+    """A queue ban is the one countdown with no session tick: the queue, accept and connect
+    clocks each call _changed() once a second, and nothing does for a ban. So the strip over
+    Match History and the profile, and the profile's Conduct card, sat on the time they were
+    drawn with (measured: "5:00 left" for 3.5 s, no on_change at all). Only the idle card had
+    a clock, and a live session in this window never draws that card.
+
+    One panel clock now moves every label that shows the ban, in place, and redraws once when
+    the ban is served. Stand-in labels and a recorded `after`, so no display is needed."""
+    from hub import competitive as C
+    from hub import i18n
+    i18n.set_language("en")
+    s, _panel = _live_session()
+    panel = C.CompetitivePanel.__new__(C.CompetitivePanel)   # no Tk, no _build
+    panel.session = s
+    panel._ban_labels = []
+    panel._ban_job = None
+    jobs = []
+    panel.after = lambda ms, fn: (jobs.append(fn), len(jobs))[1]
+    left = {"s": 300}
+    s.banned_left = lambda: left["s"]
+    redraws = []
+    s._changed = lambda: redraws.append(True)
+
+    class Label:
+        def __init__(self):
+            self.text, self.alive = "", True
+        def winfo_exists(self):
+            return self.alive
+        def configure(self, text=None, **_kw):
+            self.text = text
+
+    card, strip, conduct = Label(), Label(), Label()
+    assert panel._ban_clock(card, "comp_banned_left") is card, "it hands the label back to pack"
+    for _ in range(5):                  # the strip is rebuilt, and re-registered, every on_change
+        panel._ban_clock(strip, "comp_banned_left")
+    panel._ban_clock(conduct, "comp_profile_banned")
+    assert len(jobs) == 1, "one clock however often a redraw registers a label"
+    assert len(panel._ban_labels) == 3, panel._ban_labels
+
+    left["s"] = 241
+    jobs.pop()()
+    assert card.text == strip.text == i18n.t("comp_banned_left", time="4:01"), (card.text, strip.text)
+    assert conduct.text == i18n.t("comp_profile_banned", time="4:01"), conduct.text
+    assert len(jobs) == 1 and not redraws, "it ticks on, in place"
+
+    strip.alive = False                 # the strip was rebuilt: the old label is gone
+    left["s"] = 240
+    jobs.pop()()
+    assert strip.text.endswith("4:01 left") and card.text.endswith("4:00 left"), (strip.text, card.text)
+    assert [lab for lab, _key in panel._ban_labels] == [card, conduct]
+
+    left["s"] = 0                        # served: ONE redraw brings Find match back, and it stops
+    jobs.pop()()
+    assert redraws == [True] and not jobs and panel._ban_labels == []
+
+    # nothing on screen shows it any more: the clock stops, and redraws nothing
+    panel._ban_clock(conduct, "comp_profile_banned")
+    conduct.alive = False
+    left["s"] = 100
+    jobs.pop()()
+    assert not jobs and redraws == [True]
 
 
 def test_avatar_download_forces_a_full_rebuild():
@@ -4592,6 +4701,14 @@ assert p.view == 'history', 'the pre-game selection must not lock the player out
 assert s.phase == 'lobby', 'reading history during the lobby disturbed it'
 s.pick_coin('heads'); root.update(); s._coin_lands(); root.update()
 s.toss_winner = 1; s.stage = 'choice'; s.choose('ban'); root.update()
+# Taking the last ban hands the side pick to the other team, and it comes before any ban
+# (793fd3a). While THEY choose, nothing is owed by this player, so the strip only says the
+# lobby is running.
+assert s.stage == 'side' and s.side_picker == 2, (s.stage, s.side_picker)
+assert p.view == 'history' and s.phase == 'lobby', 'the side pick disturbed history'
+assert any('pre-game selection' in x for x in texts_of(p._hist_alert)), texts_of(p._hist_alert)
+s.choose_side('attack', by=2); root.update()
+assert s.sides == {2: 'attack', 1: 'defend'}, s.sides
 assert s.stage == 'veto' and s.ban_turn == 1 and s.i_am_captain()
 assert any('your turn to ban' in x for x in texts_of(p._hist_alert)), texts_of(p._hist_alert)
 guard = 0
@@ -4604,12 +4721,14 @@ s.phase = 'idle'; s.reset_match()
 p._show_view('history'); root.update()
 body = texts_of(p._hist_content)
 assert any('No show' == x for x in body), body
-assert any('-25 Elo' == x for x in body), body
+assert any('-25 RR' == x for x in body), body     # a penalty is priced in RR since 927b656
 assert any('Played' == x for x in body), body
 assert any('Rome' == x for x in body), body
 assert any('Team 1' in x for x in body), body
 assert any('no score' == x for x in body), body
-assert any('Scores and Elo are not recorded yet' in x for x in body), 'the pending note'
+# not one of these rows settled, so the note saying what they are missing is up (it names a
+# missing RESULT since 59b3d76, not a scoreboard the gamemode cannot send)
+assert i18n.t('comp_history_pending_note') in body, 'the pending note'
 
 # the detail pop-up opens even when the record has gone
 win = p._show_match_detail('m1', s.history[1]); root.update()
@@ -4631,13 +4750,21 @@ def test_competitive_tab_under_xvfb():
     if not shutil.which("xvfb-run"):
         print("      (skipped: no xvfb-run)")
         return
+    import socket
     code = COMPETITIVE_UI_CODE
     cat_path = os.path.join(tmpdir(), "cat.json")
     with open(cat_path, "w", encoding="utf-8") as f:
         json.dump(sample_catalogue(), f)
+    # Nothing listens on this port. The flow signs a LiveSession in with a made-up token and
+    # expects it to be OFFLINE, which it only was by luck: with no HUB_API_BASE it streamed
+    # from the production service instead.
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        dead_port = sock.getsockname()[1]
     env = {**os.environ, "HUB_STATE_DIR": tmpdir("hub-comp-state-"),
            "HUB_GAME_DIR": fake_game_dir("comp-game"),
-           "HUB_CATALOGUE_URL": file_url(cat_path)}
+           "HUB_CATALOGUE_URL": file_url(cat_path),
+           "HUB_API_BASE": "http://127.0.0.1:%d" % dead_port}
     r = subprocess.run(["xvfb-run", "-a", sys.executable, "-c", code],
                        cwd=str(REPO), capture_output=True, text=True, timeout=120, env=env)
     assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
@@ -4704,6 +4831,29 @@ s._sign_in_done({'steam_id': '76561198000999000', 'persona': 'Sam', 'token': 'to
 root.update()
 assert s.phase == 'idle' and s.me['name'] == 'Sam'
 
+# THIS WINDOW IS THE CLASSIC FALLBACK, and since 2.3.85 it takes nobody into ranked: the queue
+# needs relay measurements that only the main interface takes. So a signed-in player is told
+# what to do instead, and is offered neither Find match nor a party (a party only exists to
+# queue). A reachable service would not change this screen.
+assert type(s).__name__ == 'LiveSession', type(s).__name__
+idle = texts_of(p.body)
+assert i18n.t('comp_browser_required') in idle, idle
+assert not any(x in ('Find match', 'Create a party', 'Join with a code') for x in idle), idle
+# ...and Find match pressed anyway SAYS so rather than pretend to queue. It never claims to be
+# queued when the server has not said so.
+s.find_match(); root.update()
+for _ in range(3): s._check_next()
+root.update()
+assert s.phase == 'idle' and s.error == i18n.t('comp_browser_required'), (s.phase, s.error)
+
+# Everything else is the preview, walked with MockSession: the lobby onwards, because a match
+# that is already running keeps its controls in this window, and the party card, which only a
+# session that is not live still draws.
+p.session = s = C.MockSession(p)
+s.adopt_account({'steam_id': '76561198000999000', 'persona': 'Sam', 'token': 'tok-123'})
+s.phase = 'idle'
+p.refresh(); root.update()
+
 # the party card: solo -> create -> the code is on screen -> join dialog -> leave
 assert any('Create a party' in x for x in texts_of(p.body))
 s.create_party(); root.update()
@@ -4747,22 +4897,6 @@ assert any('to start the search' in x for x in texts_of(p.body)), texts_of(p.bod
 assert not any('Find match' == x for x in texts_of(p.body))
 s.leave_party(); root.update()
 
-# The panel now uses LiveSession. Offline, pressing Find match must SAY so rather than
-# pretend to queue - the preview used to invent a match here.
-assert type(s).__name__ == 'LiveSession', type(s).__name__
-s.find_match(); root.update()
-for _ in range(3): s._check_next()
-root.update()
-# Offline it retries before giving up. The invariant that matters is that it never
-# claims to be queued when the server has not said so.
-assert s.phase in ('checking', 'idle'), s.phase
-
-# Everything from the lobby onwards is still the preview, so walk that with MockSession.
-p.session = s = C.MockSession(p)
-s.adopt_account({'steam_id': '76561198000999000', 'persona': 'Sam', 'token': 'tok-123'})
-s.phase = 'idle'
-p.refresh(); root.update()
-
 s.find_match(); root.update()
 for _ in range(3): s._check_next()
 root.update(); assert s.phase == 'queued'
@@ -4801,12 +4935,24 @@ assert any('Coin flip' in x for x in texts_of(p.body))
 s.pick_coin('heads'); root.update(); s._coin_lands(); root.update()
 s.toss_winner = 1; s.stage = 'choice'; s.choose('ban'); root.update()
 assert s.ban_turn == 1 and s.first_ban == 1
+# Taking the last ban hands the side pick to the other team, and it comes before any ban
+# (793fd3a). Their captain is choosing, so this one is shown a wait, not the two buttons.
+assert s.stage == 'side' and s.side_picker == 2, (s.stage, s.side_picker)
+lobby = texts_of(p.body)
+assert i18n.t('comp_side_title') in lobby and any('is choosing a side' in x for x in lobby), lobby
+assert not any(x in (i18n.t('comp_side_attack'), i18n.t('comp_side_defend')) for x in lobby), lobby
+s.choose_side('attack', by=2); root.update()
+assert s.stage == 'veto' and s.sides == {2: 'attack', 1: 'defend'}, (s.stage, s.sides)
 guard = 0
 while s.stage == 'veto' and guard < 20:
     s.ban(s.remaining_maps()[0], by=s.ban_turn); root.update(); guard += 1
-assert s.stage == 'ready' and s.map and s.map != 'Paintball' 
+assert s.stage == 'ready' and s.map and s.map != 'Paintball'
 s._go_live(); root.update()
-assert s.phase == 'live' and any('Join the match' in x for x in texts_of(p.body))
+# The live screen says how the player gets in: the game joins the host by itself. 0f18a75
+# removed the "Join the match" button, which did nothing when pressed.
+live = texts_of(p.body)
+assert s.phase == 'live' and i18n.t('comp_join_hint', name=s.host['name']) in live, live
+assert i18n.t('comp_join') not in live, 'a Join button that does nothing is back'
 s.start_vote(); root.update()
 assert any('Vote to void the match' in x for x in texts_of(p.body))
 s.cast_vote(False); root.update()
@@ -4814,9 +4960,10 @@ s.finish(); root.update()
 assert s.phase == 'result'
 s.leave_result(); root.update()
 
-# the integrity note opens and says what is read
+# the integrity note opens and says what is checked. 2.3.85 rewrote it to name the checks
+# matchmaking really makes; the old one promised a file hash and a ~mods scan.
 win = p._show_integrity_note(); root.update()
-assert win.winfo_exists() and any('~mods' in x for x in texts_of(win))
+assert win.winfo_exists() and i18n.t('comp_check_what_body') in texts_of(win), texts_of(win)
 win.destroy(); root.update()
 
 # the match-found volume slider and its Test button (Sam, 2026-09-14). The tab has to be
@@ -4832,12 +4979,16 @@ assert len(scales) == 1, 'one volume slider on the idle screen'
 assert len(testbtn) == 1, 'a Test button next to it'
 assert scales[0].get() == p.sound_volume()
 
-scales[0].set(35); scales[0].event_generate('<ButtonRelease-1>'); root.update()
-assert p.sound_volume() == 35, ('the slider must stick', p.sound_volume())
-assert app.state['comp_sound_volume'] == 35, 'and be written to state.json'
+# NOT the default. This used to be 35, which is what the default became in 7f39a64, and from
+# then on neither "it sticks" nor "unmuting restores it" could tell a choice from a default.
+from hub import sounds as sounds_mod
+assert sounds_mod.DEFAULT_VOLUME != 60, 'pick a level the default is not'
+scales[0].set(60); scales[0].event_generate('<ButtonRelease-1>'); root.update()
+assert p.sound_volume() == 60, ('the slider must stick', p.sound_volume())
+assert app.state['comp_sound_volume'] == 60, 'and be written to state.json'
 # ...and be READ BACK from it: state.load() copies keys one at a time, so a key it does not
 # know about is written and then silently dropped on the next start
-assert state_mod.load()['comp_sound_volume'] == 35, 'the slider must survive a restart'
+assert state_mod.load()['comp_sound_volume'] == 60, 'the slider must survive a restart'
 
 testbtn[0].invoke(); root.update()          # no audio device here; it must not raise
 
@@ -4849,9 +5000,9 @@ def hunt_bell(w):
 p.toggle_sound(); root.update()
 assert p.sound_volume() == 0
 assert state_mod.load()['comp_sound_volume'] == 0, 'a muted player stays muted after a restart'
-assert state_mod.load()['comp_sound_last'] == 35, 'and the bell remembers where to go back to'
+assert state_mod.load()['comp_sound_last'] == 60, 'and the bell remembers where to go back to'
 p.toggle_sound(); root.update()
-assert p.sound_volume() == 35, 'unmuting restores the chosen level'
+assert p.sound_volume() == 60, 'unmuting restores the chosen level'
 
 # a language change rebuilds the window and stays on the Competitive tab
 i18n.set_language('de'); app.state['language'] = 'de'
@@ -4961,6 +5112,11 @@ p = app.comp
 app.state['installed'] = {'BB5': {'version': '1.0.4', 'title': 'Bodybomb 5v5'}}
 p.session = s = C.MockSession(p)
 s.adopt_account({'steam_id': '76561198000999000', 'persona': 'Sam', 'token': 'tok'})
+# The preview still invents a level and an Elo for the account. A LIVE account never does:
+# LiveSession.adopt_account starts from identity only, and the rank arrives later from the
+# server. So strip the preview back to what a live account really holds before its rating comes.
+s.me = {'name': 'Sam', 'steam_id': '76561198000999000', 'player_id': '76561198000999000',
+        'avatar': ''}
 s.phase = 'idle'
 s.history = [{'id': 'm%d' % i, 'ended': (time.time() - i * 3600) * 1000, 'map': 'Rome',
               'outcome': 'played', 'reason': '', 'blamed': False, 'team': 1, 'side': 'attack',
@@ -4987,6 +5143,16 @@ def first_canvas(parent):
     walk(parent)
     return hit[0]
 
+def head_of(content):
+    # The block beside the avatar: the name, the rank line under it, and the Steam ID row.
+    hit = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Label) and str(c['text']) == 'Sam' and not hit: hit.append(c)
+            walk(c)
+    walk(content)
+    return texts_of(hit[0].master.master)
+
 # THE ASK (Sam): click your picture, get your profile.
 assert p.view == 'play'
 before = (s.phase, s.queue_seconds)
@@ -4998,12 +5164,34 @@ assert (s.phase, s.queue_seconds) == before, 'opening the profile changed the se
 body = texts_of(p._prof_content)
 assert 'Sam' in body, body
 assert any('Steam ID' in x for x in body), body
-assert any('placeholders' in x for x in body), 'the invented rank must say it is invented'
+# THE HONESTY RULE. This used to be a note saying the level and Elo were placeholders. Ranked
+# went live in 0f18a75 and the note went with the invented numbers it apologised for. What
+# replaced it is stricter: a rating that has not arrived is not made up at all. The head says
+# who this is, and nothing else.
+head = head_of(p._prof_content)
+assert [x for x in head if x and x != 'Sam' and 'Steam' not in x] == [], \
+    ('no rating from the server, so no rank, level or RR on the profile', head)
 assert any('last 6 matches' in x for x in body), body
 assert 'Recent form' in body and 'Conduct' in body and 'Maps played' in body, body
 # the numbers, counted from the planted history: 5 played, 1 cancelled, 1 hosted, 1 at fault
 assert any('No scores recorded yet' in x for x in body), 'an unknown record stays unknown'
 assert any('No show' in x for x in body), body
+
+# ...and once the rating HAS arrived, the head prints the server's ladder: the rank, its
+# division and the RR inside it, in the shape server/progress.cjs publicProgress sends.
+p._show_view('play'); root.update()
+s.me.update({'level': 14, 'rank': 5, 'rank_name': 'Operator', 'division': 2, 'rr': 45,
+             'bdr': None, 'placing': False, 'placements_left': 0})
+first_canvas(p.header).event_generate('<Button-1>'); root.update()
+assert p.view == 'profile', p.view
+head = head_of(p._prof_content)
+assert any('Operator II' in x and '45 RR' in x for x in head), head
+# A match settling moves the RR while the profile is OPEN, and the page has to follow. Only
+# the RR moves here (same level, same division): that is the case that used to leave the old
+# figure on screen until the profile was closed and opened again.
+s.me['rr'] = 62; s._changed(); root.update()
+head = head_of(p._prof_content)
+assert any('Operator II' in x and '62 RR' in x for x in head), ('the open profile kept its old RR', head)
 
 # Back returns to whichever view the avatar was clicked FROM.
 p._show_view('play'); root.update()
@@ -5038,6 +5226,31 @@ s.phase = 'queued'; s.queue_seconds = 42
 p._show_view('profile'); root.update()
 p.on_change(); root.update()
 assert any('Still searching' in x for x in texts_of(p._prof_alert)), texts_of(p._prof_alert)
+
+# A queue ban counts down BY ITSELF. Nothing else ticks while the phase is idle, so the strip
+# and the Conduct card used to sit on the time they were drawn with.
+s.phase = 'idle'; s.penalty_reason = 'no_show'; s.penalty_count = 1
+s.penalty_until = time.time() + 300
+p.on_change(); root.update()
+def ban_lines():
+    return ([x for x in texts_of(p._prof_alert) if x.endswith(' left')],
+            [x for x in texts_of(p._prof_content) if x.startswith('Queue ban')])
+strip, card = ban_lines()
+assert strip and card, (strip, card)
+s.penalty_until -= 60                    # a minute passes, and nothing calls on_change
+end = time.time() + 1.5
+while time.time() < end:
+    root.update(); time.sleep(0.05)
+strip, card = ban_lines()
+shown = {C.format_clock(s.banned_left() + d) for d in (0, 1)}
+assert any(x.split(' ')[0] in shown for x in strip), ('the strip clock did not move', strip, shown)
+assert any(x.split(' ')[-2] in shown for x in card), ('the Conduct clock did not move', card, shown)
+# served: the clock redraws once, and both lines go
+s.penalty_until = time.time() + 0.3
+end = time.time() + 1.6
+while time.time() < end:
+    root.update(); time.sleep(0.05)
+assert ban_lines() == ([], []), ban_lines()
 
 # Signing out puts the player back on Play rather than a profile for nobody.
 s.sign_out(); root.update()
@@ -5818,6 +6031,8 @@ def main():
         test_live_join_retry_treats_a_queued_event_as_success,
         test_live_reconnect_during_found_recovers_the_accept_screen,
         test_render_signature_ignores_live_counters,
+        test_an_open_profile_redraws_when_the_rating_moves,
+        test_one_ban_clock_moves_every_ban_countdown,
         test_avatar_download_forces_a_full_rebuild,
         test_reconnect_in_lobby_does_not_restart_the_client_local_lobby,
         test_resumed_lobby_restores_the_real_stage_from_the_server,

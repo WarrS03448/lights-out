@@ -20,15 +20,50 @@
   // ---------------------------------------------------------------- i18n + escaping
   HubUI._strings = {};                         // set by core each render (setStrings)
   HubUI.setStrings = function (strings) { HubUI._strings = strings || {}; };
+  HubUI._lang = "en";                          // set by core each render (setLanguage)
+  HubUI.setLanguage = function (code) { HubUI._lang = code || "en"; };
+
+  function fill(s, kw) {
+    if (!kw) { return s; }
+    return s.replace(/\{(\w+)\}/g, function (m, name) {
+      return (kw[name] !== undefined && kw[name] !== null) ? String(kw[name]) : m;
+    });
+  }
 
   function t(key, kw) {
-    var s = (HubUI._strings && HubUI._strings[key]) || key;
-    if (kw) {
-      s = s.replace(/\{(\w+)\}/g, function (m, name) {
-        return (kw[name] !== undefined && kw[name] !== null) ? String(kw[name]) : m;
-      });
+    return fill((HubUI._strings && HubUI._strings[key]) || key, kw);
+  }
+
+  // A COUNT NEXT TO A NOUN needs the noun's form for that count, and the seven languages do not
+  // agree on how many there are. This is hub/i18n.py plural_form, mirrored; tests/
+  // test_i18n_plurals.py holds the two to the same answer. A string's general form is its own
+  // key, and the forms that differ from it ship beside it as "key|one" and "key|few", so a table
+  // (or a language) without them just reads the general form.
+  function pluralForm(code, n) {
+    if (n === null || n === undefined || n === "" || typeof n === "boolean") { return "other"; }
+    var v = Number(n);
+    if (!isFinite(v) || Math.floor(v) !== v) { return "other"; }
+    v = Math.abs(v);
+    if (code === "ru") {
+      if (v % 10 === 1 && v % 100 !== 11) { return "one"; }
+      if (v % 10 >= 2 && v % 10 <= 4 && !(v % 100 >= 12 && v % 100 <= 14)) { return "few"; }
+      return "other";
     }
-    return s;
+    if (code === "fr") { return v <= 1 ? "one" : "other"; }
+    if (code === "zh") { return "other"; }
+    return v === 1 ? "one" : "other";
+  }
+
+  // `key` out of `table` for a count of n: its form for that count when the table has one.
+  function plural(table, key, n) {
+    var form = pluralForm(HubUI._lang, n);
+    var s = (form !== "other" && table) ? table[key + "|" + form] : null;
+    return s || (table && table[key]) || key;
+  }
+
+  // t() for a string that counts something: {n} is the count, kw fills anything else.
+  function tn(key, n, kw) {
+    return fill(plural(HubUI._strings, key, n), Object.assign({ n: n }, kw || {}));
   }
 
   function esc(v) {
@@ -264,6 +299,9 @@
   // ---------------------------------------------------------------- export
   HubUI.mapImage = mapImage;
   HubUI.t = t;
+  HubUI.tn = tn;
+  HubUI.plural = plural;
+  HubUI.pluralForm = pluralForm;
   HubUI.esc = esc;
   HubUI.initials = initials;
   HubUI.clock = clock;
