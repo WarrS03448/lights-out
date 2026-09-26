@@ -159,7 +159,7 @@ def test_bomb_assignment_placement_and_ready_signal_use_the_inventory_bomb_not_a
         source = inputs[sink].split('.')[0]
         assert nodes[source]['type'] == 'get' and nodes[source]['var'] == 'CurrentBomb'
     retained = [n for n in logic['nodes'] if n['type'] == 'set' and n['var'] == 'CurrentBomb']
-    assert {inputs[n['id'] + '.CurrentBomb'] for n in retained} == {'slot.Item', 'pollslot.Item'}
+    assert {inputs[n['id'] + '.CurrentBomb'] for n in retained} == {'newslot.Item', 'lateslot.Item', 'slot.Item', 'pollslot.Item'}
 
 
 class BombGraph(RoundGraph):
@@ -171,6 +171,7 @@ class BombGraph(RoundGraph):
             if n['func'] == 'GetComponentByClass': return (self.arg(n, 'self') or {}).get('inventory')
             if n['func'] == 'Greater_IntInt': return int(self.arg(n, 'A')) > int(self.arg(n, 'B'))
             if n['func'] == 'Add_IntInt': return int(self.arg(n, 'A')) + int(self.arg(n, 'B'))
+            if n['func'] == 'EqualEqual_ObjectObject': return self.arg(n, 'A') is self.arg(n, 'B')
         return super().value(pin)
 
     def execute(self, node):
@@ -183,6 +184,10 @@ class BombGraph(RoundGraph):
             elif n['func'] == 'DropItem':
                 self.arg(n, 'self')['slot'] = None
                 self.values[node + '.WasDropped'] = True
+            elif n['func'] == 'IsInitialized':
+                self.values[node + '.bIsInitialized'] = self.arg(n, 'self').get('initialized', True)
+            elif n['func'] == 'GetCurrentEquippedItem':
+                self.values[node + '.Item'] = self.arg(n, 'self').get('held')
             elif n['func'] == 'SpawnSpecialItem':
                 self.arg(n, 'self')['slot'] = {'id': 'new-bomb'}
             elif n['func'] == 'OnObjectiveReady':
@@ -190,16 +195,18 @@ class BombGraph(RoundGraph):
         super().execute(node)
 
 
-def test_immediate_bomb_is_retained_before_it_can_leave_the_inventory():
+def test_handed_out_bomb_is_retained_before_it_can_leave_the_inventory():
     inventory = {'slot': None}
     player = {'pawn': {'inventory': inventory}}
     rule = {'CurrentBomb': {'id': 'previous-bomb'}}
     assignment = BombGraph(bg.rule_assign(), [], rule)
     assignment.values['entry.Player'] = player
     assignment.execute('entry')
+    assert rule['CurrentBomb'] is None and inventory['slot'] is None  # handed out by the poll, not here
+    BombGraph(bg.rule_logic(), [], rule).execute('drop')
     bomb = rule['CurrentBomb']
     assert bomb == {'id': 'new-bomb'}
-    inventory['slot'] = None  # manual drop/death before the first timer tick
+    inventory['slot'] = None  # manual drop/death before the drop tick
     lookup = BombGraph(bg.rule_logic(), [], rule)
     lookup.execute('poll')
     assert lookup.calls == [bomb]
@@ -207,7 +214,7 @@ def test_immediate_bomb_is_retained_before_it_can_leave_the_inventory():
 
 def test_deferred_bomb_is_retained_before_drop_and_the_same_actor_becomes_the_objective():
     inventory = {'slot': None}
-    rule = {'CurrentBomb': None, 'Attacker': {'pawn': {'inventory': inventory}}, 'DropTries': 0}
+    rule = {'CurrentBomb': None, 'Attacker': {'pawn': {'inventory': inventory}}, 'DropTries': 0, 'bBombSpawned': True}
     graph = BombGraph(bg.rule_logic(), [], rule)
     graph.execute('poll')
     assert graph.calls == []

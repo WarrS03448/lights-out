@@ -226,6 +226,9 @@ def rule_logic():
     g.call("latespawn", INV, "SpawnSpecialItem", {"bShouldEquip": "true"})
     g.link(("asinv.cast_result", "latespawn.self"), ("clslate.BombClass", "latespawn.ItemClass"), ("br_latepawn.then", "latespawn.exec"))
     g.set("latemark", "bBombSpawned", defaults={"bBombSpawned": "true"}); g.chain("latespawn", "latemark")
+    g.call("lateslot", INV, "GetItemForSlot", {"ItemSlot": SPECIAL_SLOT}); g.link(("asinv.cast_result", "lateslot.self")); g.chain("latemark", "lateslot")
+    g.cast("latebomb", BOMBE); g.link(("lateslot.Item", "latebomb.cast_object")); g.chain("lateslot", "latebomb")
+    g.set("keeplate", "CurrentBomb"); g.link(("lateslot.Item", "keeplate.CurrentBomb")); g.chain("latebomb", "keeplate")
     g.branch("br_pawn"); g.link(("pv.ReturnValue", "br_pawn.condition"), ("br_over.else", "br_pawn.exec"))
     g.get("spawned1", "bBombSpawned")
     g.branch("br_spawned"); g.link(("spawned1.bBombSpawned", "br_spawned.condition"), ("br_pawn.then", "br_spawned.exec"))
@@ -236,6 +239,10 @@ def rule_logic():
     g.call("spawnnow", INV, "SpawnSpecialItem", {"bShouldEquip": "false"})
     g.link(("asinv.cast_result", "spawnnow.self"), ("clsnow.BombClass", "spawnnow.ItemClass"), ("br_init.then", "spawnnow.exec"))
     g.set("markspawned", "bBombSpawned", defaults={"bBombSpawned": "true"}); g.chain("spawnnow", "markspawned")
+    # retained on the hand-out tick: the objective is this actor even if it leaves the inventory before the drop tick
+    g.call("newslot", INV, "GetItemForSlot", {"ItemSlot": SPECIAL_SLOT}); g.link(("asinv.cast_result", "newslot.self")); g.chain("markspawned", "newslot")
+    g.cast("newbomb", BOMBE); g.link(("newslot.Item", "newbomb.cast_object")); g.chain("newslot", "newbomb")
+    g.set("keepnew", "CurrentBomb"); g.link(("newslot.Item", "keepnew.CurrentBomb")); g.chain("newbomb", "keepnew")
     # handed out on an earlier tick: drop it, unless it is the item in the carrier's hands
     g.call("slot", INV, "GetItemForSlot", {"ItemSlot": SPECIAL_SLOT}); g.link(("asinv.cast_result", "slot.self"), ("br_spawned.then", "slot.exec"))
     g.branch("br_has"); g.link(("slot.IsValid", "br_has.condition")); g.chain("slot", "br_has")

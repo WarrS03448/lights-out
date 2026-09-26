@@ -151,6 +151,7 @@ def test_a_carrier_whose_inventory_is_still_loading_keeps_their_weapon():
     assert tick(rule, inv) == []                       # hand-out tick: spawned, not dropped
     assert inv.spawns == [False] and inv.slots[SPECIAL] is not None and inv.current == PRIMARY
     bomb = inv.slots[SPECIAL]
+    assert rule['CurrentBomb'] is bomb                 # retained on the hand-out tick
     assert tick(rule, inv) == [('K2_ClearTimer', 'DropBombWhenReady'), ('K2_SetTimer', 'PlaceBomb')]
     assert inv.drops == [bomb] and rule['CurrentBomb'] is bomb
     assert inv.current == PRIMARY and not inv.stale()
