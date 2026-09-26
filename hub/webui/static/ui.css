@@ -178,6 +178,16 @@ body {
 }
 #toast.show { opacity: 1; }
 
+/* The two frames after a redraw (core.js settleRedraw): a control redrawn under the pointer takes
+ * its hover look at once instead of fading into it again. Only what is under the pointer, so
+ * everything else keeps animating its own changes. */
+html.ui-redrawing :hover,
+html.ui-redrawing :hover *,
+html.ui-redrawing :hover::before,
+html.ui-redrawing :hover::after,
+html.ui-redrawing :hover *::before,
+html.ui-redrawing :hover *::after { transition: none !important; }
+
 /* ================================================================ shared components (ui-*)
  * Built by the ui.js helpers; consumed by every screen. */
 

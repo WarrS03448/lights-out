@@ -193,6 +193,7 @@
   // ---------------------------------------------------------------- render
   function render() {
     if (!state) { return; }
+    settleRedraw();
     HubUI.setStrings(state.strings);
     HubUI.setLanguage(state.lang);
     if (HubUI.clickSound) {
@@ -215,6 +216,26 @@
     renderScreen();
     renderOverlays();
     restoreInputs(saved);
+  }
+
+  // A REDRAWN CONTROL UNDER THE POINTER MUST NOT FADE BACK INTO ITS HOVER LOOK. Sam, 2026-09-26:
+  // the tabs and the search Cancel button "seem to flicker" when hovered. Measured: a redraw swaps
+  // the hovered element for a new one, Chromium gives the new one :hover within a frame, and the
+  // hover transitions then fade it from its resting look back to the hover look - the tab text
+  // dipped to grey and climbed back to white on every changed snapshot, and every button a redraw
+  // replaces (a screen, an overlay, the update strips, the friends dock) did the same. So for the
+  // two frames a redraw needs to settle, transitions are off under the pointer (ui.css,
+  // html.ui-redrawing): a new element takes its hover look at once, anything elsewhere keeps
+  // animating its own changes, and hover and press animate as before the rest of the time.
+  var settling = 0;
+  function settleRedraw() {
+    var html = document.documentElement, mine = ++settling;
+    html.classList.add("ui-redrawing");
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        if (mine === settling) { html.classList.remove("ui-redrawing"); }
+      });
+    });
   }
 
   // EVERY MODAL IS THE RENDER'S TO CLEAN UP. A screen appends its overlay to document.body rather
@@ -342,10 +363,13 @@
       { view: "tournament",  label: t("nav_tournament") }
     ];
 
-    navEl.innerHTML = items.map(function (it) {
+    var html = items.map(function (it) {
       return '<span class="navitem' + (it.view === view ? " active" : "") + '" data-view="' + esc(it.view) + '">' + esc(it.label) + "</span>";
     }).join("");
+    // Only when a tab changed: a rewrite replaces the tab under the pointer (see settleRedraw).
+    if (html !== renderedNav) { navEl.innerHTML = html; renderedNav = html; }
   }
+  var renderedNav = null;
 
   function renderStatus() {
     // Registration totals replace the activity counts. Update the existing
