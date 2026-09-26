@@ -12,21 +12,35 @@ from kismet import Pkg
 
 C = "Bodycam/Content/"
 GROUPS = ["ser_before_ser", "create_before_ser", "ser_before_create", "create_before_create"]
+# Every reviewed (header, payload) fingerprint per map. Keep the older ones: a player
+# who has not taken a game update yet still has those bytes.
 CASES = {
-    "BombHouse": ("BombHouse", "BombZone_C_0",
-        "41b2cb7509b227b71aa0f1bc281cda59debece33a56a8c08684346afe70c9a8e",
-        "1a6516a9877d61e1599e12c0fdc68fef1d635572fa693196992983a71bfa5f17"),
-    "Airsoft": ("AirSoft", "BombZone_C_1",
-        "c8d94105e777f0990350720da01824853cc6af6c4fdfb913bfbc4c889705de19",
-        "fe653ccca8ca350f9a91d37a480631490aa7dbec455f3c406045fc94f08ed838"),
+    "BombHouse": ("BombHouse", "BombZone_C_0", (
+        ("41b2cb7509b227b71aa0f1bc281cda59debece33a56a8c08684346afe70c9a8e",
+         "1a6516a9877d61e1599e12c0fdc68fef1d635572fa693196992983a71bfa5f17"),
+        # Game update of 2026-09-25: the header is unchanged and the payload differs in
+        # 4 bytes, one int pair on Ultra_Dynamic_Weather_C_2 (6801 -> 1212). The level,
+        # both bomb sites and their components are byte-identical to the review above.
+        ("41b2cb7509b227b71aa0f1bc281cda59debece33a56a8c08684346afe70c9a8e",
+         "8267a4cdc2118c2b7aee73bf5310816adfdc1d85c777c58908bd86125b0d0616"),
+    )),
+    "Airsoft": ("AirSoft", "BombZone_C_1", (
+        ("c8d94105e777f0990350720da01824853cc6af6c4fdfb913bfbc4c889705de19",
+         "fe653ccca8ca350f9a91d37a480631490aa7dbec455f3c406045fc94f08ed838"),
+    )),
 }
+MAP_TITLES = {"BombHouse": "Bomb House", "Airsoft": "Airsoft"}
 
 
 def verify_source(key, header, payload):
     if key not in CASES:
         raise ValueError("Unapproved 1v1 map")
-    if (sha(header), sha(payload)) != CASES[key][2:]:
-        raise ValueError("The installed game version does not match the reviewed 1v1 maps. No map was installed.")
+    if (sha(header), sha(payload)) not in CASES[key][2]:
+        raise ValueError(
+            "Nothing was installed: your copy of Bodycam has a version of the "
+            f"{MAP_TITLES[key]} map that Lights Out has not checked for Bodybomb 1v1 yet. "
+            "Nothing is wrong with your PC. If Steam has a Bodycam update waiting, install "
+            "it and try again; otherwise a Lights Out update is needed for this game version.")
 
 
 def sha(data):
