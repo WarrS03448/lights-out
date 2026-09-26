@@ -178,6 +178,9 @@ def rule_assign():
     g.set("unspawned", "bBombSpawned", defaults={"bBombSpawned": "false"}); g.chain("tries", "unspawned")
     g.call("timer", SYS, "K2_SetTimer", {"FunctionName": "DropBombWhenReady", "Time": "0.2", "bLooping": "true"}); g.selfnode("s1"); g.link(("s1.self", "timer.Object"))
     g.chain("unspawned", "timer", "result")
+    # CurrentBomb was just cleared, so this returns None. Linking it also replaces the override template's
+    # Parent.ReturnValue -> ReturnValue wire, which would otherwise survive and prune the unreached parent call.
+    g.get("nobomb", "CurrentBomb"); g.link(("nobomb.CurrentBomb", "result.ReturnValue"))
     return g.json()
 
 def rule_logic():
