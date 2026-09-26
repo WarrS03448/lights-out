@@ -59,29 +59,33 @@ AVATAR_COLOURS = ["#3D6FB4", "#4C8C6B", "#A05C3E", "#7A5AA8", "#B0803A",
 #
 # The LEVEL_COLOURS table above is the older 1-14 FACEIT scale and is kept only for anything still
 # drawing a level.
+# The redrawn 3.0.0 badges (tools/rank-art): each rank's division-1 plate and ink, converted
+# from the sprite's oklch. Ranks 1-4 are a soldier's career in military colours; from Operator
+# the ladder turns into night. Keep these in step with tools/rank-art/ranks/r<N>.js.
 RANK_COLOURS = {
-    1: "#472C13",   # Rookie
-    2: "#46221D",   # Private
-    3: "#381E36",   # Soldier
-    4: "#2A1C39",   # Veteran
-    5: "#1E1B35",   # Operator
-    6: "#13192F",   # Shadow
-    7: "#0A1423",   # Nightmare
-    8: "#090D18",   # Spectre
+    1: "#423219",   # Rookie - training sand
+    2: "#2E3416",   # Private - olive drab
+    3: "#182F1C",   # Soldier - field green
+    4: "#1F2730",   # Veteran - gunmetal
+    5: "#062322",   # Operator - night-vision teal
+    6: "#13192F",   # Shadow - indigo
+    7: "#1A0506",   # Nightmare - blood-black
+    8: "#030A12",   # Spectre - cold blue-black (sprite #030C15, one step darker so the plates
+                    # still darken by luma past Nightmare's red-black)
     9: "#04060A",   # Reaper - the capstone: no divisions, and the figure keeps counting
 }
 # The glyph ink for each rank, which is what a numeral on that plate is drawn in. Light on dark
 # the whole way up, so nothing needs a black/white decision per rank.
 RANK_INK = {
-    1: "#FCC682",   # Rookie
-    2: "#FEB29B",   # Private
-    3: "#E5ACD6",   # Soldier
-    4: "#C9AEDF",   # Veteran
-    5: "#B4ADDB",   # Operator
+    1: "#EAD1A4",   # Rookie
+    2: "#D0D2A3",   # Private
+    3: "#AABD9D",   # Soldier
+    4: "#D1B695",   # Veteran - brass
+    5: "#91BFB8",   # Operator
     6: "#A4ACD1",   # Shadow
-    7: "#9AA8C2",   # Nightmare
-    8: "#9BA1B2",   # Spectre
-    9: "#9B9EA6",   # Reaper
+    7: "#C6B8A7",   # Nightmare - bone
+    8: "#98A7AF",   # Spectre
+    9: "#A1A4AC",   # Reaper
 }
 RANKS = len(RANK_COLOURS)
 

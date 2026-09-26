@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="lo-depth">
 <head>
   <meta charset="utf-8">
   <!-- Offline-first: no remote origins. A stray CDN reference fails here instead of silently
@@ -30,6 +30,10 @@
   <link rel="stylesheet" href="screens/bugreport.css">
   <link rel="stylesheet" href="screens/tournament.css">
   <link rel="stylesheet" href="screens/messages.css">
+  <!-- Last: the depth pass - light, shadow and key travel over every screen. It only adds
+       box-shadow, background-image, text-shadow, filter and transform, so it loads after the
+       screens without moving a layout. Scoped to html.lo-depth: drop the class to turn it off. -->
+  <link rel="stylesheet" href="depth.css">
 </head>
 <body>
   <!-- The frame the shared core draws: a full-width header (nav + status dot), then the

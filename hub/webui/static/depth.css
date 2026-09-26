@@ -1,0 +1,572 @@
+/* Lights Out hub - depth pass.
+ *
+ * One key light, above the window. Everything that already exists keeps its size, colour and
+ * place: this layer only adds light (a rim along top edges, a faint sheen falling off downward),
+ * shadow (surfaces rest on the ground, overlays float above it) and travel (controls are keys:
+ * they stand up off what they sit on, and go down when pressed).
+ *
+ * index.html puts .lo-depth on <html> and loads this file LAST, after every screen stylesheet.
+ * Drop the class and the hub is exactly the flat 2.8.6 look again; --d scales every effect
+ * (1 = shipped, 0 = off). The one property that is not purely visual: .hero-action gains a few px
+ * of bottom padding, room for the Find match key's side (the hero scrolls and would clip it).
+ * Designed and reviewed in the "Lights Out Hub Depth" design canvas, 2026-09-25. */
+
+.lo-depth {
+  --d: 1;
+  --rk-depth: var(--d);                  /* the rank badges' own lighting (ranks sprite) */
+  /* light */
+  --rim: inset 0 1px 0 rgba(255, 255, 255, calc(.075 * var(--d)));
+  --rim-strong: inset 0 1px 0 rgba(255, 255, 255, calc(.11 * var(--d)));
+  --foot: inset 0 -1px 0 rgba(0, 0, 0, calc(.35 * var(--d)));
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, calc(.045 * var(--d))), rgba(255, 255, 255, 0) 88px);
+  --sheen-2: linear-gradient(180deg, rgba(255, 255, 255, calc(.05 * var(--d))), rgba(255, 255, 255, 0) 60%);
+  --spill: linear-gradient(180deg, rgba(200, 16, 46, calc(.11 * var(--d))), rgba(200, 16, 46, 0) 44px);
+  --spill-side: linear-gradient(90deg, rgba(200, 16, 46, calc(.14 * var(--d))), rgba(200, 16, 46, 0) 42%);
+  /* elevation: e1 resting on the ground, e2 lifted (hover, popovers), e3 floating (dialogs) */
+  --e1: 0 1px 1px rgba(0, 0, 0, calc(.5 * var(--d))), 0 4px 10px -3px rgba(0, 0, 0, calc(.45 * var(--d))),
+        0 16px 30px -18px rgba(0, 0, 0, calc(.75 * var(--d)));
+  --e2: 0 2px 3px rgba(0, 0, 0, calc(.45 * var(--d))), 0 10px 22px -6px rgba(0, 0, 0, calc(.6 * var(--d))),
+        0 26px 44px -22px rgba(0, 0, 0, calc(.85 * var(--d)));
+  --e3: 0 0 0 1px rgba(0, 0, 0, calc(.5 * var(--d))), 0 6px 14px rgba(0, 0, 0, calc(.35 * var(--d))),
+        0 34px 90px -18px rgba(0, 0, 0, calc(.9 * var(--d)));
+  /* recess: inputs, tracks and wells sit below the surface they are cut into */
+  --well: inset 0 1px 3px rgba(0, 0, 0, calc(.6 * var(--d))), inset 0 0 0 1px rgba(0, 0, 0, calc(.14 * var(--d))),
+          0 1px 0 rgba(255, 255, 255, calc(.035 * var(--d)));
+  --well-deep: inset 0 2px 5px rgba(0, 0, 0, calc(.7 * var(--d))), inset 0 0 0 1px rgba(0, 0, 0, calc(.3 * var(--d))),
+               0 1px 0 rgba(255, 255, 255, calc(.05 * var(--d)));
+  /* keys. A key has a face (lit top edge, a gradient falling off downward), a side (the solid
+   * band under it) and a shadow on whatever it stands on. Pressing it takes the side away. */
+  --travel: calc(3px * var(--d));
+  --key-face: linear-gradient(180deg, rgba(255, 255, 255, calc(.07 * var(--d))), rgba(255, 255, 255, 0) 55%, rgba(0, 0, 0, calc(.16 * var(--d))));
+  --key: inset 0 1px 0 rgba(255, 255, 255, calc(.1 * var(--d))), inset 0 -2px 0 rgba(0, 0, 0, calc(.45 * var(--d))),
+         0 var(--travel) 0 #060607, 0 calc(var(--travel) + 1px) 3px rgba(0, 0, 0, calc(.55 * var(--d))),
+         0 calc(8px * var(--d)) 14px calc(-4px * var(--d)) rgba(0, 0, 0, calc(.6 * var(--d)));
+  --key-up: inset 0 1px 0 rgba(255, 255, 255, calc(.13 * var(--d))), inset 0 -2px 0 rgba(0, 0, 0, calc(.45 * var(--d))),
+            0 calc(var(--travel) + 1px) 0 #060607, 0 calc(var(--travel) + 3px) 5px rgba(0, 0, 0, calc(.55 * var(--d))),
+            0 calc(12px * var(--d)) 18px calc(-5px * var(--d)) rgba(0, 0, 0, calc(.65 * var(--d)));
+  --key-down: inset 0 2px 5px rgba(0, 0, 0, calc(.6 * var(--d))), inset 0 0 0 1px rgba(0, 0, 0, calc(.2 * var(--d))),
+              0 1px 0 #060607;
+  --red-face: linear-gradient(180deg, rgba(255, 255, 255, calc(.17 * var(--d))), rgba(255, 255, 255, 0) 52%, rgba(0, 0, 0, calc(.14 * var(--d))));
+  --red-key: inset 0 1px 0 rgba(255, 255, 255, calc(.32 * var(--d))), inset 0 -2px 0 rgba(0, 0, 0, calc(.3 * var(--d))),
+             0 var(--travel) 0 #6c0817, 0 calc(var(--travel) + 1px) 3px rgba(0, 0, 0, calc(.5 * var(--d))),
+             0 calc(10px * var(--d)) 18px calc(-6px * var(--d)) rgba(200, 16, 46, calc(.6 * var(--d)));
+  --red-key-up: inset 0 1px 0 rgba(255, 255, 255, calc(.36 * var(--d))), inset 0 -2px 0 rgba(0, 0, 0, calc(.3 * var(--d))),
+                0 calc(var(--travel) + 1px) 0 #6c0817, 0 calc(var(--travel) + 3px) 5px rgba(0, 0, 0, calc(.5 * var(--d))),
+                0 calc(14px * var(--d)) 22px calc(-6px * var(--d)) rgba(200, 16, 46, calc(.75 * var(--d)));
+  --red-key-down: inset 0 2px 6px rgba(0, 0, 0, calc(.45 * var(--d))), 0 1px 0 #6c0817;
+  /* Colour only: transform and shadow snap. A key the page rebuilds once a second (Accept during the
+   * countdown, Cancel while searching) would otherwise ease into its hover lift on every rebuild. */
+  --press-ease: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+/* ================================================================ the room */
+/* The window reads as a lit room rather than a flat sheet: a little light pools at the top and
+ * falls away to the floor, and the corners sink. */
+.lo-depth #workspace {
+  background:
+    radial-gradient(120% 60% at 50% -12%, rgba(255, 255, 255, calc(.05 * var(--d))), rgba(255, 255, 255, 0) 62%),
+    radial-gradient(140% 100% at 50% 50%, rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, calc(.35 * var(--d))) 100%),
+    var(--ground);
+}
+/* The caption floats over the workspace and casts a soft edge down onto it. */
+.lo-depth #topbar {
+  position: relative;
+  z-index: 6;
+  background: linear-gradient(180deg, #111114, var(--ground));
+  box-shadow: 0 1px 0 rgba(0, 0, 0, calc(.8 * var(--d))), 0 10px 24px -10px rgba(0, 0, 0, calc(.9 * var(--d)));
+}
+.lo-depth .nav .navitem { transition: color .15s ease, box-shadow .2s ease, text-shadow .2s ease; }
+.lo-depth .nav .navitem.active {
+  text-shadow: 0 0 14px rgba(255, 255, 255, calc(.22 * var(--d)));
+  box-shadow: 0 9px 10px -9px rgba(200, 16, 46, calc(.95 * var(--d)));
+}
+.lo-depth .status-dot.ok .dot { box-shadow: 0 0 0 2px rgba(61, 220, 132, calc(.12 * var(--d))), 0 0 8px rgba(61, 220, 132, calc(.55 * var(--d))); }
+.lo-depth .status-dot.bad .dot { box-shadow: 0 0 8px rgba(200, 16, 46, calc(.6 * var(--d))); }
+.lo-depth #messages-unread { box-shadow: 0 2px 6px rgba(200, 16, 46, calc(.55 * var(--d))), inset 0 1px 0 rgba(255, 255, 255, calc(.25 * var(--d))); }
+.lo-depth .updatebar { box-shadow: inset 0 1px 0 rgba(255, 255, 255, calc(.15 * var(--d))), var(--e2); }
+
+/* ================================================================ surfaces (resting, e1) */
+.lo-depth .ui-card,
+.lo-depth .ui-panel,
+.lo-depth .set-card,
+.lo-depth .bug-card,
+.lo-depth .gm-row,
+.lo-depth .gm-banner,
+.lo-depth .member,
+.lo-depth .team-col,
+.lo-depth .code-row,
+.lo-depth .invite-inbox,
+.lo-depth .vote-card,
+.lo-depth .fr-card,
+.lo-depth .tournament-card,
+.lo-depth .tournament-winner,
+.lo-depth .mail-conversation,
+.lo-depth .set-ready-item,
+.lo-depth .profile-ranks-current,
+.lo-depth .profile-ranks-card,
+.lo-depth .md-head,
+.lo-depth .pm-head,
+.lo-depth .md-team,
+.lo-depth .pm-team {
+  background-image: var(--sheen);
+  box-shadow: var(--rim), var(--foot), var(--e1);
+}
+/* A surface whose top edge is the accent reads that edge as a light strip: a little red falls
+ * onto the face just under it. */
+.lo-depth .ui-card.accent,
+.lo-depth .member.leader,
+.lo-depth .fr-addcard,
+.lo-depth .fr-section-friend {
+  background-image: var(--spill), var(--sheen);
+}
+.lo-depth .ui-stat {
+  background-image: var(--spill), var(--sheen);
+  box-shadow: var(--rim), var(--e1);
+}
+.lo-depth .ui-stat .n { text-shadow: 0 2px 10px rgba(0, 0, 0, calc(.5 * var(--d))); }
+/* Tiles that share a hairline grid (profile stats, gamemode meta) stay flush with each other:
+ * the grid lifts as one plate instead of every cell casting over its neighbour. */
+.lo-depth .profile-stats .ui-stat,
+.lo-depth .gm-meta-tile { box-shadow: var(--rim); background-image: var(--sheen); }
+.lo-depth .profile-stats,
+.lo-depth .gm-meta { box-shadow: var(--e1); }
+.lo-depth .ui-listrow { background-image: var(--sheen-2); box-shadow: var(--rim); }
+.lo-depth .ui-table { box-shadow: var(--e1); }
+/* The side column of Profile sits over the content beside it. */
+.lo-depth .profile-side {
+  position: relative;
+  z-index: 1;
+  background-image: var(--sheen);
+  box-shadow: var(--rim), 14px 0 30px -18px rgba(0, 0, 0, calc(.9 * var(--d)));
+}
+.lo-depth .profile-rank {
+  background-image: radial-gradient(120% 90% at 20% 0%, rgba(255, 255, 255, calc(.14 * var(--d))), rgba(255, 255, 255, 0) 60%),
+                    linear-gradient(180deg, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, calc(.16 * var(--d))));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, calc(.22 * var(--d))), 0 10px 24px -12px rgba(200, 16, 46, calc(.7 * var(--d))), var(--e1);
+}
+.lo-depth .profile-ranks-card.is-current { box-shadow: inset 3px 0 var(--accent), var(--rim), var(--e2); }
+/* Empty party slots are cut into the floor rather than drawn on it. */
+.lo-depth .slot { box-shadow: inset 0 2px 10px rgba(0, 0, 0, calc(.45 * var(--d))); }
+.lo-depth .slot .box { box-shadow: inset 0 1px 4px rgba(0, 0, 0, calc(.5 * var(--d))); }
+
+/* ================================================================ the hero */
+/* The red block is the loudest thing in the app, so it gets the most shape: lit from the top
+ * left, a little heavier at the foot, and standing proud of the dark pane beside it. */
+.lo-depth .hero {
+  z-index: 2;
+  background-image:
+    radial-gradient(110% 65% at 22% -6%, rgba(255, 255, 255, calc(.13 * var(--d))), rgba(255, 255, 255, 0) 58%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0) 42%, rgba(0, 0, 0, calc(.2 * var(--d))) 100%);
+  box-shadow: inset -1px 0 0 rgba(0, 0, 0, calc(.3 * var(--d))), inset 0 1px 0 rgba(255, 255, 255, calc(.14 * var(--d))),
+              16px 0 36px -14px rgba(0, 0, 0, calc(.9 * var(--d)));
+}
+.lo-depth .hero-name { text-shadow: 0 2px 0 rgba(90, 0, 14, calc(.3 * var(--d))), 0 8px 22px rgba(60, 0, 10, calc(.28 * var(--d))); }
+.lo-depth .hero-rankname { text-shadow: 0 2px 12px rgba(60, 0, 10, calc(.4 * var(--d))); }
+.lo-depth .rank-badge { filter: drop-shadow(0 4px 7px rgba(0, 0, 0, calc(.55 * var(--d)))) drop-shadow(0 1px 1px rgba(0, 0, 0, calc(.4 * var(--d)))); }
+.lo-depth .hero .rank-badge { filter: drop-shadow(0 7px 10px rgba(40, 0, 6, calc(.6 * var(--d)))) drop-shadow(0 1px 1px rgba(0, 0, 0, calc(.45 * var(--d)))); }
+.lo-depth .rr-bar { box-shadow: inset 0 1px 2px rgba(60, 0, 10, calc(.55 * var(--d))); }
+.lo-depth .rr-fill { box-shadow: 0 0 12px rgba(255, 255, 255, calc(.55 * var(--d))); }
+.lo-depth .search-bar { box-shadow: inset 0 1px 2px rgba(60, 0, 10, calc(.55 * var(--d))); }
+.lo-depth .search-bar > i { box-shadow: 0 0 10px rgba(255, 255, 255, calc(.6 * var(--d))); }
+/* Dark boxes on the red are windows cut into it. */
+.lo-depth .found-box,
+.lo-depth .hero-error,
+.lo-depth .search-reminder,
+.lo-depth .connect-warn {
+  box-shadow: inset 0 2px 8px rgba(40, 0, 6, calc(.45 * var(--d))), 0 1px 0 rgba(255, 255, 255, calc(.1 * var(--d)));
+}
+.lo-depth .comp-region select { box-shadow: inset 0 1px 3px rgba(60, 0, 10, calc(.5 * var(--d))), 0 1px 0 rgba(255, 255, 255, calc(.12 * var(--d))); }
+
+/* The red-hero keys all share one construction - the one Penalties and Competitive info proved:
+ * a face lit from the top, and a SIDE drawn in the hero's own shadowed red directly under it, so
+ * the key reads as a block standing on the red rather than as a lighter stripe stuck to it. */
+.lo-depth .hero {
+  --hero-side: #8f0a20;
+  --hero-shadow: rgba(50, 0, 8, calc(.45 * var(--d)));
+}
+
+/* 5v5 / 1v1: the mode you are on is a key held down (sunk to the depth of the other's side, the
+ * track showing above it); the other stands up on its side, ready to be pressed. */
+.lo-depth .ranked-mode-bar {
+  background: rgba(40, 0, 6, calc(.3 * var(--d)));
+  box-shadow: inset 0 2px 5px rgba(30, 0, 5, calc(.45 * var(--d)));
+}
+.lo-depth .ranked-mode-choice {
+  position: relative;
+  transition: var(--press-ease);
+}
+.lo-depth .ranked-mode-choice:not(.active) {
+  background-color: var(--accent);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, calc(.14 * var(--d))), rgba(255, 255, 255, 0) 60%, rgba(60, 0, 10, calc(.12 * var(--d))));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, calc(.32 * var(--d))),
+              0 var(--travel) 0 var(--hero-side), 0 calc(var(--travel) + 2px) 6px var(--hero-shadow);
+  z-index: 1;
+}
+.lo-depth .ranked-mode-choice:not(.active):hover { transform: translateY(-1px); }
+.lo-depth .ranked-mode-choice:not(.active):active {
+  transform: translateY(var(--travel));
+  box-shadow: inset 0 2px 5px rgba(40, 0, 6, calc(.55 * var(--d))), 0 1px 0 var(--hero-side);
+}
+.lo-depth .ranked-mode-choice.active {
+  transform: translateY(var(--travel));
+  background-color: #9c0c24;
+  box-shadow: inset 0 3px 7px rgba(30, 0, 5, calc(.6 * var(--d))), inset 0 1px 1px rgba(0, 0, 0, calc(.35 * var(--d)));
+}
+
+/* Outline keys on the red: Competitive info, Penalties, Cancel, Reconnect. */
+.lo-depth .rank-info-btn,
+.lo-depth .btn-ghost-light {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, calc(.12 * var(--d))), rgba(255, 255, 255, 0) 60%, rgba(60, 0, 10, calc(.14 * var(--d))));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, calc(.3 * var(--d))), inset 0 -2px 0 rgba(90, 0, 14, calc(.35 * var(--d))),
+              0 var(--travel) 0 rgba(110, 4, 20, calc(.9 * var(--d))), 0 calc(var(--travel) + 2px) 6px var(--hero-shadow);
+  transition: var(--press-ease);
+}
+.lo-depth .rank-info-btn:hover,
+.lo-depth .btn-ghost-light:hover { transform: translateY(-1px); }
+.lo-depth .rank-info-btn:active,
+.lo-depth .btn-ghost-light:active {
+  transform: translateY(var(--travel));
+  box-shadow: inset 0 2px 5px rgba(40, 0, 6, calc(.55 * var(--d))), 0 1px 0 rgba(110, 4, 20, calc(.9 * var(--d)));
+}
+
+/* The white keys on the red: Find match, Accept, Launch, Back and the lobby choices. Same side in
+ * the hero's shadowed red, a little taller because these are the keys that start something. The
+ * action block keeps room under the key for that side: the hero scrolls, and would clip it. */
+.lo-depth .hero-action { padding-bottom: calc(7px * var(--d)); }
+/* .hero-inner scrolls, so it clips: the rank emblem's shadow (and the wide division-3 art) was cut
+ * at its left edge. 16px of room, taken back by the margin, so nothing inside moves. */
+.lo-depth .hero-inner { padding-left: 16px; margin-left: -16px; }
+.lo-depth .btn-find,
+.lo-depth .btn-accept,
+.lo-depth .btn-choice {
+  --white-side: calc(4px * var(--d));
+  background-image: linear-gradient(180deg, #ffffff 0%, #f3f0ef 100%);
+  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(120, 96, 92, calc(.16 * var(--d))),
+              0 var(--white-side) 0 var(--hero-side, #8f0a20),
+              0 calc(var(--white-side) + 3px) 8px rgba(40, 0, 6, calc(.5 * var(--d))),
+              0 calc(16px * var(--d)) 26px calc(-10px * var(--d)) rgba(40, 0, 6, calc(.6 * var(--d)));
+  transition: var(--press-ease);
+}
+.lo-depth .btn-find:hover:not(:disabled),
+.lo-depth .btn-accept:hover:not(:disabled),
+.lo-depth .btn-choice:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background-image: linear-gradient(180deg, #ffffff 0%, #f7f5f4 100%);
+}
+.lo-depth .btn-find:active:not(:disabled),
+.lo-depth .btn-accept:active:not(:disabled),
+.lo-depth .btn-choice:active:not(:disabled) {
+  transform: translateY(var(--white-side));
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, calc(.14 * var(--d))), 0 1px 0 var(--hero-side, #8f0a20),
+              0 2px 4px rgba(40, 0, 6, calc(.4 * var(--d)));
+}
+.lo-depth .btn-find:disabled,
+.lo-depth .btn-accept:disabled,
+.lo-depth .btn-choice:disabled { transform: none; box-shadow: none; background-image: none; }
+
+/* ================================================================ keys on the dark */
+/* Accent keys: Create a party, Join, Invite friends, Send, Install, Register... */
+.lo-depth .btn-solid:not(.ghost),
+.lo-depth .gm-btn.solid,
+.lo-depth .set-btn.primary,
+.lo-depth .bug-send,
+.lo-depth .fr-mini.solid,
+.lo-depth .ui-chip.solid,
+.lo-depth .chip.solid,
+.lo-depth .tournament-register {
+  background-image: var(--red-face);
+  box-shadow: var(--red-key);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, calc(.3 * var(--d)));
+  transition: var(--press-ease);
+}
+.lo-depth .btn-solid:not(.ghost):hover:not(:disabled),
+.lo-depth .gm-btn.solid:hover:not(:disabled),
+.lo-depth .set-btn.primary:hover:not(:disabled),
+.lo-depth .bug-send:hover:not(:disabled),
+.lo-depth .fr-mini.solid:hover:not(:disabled),
+.lo-depth .tournament-register:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--red-key-up);
+}
+.lo-depth .btn-solid:not(.ghost):active:not(:disabled),
+.lo-depth .gm-btn.solid:active:not(:disabled),
+.lo-depth .set-btn.primary:active:not(:disabled),
+.lo-depth .bug-send:active:not(:disabled),
+.lo-depth .fr-mini.solid:active:not(:disabled),
+.lo-depth .tournament-register:active:not(:disabled) {
+  transform: translateY(var(--travel));
+  box-shadow: var(--red-key-down);
+}
+/* Outline keys: every other button that does something. */
+.lo-depth .btn-solid.ghost,
+.lo-depth .chip:not(.solid),
+.lo-depth .gm-btn:not(.solid),
+.lo-depth .gm-ruleset,
+.lo-depth .set-btn:not(.primary),
+.lo-depth .fr-mini:not(.solid):not(.danger),
+.lo-depth button.ui-chip:not(.solid),
+.lo-depth .mail-button,
+.lo-depth .tournament-button,
+.lo-depth .lb-go-to-me,
+.lo-depth .lb-reset,
+.lo-depth .rep-reason,
+.lo-depth .combat-toggle,
+.lo-depth .ui-modal-x {
+  background-image: var(--key-face);
+  box-shadow: var(--key);
+  transition: var(--press-ease);
+}
+.lo-depth .btn-solid.ghost:hover,
+.lo-depth .chip:not(.solid):hover,
+.lo-depth .gm-btn:not(.solid):hover:not(:disabled),
+.lo-depth .gm-ruleset:hover,
+.lo-depth .set-btn:not(.primary):hover:not(:disabled),
+.lo-depth .fr-mini:not(.solid):not(.danger):hover:not(:disabled),
+.lo-depth button.ui-chip:not(.solid):hover,
+.lo-depth .mail-button:hover,
+.lo-depth .tournament-button:hover,
+.lo-depth .lb-go-to-me:hover:not(:disabled),
+.lo-depth .lb-reset:hover,
+.lo-depth .rep-reason:hover,
+.lo-depth .combat-toggle:hover,
+.lo-depth .ui-modal-x:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--key-up);
+}
+.lo-depth .btn-solid.ghost:active,
+.lo-depth .chip:not(.solid):active,
+.lo-depth .gm-btn:not(.solid):active:not(:disabled),
+.lo-depth .gm-ruleset:active,
+.lo-depth .set-btn:not(.primary):active:not(:disabled),
+.lo-depth .fr-mini:not(.solid):not(.danger):active:not(:disabled),
+.lo-depth button.ui-chip:not(.solid):active,
+.lo-depth .mail-button:active,
+.lo-depth .tournament-button:active,
+.lo-depth .lb-go-to-me:active:not(:disabled),
+.lo-depth .lb-reset:active,
+.lo-depth .rep-reason:active,
+.lo-depth .combat-toggle:active,
+.lo-depth .combat-toggle[aria-expanded="true"],
+.lo-depth .ui-modal-x:active {
+  transform: translateY(var(--travel));
+  box-shadow: var(--key-down);
+}
+/* A disabled key is not a key: it never lifts or sinks (several hover/active rules above are more
+ * specific than a plain :disabled, hence the !important), and a disabled accent key loses its side
+ * and glow so a greyed-out Install does not still read as a raised, lit button. */
+.lo-depth button:disabled,
+.lo-depth button:disabled:hover,
+.lo-depth button:disabled:active { transform: none !important; }
+.lo-depth .btn-solid:disabled,
+.lo-depth .gm-btn.solid:disabled,
+.lo-depth .set-btn.primary:disabled,
+.lo-depth .bug-send:disabled,
+.lo-depth .fr-mini.solid:disabled,
+.lo-depth .tournament-register:disabled { box-shadow: none; background-image: none; }
+
+/* A key that moves must not move out from under the pointer. Pressed, it drops by its travel, so a
+ * press that starts on its top edge would release above it and the click would land on whatever is
+ * behind; hovered, it lifts 1px off its own bottom edge. A transparent skirt covers the strip it
+ * vacates, only while it is hovered or held. */
+.lo-depth :is(.rank-info-btn, .btn-ghost-light, .btn-find, .btn-accept, .btn-choice, .btn-solid,
+              .gm-btn, .gm-ruleset, .set-btn, .bug-send, .fr-mini, button.ui-chip, .chip,
+              .mail-button, .tournament-button, .tournament-register, .lb-go-to-me, .lb-reset,
+              .rep-reason, .combat-toggle, .chat-channel, .round-choice):is(:hover, :active) { position: relative; }
+.lo-depth :is(.ranked-mode-choice, .rank-info-btn, .btn-ghost-light, .btn-find, .btn-accept, .btn-choice,
+              .btn-solid, .gm-btn, .gm-ruleset, .set-btn, .bug-send, .fr-mini, button.ui-chip, .chip,
+              .mail-button, .tournament-button, .tournament-register, .lb-go-to-me, .lb-reset,
+              .rep-reason, .combat-toggle, .chat-channel, .round-choice, button.veto-map,
+              .ui-modal-x):is(:hover, :active)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: -2px;
+}
+.lo-depth :is(.ranked-mode-choice, .rank-info-btn, .btn-ghost-light, .btn-solid, .gm-btn, .gm-ruleset,
+              .set-btn, .bug-send, .fr-mini, button.ui-chip, .chip, .mail-button, .tournament-button,
+              .tournament-register, .lb-go-to-me, .lb-reset, .rep-reason, .combat-toggle, .chat-channel,
+              .round-choice, button.veto-map, .ui-modal-x):active::before { top: calc(-1 * var(--travel) - 2px); }
+/* button.* so this outranks the rule above, whose list includes button.veto-map */
+.lo-depth :is(button.btn-find, button.btn-accept, button.btn-choice):active::before { top: calc(-1 * var(--white-side) - 2px); }
+
+/* Segmented controls (5v5/1v1, Global/Friends, All/Played/Cancelled...): the track is cut into
+ * the surface and the chosen segment is a red key standing up out of it. */
+.lo-depth .ui-tabs {
+  background: rgba(0, 0, 0, calc(.3 * var(--d)));
+  box-shadow: var(--well-deep);
+}
+.lo-depth .ui-tab { transition: var(--press-ease); }
+.lo-depth .ui-tab:not(.active):hover { color: var(--text); background: rgba(255, 255, 255, calc(.035 * var(--d))); }
+.lo-depth .ui-tab:not(.active):active { box-shadow: inset 0 2px 4px rgba(0, 0, 0, calc(.6 * var(--d))); }
+.lo-depth .ui-tab.active {
+  position: relative;
+  z-index: 1;
+  background-image: var(--red-face);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, calc(.32 * var(--d))), inset 0 -2px 0 rgba(0, 0, 0, calc(.3 * var(--d))),
+              0 2px 0 #6c0817, 0 3px 4px rgba(0, 0, 0, calc(.6 * var(--d))), 0 8px 16px -6px rgba(200, 16, 46, calc(.65 * var(--d)));
+  transform: translateY(calc(-1px * var(--d)));
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, calc(.3 * var(--d)));
+}
+/* Toggle pairs (Team/All chat, round chips): the chosen one is held down. */
+.lo-depth .chat-channel,
+.lo-depth .round-choice {
+  background-image: var(--key-face);
+  box-shadow: var(--key);
+  transition: var(--press-ease);
+}
+.lo-depth .chat-channel:hover,
+.lo-depth .round-choice:hover { transform: translateY(-1px); box-shadow: var(--key-up); }
+.lo-depth .chat-channel[aria-pressed="true"],
+.lo-depth .round-choice[aria-pressed="true"] {
+  transform: translateY(var(--travel));
+  background-image: none;
+  box-shadow: var(--key-down);
+}
+.lo-depth .round-choice[aria-pressed="true"] { box-shadow: inset 0 -2px var(--accent), var(--key-down); }
+
+/* Map tiles in the veto are keys too: pick one and it goes down. */
+.lo-depth .veto-map { box-shadow: var(--rim), inset 0 -2px 0 rgba(0, 0, 0, calc(.5 * var(--d))), 0 2px 0 #060607, var(--e1); transition: var(--press-ease); }
+.lo-depth button.veto-map:hover { transform: translateY(-1px); box-shadow: var(--rim-strong), inset 0 -2px 0 rgba(0, 0, 0, calc(.5 * var(--d))), 0 3px 0 #060607, var(--e2); }
+.lo-depth button.veto-map:active { transform: translateY(2px); box-shadow: inset 0 2px 6px rgba(0, 0, 0, calc(.6 * var(--d))), 0 1px 0 #060607; }
+.lo-depth .veto-map.final { box-shadow: var(--rim), 0 0 0 1px rgba(61, 220, 132, calc(.25 * var(--d))), 0 8px 22px -10px rgba(61, 220, 132, calc(.45 * var(--d))); }
+
+/* ================================================================ recesses */
+.lo-depth .join-row input,
+.lo-depth .chat-row input,
+.lo-depth .chat-log,
+.lo-depth .set-path,
+.lo-depth .set-path-input,
+.lo-depth .set-select,
+.lo-depth .set-link-field input,
+.lo-depth .fr-code,
+.lo-depth .fr-input,
+.lo-depth .bug-box,
+.lo-depth .mail-compose textarea,
+.lo-depth .mail-select,
+.lo-depth .leaderboard .lb-control,
+.lo-depth .tournament-support-form input,
+.lo-depth .tournament-support-form textarea,
+.lo-depth .tournament-support-form select,
+.lo-depth .tournament-share,
+.lo-depth .rep-details,
+.lo-depth .account-field input {
+  box-shadow: var(--well);
+}
+.lo-depth .join-row input,
+.lo-depth .chat-row input,
+.lo-depth .chat-log { background-color: #111115; }
+.lo-depth .gm-progress,
+.lo-depth .ub-progress { box-shadow: inset 0 1px 2px rgba(0, 0, 0, calc(.55 * var(--d))); }
+.lo-depth .gm-progress-fill { box-shadow: 0 0 10px rgba(200, 16, 46, calc(.7 * var(--d))); }
+/* Range sliders: the knob and track lift off the card a little. */
+.lo-depth input[type="range"] { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, calc(.5 * var(--d)))); }
+
+/* ================================================================ lists and rows */
+.lo-depth .leaderboard .lb-cols { box-shadow: 0 8px 12px -10px rgba(0, 0, 0, calc(.9 * var(--d))); position: relative; z-index: 1; }
+.lo-depth .leaderboard .lb-row { transition: background-color .15s ease, box-shadow .15s ease; }
+.lo-depth .leaderboard .lb-row:hover { background-color: rgba(255, 255, 255, calc(.025 * var(--d))); }
+.lo-depth .leaderboard .lb-row.you {
+  position: relative;
+  z-index: 1;
+  background-image: var(--spill-side), var(--sheen-2);
+  box-shadow: var(--rim), var(--e2);
+}
+.lo-depth .hist-row,
+.lo-depth .recent-open,
+.lo-depth .fr-row { transition: background-color .15s ease, box-shadow .15s ease, transform .12s ease; }
+.lo-depth .hist-row { background-image: var(--sheen-2); box-shadow: var(--rim), 0 1px 0 rgba(0, 0, 0, calc(.55 * var(--d))); }
+.lo-depth .hist-row:hover,
+.lo-depth .recent-open:hover { position: relative; z-index: 1; box-shadow: var(--rim-strong), var(--e2); }
+.lo-depth .md-player.you,
+.lo-depth .pm-player.you { box-shadow: inset 2px 0 var(--accent); background-image: var(--spill-side); }
+.lo-depth .md-team-h,
+.lo-depth .pm-team-h { box-shadow: 0 1px 0 rgba(0, 0, 0, calc(.6 * var(--d))), inset 0 -1px 0 rgba(255, 255, 255, calc(.03 * var(--d))); }
+.lo-depth .md-round,
+.lo-depth .recent-res { box-shadow: inset 0 1px 0 rgba(255, 255, 255, calc(.18 * var(--d))), inset 0 -1px 0 rgba(0, 0, 0, calc(.25 * var(--d))), 0 1px 2px rgba(0, 0, 0, calc(.45 * var(--d))); }
+.lo-depth .tournament-you-row { background-image: var(--spill-side); box-shadow: var(--rim); }
+.lo-depth .tournament-status[data-phase="live"] { box-shadow: 0 0 14px rgba(255, 79, 88, calc(.25 * var(--d))), inset 0 1px 0 rgba(255, 255, 255, calc(.06 * var(--d))); }
+.lo-depth .mail-message { box-shadow: var(--rim), 0 2px 6px -2px rgba(0, 0, 0, calc(.55 * var(--d))); }
+
+/* Map art: a vignette so the picture sits inside its frame instead of on top of it. */
+.lo-depth .hist-map-art,
+.lo-depth .gm-icon { position: relative; box-shadow: 0 2px 6px -1px rgba(0, 0, 0, calc(.6 * var(--d))); }
+.lo-depth .hist-map-art::after,
+.lo-depth .gm-icon::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, calc(.07 * var(--d))), inset 0 -14px 18px -8px rgba(0, 0, 0, calc(.55 * var(--d)));
+}
+
+/* ================================================================ people */
+.lo-depth .ui-avatar,
+.lo-depth .member .av,
+.lo-depth .fr-avatar {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, calc(.2 * var(--d))), inset 0 -1px 0 rgba(0, 0, 0, calc(.3 * var(--d))),
+              0 2px 5px rgba(0, 0, 0, calc(.5 * var(--d)));
+}
+.lo-depth .ui-avatar.anon { box-shadow: inset 0 2px 6px rgba(0, 0, 0, calc(.6 * var(--d))); }
+.lo-depth .fr-dot.on,
+.lo-depth .invite-dot.on,
+.lo-depth .pip.on { box-shadow: 0 0 6px rgba(61, 220, 132, calc(.6 * var(--d))); }
+.lo-depth .pip:not(.on) { box-shadow: inset 0 1px 2px rgba(0, 0, 0, calc(.45 * var(--d))); }
+
+/* ================================================================ the friends dock */
+/* A rail pinned to the right edge: it throws a thin shadow across the screen beside it, and
+ * the open drawer throws a deeper one. */
+.lo-depth .fr-toggle {
+  background-image: linear-gradient(90deg, rgba(0, 0, 0, calc(.18 * var(--d))), rgba(0, 0, 0, 0) 10px), var(--sheen);
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, calc(.04 * var(--d))), -10px 0 22px -14px rgba(0, 0, 0, calc(.95 * var(--d)));
+}
+.lo-depth .fr-toggle-requests { box-shadow: 0 2px 6px rgba(200, 16, 46, calc(.55 * var(--d))); }
+.lo-depth .fr-panel {
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, calc(.02 * var(--d))), rgba(255, 255, 255, 0) 30%);
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, calc(.05 * var(--d))), -18px 0 48px -8px rgba(0, 0, 0, calc(.85 * var(--d)));
+}
+.lo-depth .fr-menu { box-shadow: var(--rim), var(--e2); }
+
+/* ================================================================ overlays (e3) */
+/* The app behind a dialog steps back: it dims and softens, so the dialog is the one thing in
+ * focus. The dialog itself floats on the deepest shadow in the system. */
+.lo-depth .ui-overlay {
+  background:
+    radial-gradient(120% 90% at 50% 40%, rgba(0, 0, 0, .5), rgba(0, 0, 0, .72));
+  backdrop-filter: blur(calc(3px * var(--d))) saturate(calc(1 - .15 * var(--d)));
+}
+.lo-depth .ui-modal {
+  background-image: var(--spill), var(--sheen);
+  box-shadow: var(--rim-strong), var(--e3);
+}
+.lo-depth .pm-modal.pm-win { background-image: linear-gradient(180deg, rgba(61, 220, 132, calc(.08 * var(--d))), rgba(61, 220, 132, 0) 44px), var(--sheen); }
+.lo-depth .pm-modal.pm-void { background-image: linear-gradient(180deg, rgba(224, 180, 92, calc(.08 * var(--d))), rgba(224, 180, 92, 0) 44px), var(--sheen); }
+.lo-depth .pm-rr { box-shadow: var(--rim), var(--e1); }
+.lo-depth .md-combat,
+.lo-depth .pm-combat { box-shadow: inset 0 2px 6px rgba(0, 0, 0, calc(.45 * var(--d))); }
+.lo-depth .combat-metric { box-shadow: var(--rim), 0 1px 2px rgba(0, 0, 0, calc(.4 * var(--d))); }
+.lo-depth #toast { box-shadow: var(--rim-strong), var(--e3); }
+
+/* ================================================================ the window's edge */
+/* The frameless window's only edge is ui.css's inset shadow on <body>, which paints under the app -
+ * and the workspace now has a background of its own that covered it on the left and bottom. Draw
+ * the same hairline over the app instead: below the resize grips (z 40) and every overlay (900). */
+html.lo-depth:not(.native-frame) body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 39;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+/* ================================================================ reduced motion */
+/* The screens already turn button motion off for reduced motion (competitive.css, gamemodes.css);
+ * the depth rules are more specific, so they must honour it themselves. Light and shadow stay. */
+@media (prefers-reduced-motion: reduce) {
+  .lo-depth { --travel: 0px; }
+  .lo-depth :is(.btn-find, .btn-accept, .btn-choice) { --white-side: 0px; }
+  .lo-depth button:is(:hover, :active),
+  .lo-depth .ui-tab.active,
+  .lo-depth .ranked-mode-choice.active,
+  .lo-depth :is(.chat-channel, .round-choice)[aria-pressed="true"],
+  .lo-depth .combat-toggle[aria-expanded="true"] { transform: none !important; }
+}
