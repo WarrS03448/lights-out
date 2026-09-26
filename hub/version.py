@@ -15,7 +15,7 @@ import os
 
 # ---------------------------------------------------------------- identity
 APP_NAME = "Lights Out"
-HUB_VERSION = "2.8.7"                       # display version: shown in the UI, the installer name, AppVersion
+HUB_VERSION = "3.0.0"                       # display version: shown in the UI, the installer name, AppVersion
 # Version-info resource fields (hub.spec). Plain strings; the exe's file version is HUB_VERSION.
 COMPANY_NAME = "Lights Out (unofficial)"
 PRODUCT_NAME = APP_NAME
