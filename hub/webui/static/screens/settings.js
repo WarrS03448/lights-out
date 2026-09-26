@@ -17,7 +17,64 @@
 (function () {
   "use strict";
 
-  window.HubUI.registerScreen("settings", { render: render });
+  window.HubUI.registerScreen("settings", { render: render, update: update });
+
+  // AN OPEN DROPDOWN HAS TO STAY IN THE PAGE. The core redraws this screen on every changed
+  // snapshot, several a second whatever changed, and a <select> taken out of the page closes its
+  // list under the cursor. Sam, 2026-09-25: the language dropdown "disappears after a second due
+  // to the refresh". So while a dropdown here has focus, the new draw is built off the page and
+  // grafted on: the dropdown and every element above it stay where they are with their attributes
+  // brought up to date, and everything beside them is swapped for the fresh copy. The dropdown's
+  // own options and value are left to the player until they move on; the next snapshot after that
+  // is the plain redraw again. Nothing focused, or a shape that does not line up: plain redraw.
+  function update(root, state, ctx) {
+    var picker = document.activeElement;
+    if (!picker || picker.tagName !== "SELECT" || !picker.id || !root.contains(picker)) { return false; }
+    var draft = document.createElement("div");
+    render(draft, state, ctx);
+    var fresh = draft.querySelector("#" + picker.id);
+    if (!fresh || !graft(root, draft, picker, fresh)) {
+      // render() has already put this draw's modals on the body, so finish it here rather than
+      // let the core draw a second copy.
+      root.innerHTML = "";
+      while (draft.firstChild) { root.appendChild(draft.firstChild); }
+    }
+    return true;
+  }
+
+  function chainTo(node, top) {
+    var chain = [];
+    for (; node && node !== top; node = node.parentNode) { chain.unshift(node); }
+    return node === top ? chain : null;
+  }
+
+  function graft(root, draft, keep, fresh) {
+    var olds = chainTo(keep, root), news = chainTo(fresh, draft);
+    if (!olds || !news || olds.length !== news.length) { return false; }
+    for (var i = 0; i < olds.length; i++) {
+      if (olds[i].tagName !== news[i].tagName) { return false; }
+    }
+    var oldParent = root, newParent = draft;
+    olds.forEach(function (old, i) {
+      Array.prototype.slice.call(oldParent.childNodes).forEach(function (n) {
+        if (n !== old) { oldParent.removeChild(n); }
+      });
+      var before = true;
+      Array.prototype.slice.call(newParent.childNodes).forEach(function (n) {
+        if (n === news[i]) { before = false; }
+        else if (before) { oldParent.insertBefore(n, old); }
+        else { oldParent.appendChild(n); }
+      });
+      Array.prototype.slice.call(old.attributes).forEach(function (a) {
+        if (!news[i].hasAttribute(a.name)) { old.removeAttribute(a.name); }
+      });
+      Array.prototype.slice.call(news[i].attributes).forEach(function (a) {
+        if (old.getAttribute(a.name) !== a.value) { old.setAttribute(a.name, a.value); }
+      });
+      oldParent = old; newParent = news[i];
+    });
+    return true;
+  }
 
   // The "also delete my data" tick, kept OUTSIDE render on purpose. The snapshot re-renders this
   // screen several times a second, and the core only preserves an input's `value` across a
