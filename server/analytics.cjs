@@ -27,7 +27,7 @@ function cleanEvent(raw,context={},now=Date.now()){
     if(typeof v==='number'&&Number.isFinite(v)&&Math.abs(v)<=1e12)data[k]=v;
     else if(typeof v==='boolean')data[k]=v;
     else if(typeof v==='string'&&/^[A-Za-z0-9_. -]{1,96}$/.test(v)&&!/(?:bearer|token|password|secret|sk[-_]|eyJ)/i.test(v)&&
-      (context.source!=='client'||/^[a-z][a-z0-9_.-]{0,95}$/.test(v)||k==='error_class'&&['TimeoutError','ConnectionError','OSError','RuntimeError','ValueError'].includes(v)))data[k]=v;
+      (context.source!=='client'||/^[a-z][a-z0-9_.-]{0,95}$/.test(v)||k==='error_class'&&['TimeoutError','ConnectionError','OSError','RuntimeError','ValueError','FileNotFoundError','PermissionError','KeyError','TypeError','AttributeError'].includes(v)))data[k]=v;
   }
   const out={schema:1,id:raw.id,type:raw.type,at,received_at:now,source:context.source||'server',
     severity:['info','warn','error'].includes(raw.severity)?raw.severity:'info',actor_id:SID.test(context.actor_id)?context.actor_id:null,

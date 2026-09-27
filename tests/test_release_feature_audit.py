@@ -128,3 +128,32 @@ def test_connect_replay_restores_teams_sides_and_host_readiness():
                             'connect_seconds': 123})
     assert session.host_ready and session.join_left == 123 and session.my_team() == 2
     assert session.sides == {1: 'defend', 2: 'attack'}
+
+
+def test_a_pak_that_raises_is_logged_and_handled_instead_of_escaping(monkeypatch):
+    """The session's except arms called a _log_exception only the Tk panel had, so each one raised
+    AttributeError: the connect handler died before the stale-pak remove() and the error line."""
+    panel, session = _panel()
+    panel.app.game_dir = 'scratch-game'
+    session.phase = 'connecting'
+    session.map = 'Rome'
+    removed, launches = [], []
+    def prepare(*args, **kwargs):
+        raise TypeError('prepare blew up')
+    monkeypatch.setattr(C.lobbypak_mod, 'prepare', prepare)
+    monkeypatch.setattr(C.lobbypak_mod, 'remove', lambda game: removed.append(game) or True)
+    monkeypatch.setattr(C.game_mod, 'game_running', lambda: False)
+    monkeypatch.setattr(C.game_mod, 'launch_game', lambda: launches.append(True) or True)
+    session._on_connecting({'match_id': 'c' * 16, 'host': session.me['steam_id'], 'map': 'Rome',
+                            'players': [{'steam_id': session.me['steam_id']}], 'connect_seconds': 90})
+    assert removed == ['scratch-game'] and not launches and session.error
+    assert not session.host_level and not session.host_pak_done
+    assert '[competitive/prepare_host_pak]' in C.paths.log_file().read_text(encoding='utf-8')
+    def launch():
+        raise OSError('steam:// refused')
+    monkeypatch.setattr(C.game_mod, 'launch_game', launch)
+    session.host_pak_done = True
+    session.match_id = 'd' * 16
+    session._maybe_launch_game('host')
+    assert session.launched_for == 'd' * 16
+    assert '[competitive/launch_game]' in C.paths.log_file().read_text(encoding='utf-8')

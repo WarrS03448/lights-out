@@ -47,6 +47,14 @@ test('client identity is authenticated and unknown payload fields cannot retain 
   assert.equal(ev.actor_id,sid); assert.deepEqual(ev.data,{action:'accept',status:200});
   assert.equal(JSON.stringify(ev).includes('secret'),false);
 });
+test('a hub launch skip keeps its reason codes and builtin error class, never a free-form string', () => {
+  const skip=data=>api.cleanEvent({id:'skip-1',type:'launch.outcome',at:Date.now(),severity:'warn',match_id:'m-1',data},{actor_id:sid,source:'client'});
+  const ev=skip({action:'host',status:'skipped',phase:'pak',reason:'pak_failed',code:'install',error_class:'PermissionError'});
+  assert.ok(ev,'the whole batch is rejected when one event is'); assert.equal(ev.severity,'warn'); assert.equal(ev.match_id,null);
+  assert.deepEqual(ev.data,{action:'host',status:'skipped',phase:'pak',reason:'pak_failed',code:'install',error_class:'PermissionError'});
+  for(const name of ['FileNotFoundError','KeyError','TypeError','AttributeError'])assert.equal(skip({error_class:name}).data.error_class,name);
+  assert.deepEqual(skip({reason:'pak_failed',error_class:'PrivateError',code:'C:/Users/sam/game'}).data,{reason:'pak_failed'});
+});
 test('malformed, future and unbounded client input is rejected', () => {
   assert.equal(api.cleanEvent({id:'x',type:'app.action',at:Infinity}, {source:'client'}),null);
   assert.equal(api.cleanEvent({id:'x',type:'app.action',at:Date.now()+900000}, {source:'client'}),null);

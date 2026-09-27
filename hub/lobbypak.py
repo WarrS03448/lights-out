@@ -376,28 +376,50 @@ def _complain(message, log=None):
         pass
 
 
+def _unresolved(game):
+    """Why resolve() found no level, as a reason code: the gamemode pak is not in ~mods, it is there
+    but no levels could be read from it, or the match's map is not among the levels it has."""
+    try:
+        if not os.path.isfile(os.path.join(game_mod.mods_dir(game, create=False), version.PAK_NAME)):
+            return "no_gamemode_pak"
+        return "no_level" if available_levels(game) else "no_levels"
+    except Exception:           # noqa: BLE001 - a diagnostic must not break the answer it explains
+        return "no_level"
+
+
 def prepare(game, gamemode_id, map_name, log=None, host_id="", token="", role="host",
-            report_token=""):
+            report_token="", why=None):
     """Put the right lobby pak in place for this match. Returns the level name, or "" if we cannot.
 
     "" is a complete answer: the caller tells the host to open the map themselves, and the manual
     "I'm in" button still releases the joiners. What it must NOT do is launch the game anyway - that
-    is how a host ends up in the wrong map."""
+    is how a host ends up in the wrong map.
+
+    `why`, when the caller passes a dict, is filled on a "" answer with the reason as telemetry can
+    carry it: "reason" is game_running, no_gamemode_pak, no_levels, no_level or pak_failed, and a
+    pak_failed adds the step that raised ("code": variant or install) and the exception's class
+    name. Never its message - those carry paths, SteamIDs and the match token."""
+    why = {} if why is None else why
     if game_mod.game_running():
+        why["reason"] = "game_running"
         remove(game)
         return ""
     target = resolve(game, gamemode_id, map_name)
     if not target:
         remove(game)
+        why["reason"] = _unresolved(game)
         return ""
     level_pkg, level_name = target
     made = ""
+    step = "variant"
     try:
         made = variant(game, level_pkg, level_name, log=log,
                        host_id=host_id, token=token, role=role,
                        report_token=report_token)
+        step = "install"
         install(game, made)
     except Exception as e:
+        why.update(reason="pak_failed", code=step, error_class=type(e).__name__)
         # SAY WHY. Removing the pak and returning "" is the safe answer - better a host who is told
         # to open the map by hand than one launched into the wrong one - but doing it silently made
         # a real bug indistinguishable from "nothing to do". The joiner's ship-safety file list

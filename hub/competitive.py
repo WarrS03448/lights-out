@@ -43,6 +43,7 @@ from . import player_identity
 from . import paths
 from . import sounds as sounds_mod
 from . import state as state_mod
+from . import telemetry
 from .i18n import t, tn
 from .ranked_modes import name as ranked_name, strings as ranked_strings
 from . import catalogue as catalogue_mod
@@ -591,6 +592,7 @@ class Session:
                              # JOIN_SECONDS window, Python-ticked exactly like connect_left
     launched = False         # fallback for a service that sends no match id; see reset_match
     launched_for = ""        # the match id Bodycam was opened for. NOT cleared by reset_match.
+    _launch_attempt_for = "" # the match _maybe_launch_game itself went past its guard for
     match_id = ""            # the match the server currently has us in ("" when none)
     game_was_open = False    # the game was ALREADY running, so its one BeginPlay is spent
     game_opened_by_us = ""   # "host" (auto, at the connect window) or "player" (the joiner
@@ -711,6 +713,22 @@ class Session:
     history_stale = False    # a match just ended: the next look should re-ask the server
     history_seq = 0          # bumped on every answer, so a redraw can tell one fetch from the
                              # next even when the rows are the same length and the same match
+
+    def _log_exception(self, where):
+        """Swallowed exceptions go to the log rather than nowhere.
+
+        A SESSION METHOD TOO, not only the Tk panel's. The pak, launch and cleanup handlers here
+        all end in `except Exception: self._log_exception(...)`, and the session never had one: each
+        of those arms raised AttributeError instead of swallowing. A pak that failed to prepare
+        aborted the whole match_connecting handler - the remove() after it, the error line and the
+        connect countdown never ran - and the web UI's scheduler drops a callback's exception
+        without a trace (webui/scheduler.py _fire), so nothing anywhere said so."""
+        try:
+            import traceback
+            with open(paths.log_file(), "a", encoding="utf-8") as f:
+                f.write("\n[competitive/%s] %s" % (where, traceback.format_exc()))
+        except Exception:           # noqa: BLE001
+            pass
 
     # ---------------------------------------------------------------- the install gate
     def gamemode_installed(self) -> bool:
@@ -1050,17 +1068,23 @@ class MockSession(Session):
         game = self._game_dir()
         token = self._match_token()
         if not game or not self.map or not token:
+            self._report_launch_skip("pak", "no_game_dir" if not game else "no_map" if not self.map else "no_match_id")
             return False
         try:
+            why = {}
             ready = lobbypak_mod.prepare(game, getattr(self, "ranked_mode", "BB5"), self.map, log=None,
                                  host_id=player_identity.native_id(self.host),
-                                 token=token, role="join", report_token=self._report_configuration(self.migration_token))
+                                 token=token, role="join", report_token=self._report_configuration(self.migration_token),
+                                 why=why)
             self.pak_done = bool(ready)
             if ready:
                 self._lobby_pak_dir = game
                 self._pending_lobby_cleanup.discard(game)
+            else:
+                self._report_launch_skip("pak", why.pop("reason", "unknown"), **why)
             return self.pak_done
-        except Exception:
+        except Exception as exc:
+            self._report_launch_skip("pak", "prepare_error", error_class=type(exc).__name__)
             self._log_exception("prepare_joiner_pak")
             return False
 
@@ -1085,6 +1109,7 @@ class MockSession(Session):
         game = self._game_dir()
         if not game or not self.map:
             self.host_level = ""
+            self._report_launch_skip("pak", "no_game_dir" if not game else "no_map")
             return False
         try:
             # The host's own id goes in too: EVERY player's pak carries it, because the joiner
@@ -1093,15 +1118,20 @@ class MockSession(Session):
             # stamped into BodycamGI "Session Name", which the game's own MakeCreateLobbyParams
             # copies into the lobby's searchable `Name` attribute. Without it the host advertises
             # nothing a joiner could ask for by name, and autojoin degrades to manual silently.
+            why = {}
             self.host_level = lobbypak_mod.prepare(
                 game, getattr(self, "ranked_mode", HOST_GAMEMODE_ID), self.map,
                 host_id=player_identity.native_id(self.host),
-                token=self._match_token(), report_token=self._report_configuration(self.report_token))
+                token=self._match_token(), report_token=self._report_configuration(self.report_token),
+                why=why)
             self.host_pak_done = bool(self.host_level)
             if self.host_pak_done:
                 self._lobby_pak_dir = game
                 self._pending_lobby_cleanup.discard(game)
-        except Exception:
+            else:
+                self._report_launch_skip("pak", why.pop("reason", "unknown"), **why)
+        except Exception as exc:
+            self._report_launch_skip("pak", "prepare_error", error_class=type(exc).__name__)
             self._log_exception("prepare_host_pak")
             try:
                 lobbypak_mod.remove(game)
@@ -1136,6 +1166,35 @@ class MockSession(Session):
             return False
         return True
 
+    def _report_launch_skip(self, step, reason, severity="warn", **detail):
+        """Tell the service why Bodycam was NOT opened for this match.
+
+        Every way off the path to game_mod.launch_game used to end in silence as far as the service
+        could tell: the pak arms returned False, prepare() returned "", and the only trace was a
+        line in the player's own log. So when the host's game never opened on 2026-09-27 (two BB1
+        matches on deploy a78f9384) there was nothing to read. This sends the reason as a code -
+        never a path, token, SteamID or exception message - on launch.outcome with status
+        "skipped", which the service already accepts (server/analytics.cjs CLIENT_TYPES).
+
+        Once per match, role, step and reason: a failed pak is retried on every replayed
+        match_connecting, and a flapping stream replays it many times. Wrapped whole, because a
+        diagnostic may never be the thing that breaks the launch it is describing."""
+        if not getattr(self, "live", False):
+            return
+        try:
+            match_id = str(getattr(self, "match_id", "") or "")
+            key = ("host" if self._i_am_host() else "join", step, reason)
+            seen = getattr(self, "_launch_skips", None)
+            if not seen or seen[0] != match_id:
+                seen = self._launch_skips = (match_id, set())
+            if key in seen[1]:
+                return
+            seen[1].add(key)
+            telemetry.emit("launch.outcome", severity=severity, action=key[0], status="skipped",
+                           phase=step, reason=reason, **detail)
+        except Exception:
+            self._log_exception("report_launch_skip")
+
     def _maybe_launch_game(self, why):
         """Open Bodycam once per match, if it is not already open.
 
@@ -1144,27 +1203,36 @@ class MockSession(Session):
         Bodycam process to tell it otherwise, and launch_game() would be a no-op. They are marked
         so the screen can say so rather than leaving them to wonder why nothing happened."""
         if self.phase != "connecting":
+            self._report_launch_skip("launch", "not_connecting")
             return
         # ONCE PER MATCH, KEYED ON THE MATCH - not once per session object. The service replays
         # match_connecting to any hub that reconnects mid-window (that is what it is for), so the
         # only thing that can safely mean "we already did this" is the id of the match itself.
         mid = str(getattr(self, "match_id", "") or "")
         if mid and self.launched_for == mid:
+            # A replay after our OWN attempt is routine, and that attempt was reported already.
+            # Anything else set the guard without launching (_recover_running_game), so say so.
+            if self._launch_attempt_for != mid:
+                self._report_launch_skip("launch", "already_launched_for_match", severity="info")
             return
         if not mid and self.launched:
+            self._report_launch_skip("launch", "already_launched", severity="info")
             return                       # no id to key on: behave as before, once per reset
         self.launched = True
         self.launched_for = mid
+        self._launch_attempt_for = mid
         try:
             if game_mod.game_running():
                 self.game_was_open = True          # the screen tells them to restart
                 self._take_game_ownership()
+                self._report_launch_skip("launch", "game_running")
                 return
             self._game_launch_at = time.time()
             game_mod.launch_game()
             self.game_opened_by_us = why
             self._take_game_ownership()
-        except Exception:
+        except Exception as exc:
+            self._report_launch_skip("launch", "launch_error", error_class=type(exc).__name__)
             self._log_exception("launch_game")
 
     def _take_game_ownership(self):
@@ -1278,6 +1346,8 @@ class MockSession(Session):
         claim: goLiveIfReady holds the match until the GAME reports teams that match the lobby's,
         so reporting in here cannot start a match nobody is standing in."""
         if self.phase != "connecting" or self._i_am_host() or not self.host_ready:
+            self._report_launch_skip("button", "not_connecting" if self.phase != "connecting" else
+                                     "is_host" if self._i_am_host() else "not_host_ready")
             return
         # The pak FIRST, and this ordering is the whole feature: paks mount at process start, so
         # an install that lands after the launch does nothing at all.
@@ -1312,6 +1382,7 @@ class MockSession(Session):
             if game_mod.game_running():
                 self._game_launch_at = None
                 self._take_game_ownership()
+                self._report_launch_skip("relaunch", "game_running")
                 self.error = t("comp_open_game_running")
                 self._cue(self.error)
                 self._changed()
@@ -3806,6 +3877,9 @@ class LiveSession(MockSession):
                 else:
                     if kind == "rating":
                         self._changed()
+                    elif kind == "match_connecting":
+                        # Dropping this one means the connect window never opens here at all.
+                        self._report_launch_skip("event", "mode_mismatch")
                     return
         if kind == "ranked_ban":
             self.ranked_ban = event.get("ban")
@@ -4250,6 +4324,9 @@ class LiveSession(MockSession):
                                  all(ch in "0123456789abcdef" for ch in token) else "")
             if self._prepare_launch():
                 self._maybe_launch_game("host")
+        elif host_id and host_id == str((self.me or {}).get("steam_id") or ""):
+            # The service named us host and we are about to wait as a joiner: nothing would launch.
+            self._report_launch_skip("event", "host_mismatch")
         self._changed()
         if was != "connecting":
             self._later(1000, self._tick_connect)
