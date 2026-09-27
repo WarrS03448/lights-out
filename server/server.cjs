@@ -184,6 +184,10 @@ function requiredVersions(modeId = liveModule.GATED_MODE_ID) {
       // override, so without this the gate would demand 1.0.15 from a hub that had correctly
       // installed 1.0.15.2 - and, worse, would accept 1.0.15 from one that had not updated.
       mode: overriddenVersion(entry),
+      // The native Linux beta's own release (top-level `linux`, written by publish.py linux).
+      // Empty until the first Linux release. Only an optional per-platform gate in live.cjs would
+      // read it; the hub and mode fields above keep deciding everything they decide today.
+      linux: String(catalogue.linux?.version || ''),
     };
   } catch {
     value = null;

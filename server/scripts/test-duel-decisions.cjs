@@ -1,17 +1,31 @@
 // Uses the same Redis/Lua fixture as account and settlement tests.
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const live=require('../live.cjs'),identity=require('../player-identity.cjs');
-function redis(t){
- const child=require('node:child_process').spawn(process.env.ACCOUNT_TEST_PYTHON||'python',['-u',require('node:path').join(__dirname,'account-redis-fixture.py')]);
- let seq=0;const pending=new Map();
- require('node:readline').createInterface({input:child.stdout}).on('line',line=>{const r=JSON.parse(line),p=pending.get(r.id);pending.delete(r.id);if(p)r.error?p.reject(Error(r.error)):p.resolve(r.result);});
- child.on('exit',()=>{for(const p of pending.values())p.reject(Error('Fixture closed'));});t.after(()=>child.kill());
- return args=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});child.stdin.write(JSON.stringify({id,command:args})+'\n');});
+function redis(t, python=process.env.ACCOUNT_TEST_PYTHON||'python'){
+ const child=require('node:child_process').spawn(python,['-u',require('node:path').join(__dirname,'account-redis-fixture.py')]);
+ let seq=0,closed=null,stderr='';const pending=new Map(),services=[];
+ const close=error=>{closed ||= error;for(const p of pending.values())p.reject(closed);pending.clear();};
+ child.stderr.on('data',data=>{stderr=(stderr+data.toString()).slice(-2048);});
+ require('node:readline').createInterface({input:child.stdout}).on('line',line=>{
+  try {const r=JSON.parse(line),p=pending.get(r.id);pending.delete(r.id);if(p)r.error?p.reject(Error(r.error)):p.resolve(r.result);}
+  catch(error){close(Error('Fixture returned invalid JSON: '+error.message));}
+ });
+ child.on('error',error=>close(Error('Fixture failed: '+error.message)));
+ child.on('exit',(code,signal)=>close(Error(`Fixture closed (${code ?? signal}): ${stderr}`)));
+ child.stdin.on('error',error=>close(Error('Fixture input failed: '+error.message)));
+ t.after(async()=>{try{for(const service of services.reverse())await service.shutdown();}finally{child.kill();}});
+ const request=args=>new Promise((resolve,reject)=>{
+  if(closed)return reject(closed);
+  const id=++seq;pending.set(id,{resolve,reject});
+  child.stdin.write(JSON.stringify({id,command:args})+'\n',error=>{if(error)close(Error('Fixture input failed: '+error.message));});
+ });
+ request.track=service=>{services.push(service);return service;};
+ return request;
 }
 async function setup(t, limit=5){
  const raw=redis(t);let fail=false;
  const store=async args=>{if(fail&&args[0]==='EVAL'&&args[1].includes('local old = redis.call'))throw Error('receipt offline');return raw(args);};
- const L=live.create({upstashCmd:store,modeId:'BB1'});await L._internals.ready;t.after(()=>L.shutdown());
+ const L=raw.track(live.create({upstashCmd:store,modeId:'BB1'}));await L._internals.ready;
  const ids=['76561198000000001','76561198000000002'],teams={1:[ids[0]],2:[ids[1]]};
  const match=identity.freezeMatch({mode:'BB1',id:'abcdef0123456789',state:'live',host:ids[0],created:Date.now(),live_at:Date.now(),
   players:ids.map(steam_id=>({steam_id,connected:true,accepted:true})),teams,assigned_teams:structuredClone(teams),
@@ -19,14 +33,21 @@ async function setup(t, limit=5){
   left:[],map:'Paintball',expiry:'live',deadline:Date.now()-1000});
  L._internals.matches.set(match.id,match);ids.forEach(id=>L._internals.inMatch.set(id,match.id));
  await L._internals.flushMatches();
- return {L,match,ids,store,fail:x=>fail=x,account:i=>({player_id:ids[i],game_steam_id:ids[i]})};
+ return {L,match,ids,store,track:raw.track,fail:x=>fail=x,account:i=>({player_id:ids[i],game_steam_id:ids[i]})};
 }
+
+test('fixture startup failure rejects both pending and subsequent storage calls',{timeout:5000},async t=>{
+ // Node cannot run the Python fixture; this deliberately exercises early exit.
+ const raw=redis(t,process.execPath);
+ await assert.rejects(raw(['PING']),/Fixture/);
+ await assert.rejects(raw(['PING']),/Fixture/);
+});
 
 for(const limit of [5,7])test(`concession respects frozen first-to-${limit} rules after restart`,async t=>{
  const f=await setup(t,limit);f.match.score={1:limit-1,2:4};f.fail(true);
  assert.equal((await f.L.concedeMatch(f.account(0),{match_id:f.match.id})).unavailable,true);
  await f.L.shutdown();f.fail(false);
- const reboot=live.create({upstashCmd:f.store,modeId:'BB1'});t.after(()=>reboot.shutdown());await reboot._internals.ready;
+ const reboot=f.track(live.create({upstashCmd:f.store,modeId:'BB1'}));await reboot._internals.ready;
  assert.equal((await reboot.finalSnapshot(f.ids[0],{match_id:f.match.id})).ok,true);
  const receipt=JSON.parse(await f.store(['GET','hub:ranked:BB1:settlement:'+f.match.id]));
  assert.equal(receipt.limit,limit);assert.deepEqual(receipt.score,{1:limit-1,2:4});
@@ -49,7 +70,7 @@ test('pending concession survives overdue clocks, opposite concession, restart a
  assert.equal(opposite.ok,false);assert.match(opposite.error,/already/);
  assert.deepEqual(f.match.terminal,terminal);
  await f.L.shutdown();f.fail(false);
- const reboot=live.create({upstashCmd:f.store,modeId:'BB1'});t.after(()=>reboot.shutdown());await reboot._internals.ready;
+ const reboot=f.track(live.create({upstashCmd:f.store,modeId:'BB1'}));await reboot._internals.ready;
  assert(reboot._internals.matches.has(f.match.id));
  const done=await reboot.finalSnapshot(f.ids[0],{match_id:f.match.id});assert.equal(done.ok,true);
  const receipt=JSON.parse(await f.store(['GET','hub:ranked:BB1:settlement:'+f.match.id]));
