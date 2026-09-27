@@ -135,6 +135,33 @@ def test_running_stranded_game_gets_conditional_guidance_but_cannot_claim():
     assert not recovery.public_status(s)['visible']
 
 
+def test_dead_host_world_offers_no_reconnect_into_nothing():
+    # Live 2026-09-27: the host's world was gone, yet the joiner's Reconnect stayed up, and
+    # pressing it loaded Bodycam, failed to connect and dropped them in the shooting range.
+    s=SimpleNamespace(recovery={},recovery_health={'session_stale':True,'checkpoint_round':3,
+        'observation':'closed','can_claim':False},_i_am_host=lambda:False)
+    assert not recovery.launch_allowed(s)
+    status=recovery.public_status(s)
+    assert status['visible'] and not status['can_launch']
+    s.recovery_health['session_stale']=False
+    assert recovery.launch_allowed(s), 'a live host world still takes a reconnect'
+    s.recovery_health['session_stale']=True
+    s.recovery={'phase':'restoring','world_ready':True}
+    assert recovery.launch_allowed(s), 'the replacement world is the one to rejoin'
+
+
+def test_dead_host_world_fences_the_ordinary_reconnect_button(monkeypatch):
+    from hub.competitive import LiveSession
+    launched=[]
+    s=object.__new__(LiveSession)
+    s.phase="live";s.host_ready=True;s.recovery={};s.match_id="0123456789abcdef"
+    s.recovery_health={'session_stale':True};s.error=""
+    s._i_am_host=lambda:False;s._changed=lambda:None
+    s._relaunch_closed_game=lambda:launched.append(True)
+    LiveSession.relaunch_game(s)
+    assert launched==[] and s.error
+
+
 def test_completed_recovery_keeps_participant_reconnect_control():
     s=SimpleNamespace(recovery={'phase':'playing','can_rejoin':True},
         recovery_health={'checkpoint_round':3,'observation':'closed'},_i_am_host=lambda:False)

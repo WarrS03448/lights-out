@@ -58,6 +58,11 @@ def launch_allowed(session):
     if (session._i_am_host() and restore.get("phase") != "restoring" and
             (getattr(session, "phase", "") == "live" or getattr(session, "host_ready", False))):
         return False
+    # The service has heard nothing from the host's world for a minute: a reconnect would join a
+    # lobby that no longer exists and land in the shooting range (live, 2026-09-27). Claim instead.
+    if (restore.get("phase") != "restoring" and
+            (getattr(session, "recovery_health", {}) or {}).get("session_stale") is True):
+        return False
     if restore.get("can_rejoin") is False:
         return False
     if (restore.get("phase") == "restoring" and not restore.get("roster") and

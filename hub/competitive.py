@@ -1300,7 +1300,8 @@ class MockSession(Session):
             match_recovery.poll(self)
             self._changed()
             return
-        if recovery:
+        # A dead host world is known before any claim exists, so an ordinary match needs the fence too.
+        if recovery or (getattr(self, "recovery_health", {}) or {}).get("session_stale") is True:
             from . import match_recovery
             match_recovery.relaunch(self)
             return

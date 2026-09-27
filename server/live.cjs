@@ -426,6 +426,9 @@ const NEEDS_AUTH = ['/api/match/concede', '/api/messages', '/api/messages/thread
                     '/api/match/coin', '/api/match/choose', '/api/match/side', '/api/match/ban',
                     '/api/match/connecting', '/api/match/connected',
                     '/api/match/chat', '/api/match/void-vote',
+                    // Missing from 2026-09-24 to 09-27: every hub recovery poll 404'd, so a cold
+                    // host sat on "Recovery is not ready" until the match voided itself.
+                    '/api/match/recovery',
                     '/api/report',
                     '/api/bug',
                     '/api/leaderboard', '/api/ranked/profile',
