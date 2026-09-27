@@ -118,8 +118,7 @@ try {
   const offered = await request(A,'/api/network/signal',signal(a.body.revision,B,b.body.revision,attempt));
   assert.equal(offered.status,200);
   assert.deepEqual(deliveredB.pop(),{type:'network_signal',from:A,revision:a.body.revision,
-    target_revision:b.body.revision,attempt,signal:{type:'offer',data:offerSdp},
-    queue_actor:'',queue_context:'',queue_unit:''});
+    target_revision:b.body.revision,attempt,signal:{type:'offer',data:offerSdp}});
   assert.equal((await request(B,'/api/network/signal',
     signal(b.body.revision,A,a.body.revision,attempt,'answer'))).status,200);
 

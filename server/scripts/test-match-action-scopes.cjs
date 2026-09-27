@@ -22,9 +22,10 @@ function fixture(t, options={}) {
     players:ids.map(steam_id => ({steam_id, accepted:false, connected:false})),
     teams:{1:[ids[0]], 2:[ids[1]]}, host:ids[0], left:[], map:'Airsoft'});
   I.matches.set(B, match); ids.forEach(id => I.inMatch.set(id, B));
+  // A scoped client: a Windows hub is answered as 2d25405 did (test-legacy-wire.cjs).
   const request = async (action, body={}) => {
     const res = {};
-    await service.route({token:ids[0], body, headers:{}}, res, 'POST', '/api/match/' + action);
+    await service.route({token:ids[0], body, headers:{'x-hub-platform':'linux'}}, res, 'POST', '/api/match/' + action);
     return res;
   };
   t.after(() => service.shutdown());

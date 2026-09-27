@@ -10,12 +10,14 @@ function fixture(t, options={}) {
     readBody:async req=>Buffer.from(JSON.stringify(req.body||{})), ...options});
   const I=service._internals;
   for (const id of ids) {
-    I.clients.set(id,{steamId:id,gameSteamId:id,token:id,res:{write:data=>events.push([id,data]),end(){}}});
+    I.clients.set(id,{steamId:id,gameSteamId:id,token:id,scoped:true,res:{write:data=>events.push([id,data]),end(){}}});
     I.bySteam.set(id,new Set([id]));
   }
+  // Every caller is a scoped (Linux) client; `scoped` picks the route family. A Windows hub is
+  // answered as 2d25405 did (test-legacy-wire.cjs).
   const request=async (action,body={},id=ids[0],scoped=true)=>{
     const res={};
-    await service.route({token:id,headers:{},body},res,'POST','/api/party/'+(scoped?'scoped/':'')+action);
+    await service.route({token:id,headers:{'x-hub-platform':'linux'},body},res,'POST','/api/party/'+(scoped?'scoped/':'')+action);
     return res;
   };
   t.after(()=>service.shutdown());

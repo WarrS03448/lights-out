@@ -30,13 +30,13 @@ function partyFixture(t) {
     readBody:fixtureBody});
   const I = service._internals;
   for (const id of ids) {
-    I.clients.set(id, {steamId:id, gameSteamId:id, token:id, res:{write:data => events.push([id, data]), end() {}}});
+    I.clients.set(id, {steamId:id, gameSteamId:id, token:id, scoped:true, res:{write:data => events.push([id, data]), end() {}}});
     I.bySteam.set(id, new Set([id]));
   }
   // `raw`, when given, is the request body exactly as sent, in place of JSON.stringify(body).
   const request = async (action, body = {}, id = ids[0], scoped = true, raw = undefined) => {
     const res = {};
-    await service.route({token:id, headers:{}, body, raw}, res, 'POST', '/api/party/' + (scoped ? 'scoped/' : '') + action);
+    await service.route({token:id, headers:{'x-hub-platform':'linux'}, body, raw}, res, 'POST', '/api/party/' + (scoped ? 'scoped/' : '') + action);
     return res;
   };
   t.after(() => service.shutdown());
@@ -106,8 +106,9 @@ test('an invite to a dissolved party is not listed when a new party reuses its c
 });
 
 // readPartyActionBody: a body that is not a JSON object, or is over 4096 bytes, reads as
-// {expected_party_context:null}. No context matches null, so even a legacy route refuses it
-// rather than running it as an unscoped create or leave.
+// {expected_party_context:null}. No context matches null, so even a legacy route refuses it from a
+// scoped client rather than running it as an unscoped create or leave. (A Windows hub keeps
+// 2d25405's reading, an unreadable body is {}: test-legacy-wire.cjs.)
 const UNREADABLE = [['cut-off JSON', '{'], ['an array', '[]'], ['null', 'null'], ['a bare value', 'true'],
   ['a body over 4096 bytes', JSON.stringify({code:'', pad:'x'.repeat(4096)})]];
 for (const [what, raw] of UNREADABLE) {
@@ -163,7 +164,8 @@ async function queueFixture(t, {dual = false, store = null} = {}) {
   t.after(async () => { for (const s of streams) s.close(); await service.shutdown(); });
   await service._internals.ready;
   const internals = mode => dual ? service.forMode(mode)._internals : service._internals;
-  const headers = (mode = 'BB5', extra = {}) => ({'x-ranked-mode':mode,
+  // A Linux client on every request and on the stream (hub/live.py _stamp): the scopes are theirs.
+  const headers = (mode = 'BB5', extra = {}) => ({'x-ranked-mode':mode, 'x-hub-platform':'linux',
     'x-hub-version':'2.3.85', 'x-mode-version':'1.0.27',
     'x-bb5-version':'1.0.27', 'x-bb1-version':'1.0.27', ...extra});
   const measure = (mode, location) => internals(mode).networkRegistry.profile(A, {

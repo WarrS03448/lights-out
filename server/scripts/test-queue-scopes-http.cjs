@@ -34,7 +34,8 @@ async function fixture(t, dual = false) {
   t.after(async () => { for (const stream of streams) stream.close(); await service.shutdown(); });
   await service._internals.ready;
   const internals = mode => dual ? service.forMode(mode)._internals : service._internals;
-  const headers = (mode = 'BB5', extra = {}) => ({'x-ranked-mode':mode,
+  // A Linux client on every request and on the stream (hub/live.py _stamp): the scopes are theirs.
+  const headers = (mode = 'BB5', extra = {}) => ({'x-ranked-mode':mode, 'x-hub-platform':'linux',
     'x-hub-version':'2.3.85', 'x-mode-version':'1.0.27',
     'x-bb5-version':'1.0.27', 'x-bb1-version':'1.0.27', ...extra});
   async function post(path, body = {}, mode = 'BB5', extra = {}, token = A, raw) {

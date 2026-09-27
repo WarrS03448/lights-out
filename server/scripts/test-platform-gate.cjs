@@ -92,10 +92,13 @@ const LINUX = (hub, mode = MODE) => ({hub, mode, platform:'linux'});
 
 test('hello announces the platform gate beside the three action scopes', async t => {
   const f = await fixture(t, {hub:'3.0.3', mode:MODE});
-  const s = await f.stream(A, WIN('3.0.3'));
+  const s = await f.stream(A, LINUX('3.0.3'));
   const hello = s.events.find(e => e.type === 'hello');
   assert.deepEqual(hello.capabilities, {match_action_scopes_v1:true, party_action_scopes_v1:true,
     queue_action_scopes_v1:true, hub_platform_gate_v1:true});
+  // ...to the Linux build only: a Windows hub's hello is 2d25405's, with no capabilities at all.
+  const windows = await f.stream(B, WIN('3.0.3'));
+  assert.equal('capabilities' in windows.events.find(e => e.type === 'hello'), false);
 });
 
 test('Windows is unchanged whatever the Linux entry says', async t => {
