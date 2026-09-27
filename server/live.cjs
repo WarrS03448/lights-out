@@ -1108,13 +1108,37 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    *
    * HEADERS AND NOT A BODY, because the request that matters most for a party is the STREAM -
    * a GET with no body at all - and a member who is not the leader never sends anything else.
+   *
+   * The platform rides with the version it describes. The native Linux build sends
+   * `x-hub-platform: linux`; the value has to be exactly that, and anything else, including no
+   * header at all (every Windows hub), is recorded as Windows. See hubRequirement for what it
+   * changes.
    */
   function noteVersions(req, steamId) {
     const h = (req && req.headers) || {};
     const hub = String(h['x-hub-version'] || '').trim().slice(0, 32);
     const mode = String(h['x-mode-version'] || '').trim().slice(0, 32);
     if (!hub && !mode) return;                // an old hub says nothing; leave what we had
-    versions.set(steamId, { hub, mode, at: Date.now() });
+    const platform = h['x-hub-platform'] === 'linux' ? 'linux' : 'windows';
+    versions.set(steamId, { hub, mode, platform, at: Date.now() });
+  }
+
+  /**
+   * The hub version this player's build has to reach.
+   *
+   * THE PER-PLATFORM GATE. The Linux build ships on its own schedule, so it is held to the Linux
+   * catalogue entry (requiredVersions().linux) once server.cjs publishes one as a non-empty
+   * string. Until then, and for every other build, it is requiredVersions().hub, which is the
+   * lockstep rule every hub had before. The gamemode (pak) requirement is not per platform:
+   * both builds install the same pack. Each party member is judged by their own record.
+   *
+   * THIS IS A COMPATIBILITY GATE, NOT A SECURITY BOUNDARY. The platform is self-declared, like
+   * the version beside it; a client that claims the other platform only changes which published
+   * version it is compared with, and gains nothing a modified client could not already claim.
+   */
+  function hubRequirement(need, have) {
+    const linux = need.linux;
+    return have.platform === 'linux' && typeof linux === 'string' && linux.trim() ? linux : need.hub;
   }
 
   /**
@@ -1137,7 +1161,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
                need_hub: String(need.hub || ''), need_mode: String(need.mode || ''),
                have_hub: '', have_mode: '' };
     }
-    const hubStale = versionOlder(have.hub, need.hub);
+    const needHub = hubRequirement(need, have);
+    const hubStale = versionOlder(have.hub, needHub);
     // A hub that reports a hub version but NO mode version has no ranked pack installed. This
     // used to be waved through on the reasoning that "the tab cannot reach the queue without
     // one" - which was true of the Tk tab, whose gate screen replaces the Find match button, and
@@ -1158,7 +1183,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       // "update"); an older hub that does not know the flag still reads the rest and tells them
       // to go to Gamemodes, which is the right screen either way.
       missing_mode: missing,
-      need_hub: String(need.hub || ''),
+      need_hub: String(needHub || ''),
       need_mode: String(need.mode || ''),
       have_hub: have.hub || '',
       have_mode: have.mode || '',
@@ -5707,9 +5732,12 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     }
     bugCooldown.set(by, now);
 
+    // The platform rides with the hub version it qualifies (noteVersions): a Linux 3.0.x and a
+    // Windows 3.0.x are different builds, and triage has to be able to tell them apart.
     const v = versions.get(by) || {};
     const row = { at: now, by, persona: personaOf(by), text,
-                  hub: String(v.hub || ''), mode: String(v.mode || '') };
+                  hub: String(v.hub || ''), mode: String(v.mode || ''),
+                  platform: String(v.platform || '') };
     const list = (await loadBugs()).slice();
     list.unshift(row);
     saveBugs(list.slice(0, BUG_KEEP));
@@ -8431,7 +8459,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     }
 
     send(clientId, { type: 'hello', player_id: account.player_id, game_steam_id: account.game_steam_id, persona: account.persona || '',
-                     capabilities: {match_action_scopes_v1:true, party_action_scopes_v1:true, queue_action_scopes_v1:true},
+                     capabilities: {match_action_scopes_v1:true, party_action_scopes_v1:true, queue_action_scopes_v1:true,
+                                    hub_platform_gate_v1:true},
                      match_size: MATCH_SIZE, accept_seconds: ACCEPT_SECONDS,
                      connect_seconds: CONNECT_SECONDS, lobby_seconds: LOBBY_SECONDS,
                      ban_seconds: BAN_SECONDS,
