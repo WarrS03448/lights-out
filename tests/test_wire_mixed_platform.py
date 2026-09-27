@@ -34,7 +34,8 @@ Environment:
     MIXED_ONLY        run only the scenarios whose names contain this text
 
 RESULT, 2026-09-27: passes, all four scenarios, against this branch with the Linux client at
-e5ec3289 and the Windows hub at eb1f9e37 (3.0.3).
+e5ec3289 and the Windows hub at eb1f9e37 (3.0.3). Again after the rebase onto d80ac059: passes,
+all four scenarios (212 checks), with the Windows hub at eb1f9e37 and at d80ac059 (3.0.6).
 """
 import json
 import os

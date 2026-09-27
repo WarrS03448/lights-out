@@ -104,9 +104,19 @@ RESULT, 2026-09-27 (gate = claude/scopes-legacy-gate after 9b8cc451, reference =
       leader's BB5 search) and differed on the resend: it kept the re-sent invite where 2d25405
       sends the invitee an empty inbox and answers the accept 409 "That invite has expired.".
   Incidental, identical on both servers: POST /api/match/recovery (the hub's live-phase recovery
-  poll) is not in live.cjs NEEDS_AUTH, so server.cjs answers 404 "Not found." without reading the
-  body, and many of those polls end client-side in ConnectionAbortedError. Fixing that changes
-  what a Windows hub sees, so it is not part of the scopes redeploy.
+  poll) was not in live.cjs NEEDS_AUTH, so server.cjs answered 404 "Not found." without reading
+  the body, and many of those polls ended client-side in ConnectionAbortedError. main fixed that
+  in 3c1cd127 (hub 3.0.5), which is one reason the reference had to move to d80ac059.
+
+RESULT, 2026-09-27 (gate = claude/scopes-legacy-gate rebased onto d80ac059, reference = d80ac059,
+hub 3.0.6 reported):
+  --self-check, every section, with HUB303_DIR = C:/w/hub303 (3.0.3's code) and again with
+  HUB303_DIR = C:/w/hub306 (d80ac059, 3.0.6's own code): the reference against itself and the
+  gate against the reference are IDENTICAL (100 steps each, 2457 stream entries, 396 ordered
+  exchanges, 37 distinct polls, now that the recovery polls are answered; 2-12 status polls per
+  run raced the go-live write and were left out, on every server alike).
+  Control: the ungated scopes (745f0df0 rebased onto d80ac059) differ on every hub from its first
+  stream event (hello.capabilities, queue_actor/queue_context/queue_unit) and fail the `tab` step.
 """
 import argparse
 import hashlib
