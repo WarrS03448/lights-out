@@ -54,7 +54,7 @@ def default_state() -> dict:
             "comp_sound": None,
             # Empty means the player has not selected a region yet. Steam relay markers are opaque,
             # so the hub never invents geography from them, locale, or time zone. Cross-region play
-            # is an explicit opt-in and still observes the service's hard ping ceiling.
+            # is an explicit opt-in, and the service applies no ping ceiling to it (2026-09-27).
             "matchmaking_region": "",
             "matchmaking_cross_region": False,
             "ui_click_volume": 35,
