@@ -568,6 +568,11 @@ const LOBBY_SECONDS = Math.max(10, Number(process.env.COMP_LOBBY_SECONDS) || 600
 // no-show-penalized before their five minutes are up.
 const CONNECT_SECONDS = Math.max(5, Number(process.env.COMP_CONNECT_SECONDS) || 300);
 
+// How long a connect window may run with no sign of the host's launch before the log says so. A
+// good launch shows one 4-20 s after the window opens (the cleanup worker's completion poll, the
+// travel permit, a report-in). Logging only, see watchConnect; the floor lets a test run it fast.
+const CONNECT_SILENT_SECONDS = Math.max(1, Number(process.env.COMP_CONNECT_SILENT_SECONDS) || 90);
+
 // ...and the no-show pays for it: "the person who didnt connect will lose a medium size of
 // elo and get a 5 [minute] queue ban". This is a LIGHTER offence than abandoning a live
 // match, which has its own ladder (10m/30m/1h/1d/1w/permanent - memory section 2, C6-C9)
@@ -2824,6 +2829,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     for (const p of match.players) inMatch.delete(p.player_id);
     matches.delete(match.id);
     hostChecks.delete(match.id);
+    unwatchConnect(match.id);
     forgetMatch(match.id);          // and the live copy, so no boot can bring it back
     // Only now, with the players already released and the match already out of the registry:
     // archiving needs nothing from either, so writing history can never be what keeps ten
@@ -3598,6 +3604,61 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     };
   }
 
+  // ---------------------------------------------------------------- connect-window evidence
+  //
+  // THE 2026-09-27 STALL LEFT NOTHING TO READ. Two 1v1 connect windows opened and the host's hub
+  // never launched the game: no completion poll, no permit ask, no report-in - and nothing on this
+  // side said whether that host even had a stream to receive match_connecting on. These two lines
+  // are that record for next time: one when a window opens, one if the host is still silent
+  // CONNECT_SILENT_SECONDS later. Nothing else. They change no behaviour.
+  //
+  // IN A MAP OF ITS OWN, never on the match: serialiseMatch sweeps every key of a match into
+  // storage, and a restored match simply has no watch (rearm leaves its own row in the timeline).
+  const connectWatch = new Map();    // matchId -> {host, timer}
+
+  // Streams this process holds open for a player on this ladder, right now.
+  function liveStreams(steamId) {
+    let n = 0;
+    for (const clientId of bySteam.get(steamId) || []) {
+      const res = clients.get(clientId)?.res;
+      if (res && !res.destroyed && !res.writableEnded) n++;
+    }
+    return n;
+  }
+
+  function unwatchConnect(matchId) {
+    const watch = connectWatch.get(matchId);
+    if (!watch) return;
+    clearTimeout(watch.timer);
+    connectWatch.delete(matchId);
+  }
+
+  // Called after match_connecting has been handed to every player's streams.
+  function watchConnect(match) {
+    unwatchConnect(match.id);
+    const host = String(match.host || '');
+    const streams = liveStreams(host);
+    console.log('[connect] %s opened host=%s host_streams=%d players=%d%s', match.id, host, streams,
+                match.players.length, streams ? '' : ' - the host has no open stream');
+    const timer = setTimeout(() => {
+      connectWatch.delete(match.id);
+      const current = matches.get(match.id);
+      if (!current || current.state !== 'connecting') return;
+      console.log('[connect] %s host %s silent %ds host_streams=%d', match.id, host,
+                  CONNECT_SILENT_SECONDS, liveStreams(host));
+    }, CONNECT_SILENT_SECONDS * 1000);
+    if (typeof timer.unref === 'function') timer.unref();
+    connectWatch.set(match.id, { host, timer });
+  }
+
+  // Any sign that the host's launch happened ends the watch: the permit ask, the cleanup worker's
+  // completion poll, a report-in from the hub or from the game.
+  function connectSign(steamId) {
+    const id = String(steamId || '');
+    const matchId = inMatch.get(id);
+    if (matchId && connectWatch.get(matchId)?.host === id) unwatchConnect(matchId);
+  }
+
   /**
    * The veto is over and a host has been picked: start the three minutes.
    *
@@ -3688,6 +3749,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     grantHostPermit(match.host, CONNECT_SECONDS + 120);
     arm(match, CONNECT_SECONDS, 'connect', () => expireConnect(match.id));
     for (const p of match.players) sendTo(p.player_id, connectPayload(match, p.player_id));
+    watchConnect(match);
     return { ok: true, ...connectPayload(match, steamId) };
   }
 
@@ -3732,6 +3794,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   }
 
   function reportConnected(steamId, body) {
+    connectSign(steamId);
     const problem = matchActionProblem(steamId, body);
     if (problem) return problem;
     const matchId = inMatch.get(steamId);
@@ -3816,6 +3879,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
 
   function takeHostPermit(steamId) {
     const id = String(steamId || '');
+    connectSign(id);                   // asking at all means the host's game is up
     const match = matches.get(inMatch.get(id));
     const permit = hostPermits.get(id);
     const until = permit ? permit.until : match && match.host_permit_until;
@@ -3847,6 +3911,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    */
   function noteHostLaunching(steamId) {
     const id = String(steamId || '');
+    connectSign(id);
     const matchId = inMatch.get(id);
     const match = matchId && matches.get(matchId);
     if (!match || match.state !== 'connecting') return false;
@@ -3986,6 +4051,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * archive write and the same broadcast.
    */
   function goLive(match, verdict) {
+    unwatchConnect(match.id);
     match.state = 'live';
     // WHEN THE PLAYING STARTED, which is not when the match was formed: the accept window, the
     // lobby and the connect window are all before this, and counting them as time played would
@@ -6314,6 +6380,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const match = matchId && matches.get(matchId);
     if (!match || (match.state !== 'connecting'&&match.recovery?.phase!=='restoring')) return { ok: false, error: 'no connecting match' };
     if (String(match.host || '') !== id) return { ok: false, error: 'not the host' };
+    connectSign(id);
     const player = match.players.find((p) => p.player_id === id);
     const name = String(event || '');
 
@@ -7346,6 +7413,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   }
 
   async function completion(steamId, matchId) {
+    connectSign(steamId);            // the host's cleanup worker starts beside its game
     const id = String(matchId || '');
     const pending = { ok: false, match_id: id, data_collected: false, close_allowed: false };
     if (!/^[0-9a-f]{16}$/.test(id)) return pending;
@@ -9182,6 +9250,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (!match.players.length) {
       // The last one out: now it really is over, and nobody is left to play it.
       if (match.timer) clearTimeout(match.timer);
+      unwatchConnect(match.id);
       matches.delete(match.id);
       forgetMatch(match.id);
       archiveMatch(match, { outcome: 'cancelled', reason: 'abandoned' });
@@ -9617,6 +9686,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       for (const key of ['timer','collectTimer','stage_timer','ban_timer']) if (match[key]) clearTimeout(match[key]);
     }
     for (const timer of partyGrace.values()) clearTimeout(timer);
+    for (const matchId of [...connectWatch.keys()]) unwatchConnect(matchId);
     partyContexts.clear();
     soloPartyContexts.clear();
     clearInterval(partyContextPruner);
@@ -9801,6 +9871,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     revokeJoinPermit: nativePermit(revokeJoinPermit),
     _internals: { networkRegistry, hostPermits,   // exposed for focused policy tests
                   queueScopes,   // its per-player rows: a closed stream must not leave one behind
+                  connectWatch,  // the connect-window watchdog timers, which no exit may leave running
                   clients, bySteam, queue, queueOf, matches, inMatch, penalties, history, archived,
                   parties, partyOf, partyGrace, partyInvites, partyContext, partyContexts, prunePartyContexts, ratings,
                   inviteToParty, acceptPartyInvite, declinePartyInvite, invitePayload,

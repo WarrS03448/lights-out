@@ -5,12 +5,15 @@
 // stalled the only two matches that reached the connect window and the cause was never found, so
 // they came back behind scopedClient (live.cjs): a client that does not send
 // `x-hub-platform: linux` (or `x-hub-action-scopes: 1`) is answered exactly as 2d25405 answered
-// it. These tests pin that wire and the scoped client's side of the same switch.
+// it. These tests pin that wire, the scoped client's side of the same switch, and the two
+// [connect] log lines that are the evidence for next time.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const util = require('node:util');
 const {EventEmitter} = require('node:events');
 delete process.env.COMP_NETWORK_TEST_BYPASS;
 process.env.COMP_MATCH_SIZE = '10';
+process.env.COMP_CONNECT_SILENT_SECONDS = '1';   // the floor, so a silent host is logged in a second
 const live = require('../live.cjs');
 const identity = require('../player-identity.cjs');
 
@@ -311,4 +314,91 @@ test('a Linux leader cancelling an admission in flight tells a Windows member no
   assert.equal(toA().filter(e => e.type === 'unqueued').length, 1);
   assert.equal(toB().some(e => e.type === 'unqueued' || e.type === 'queued'), false);
   assertLegacyWire(b.events);
+});
+
+// ------------------------------------------------------------------ (d) connect diagnostics
+
+function captureLog(t) {
+  const lines = [];
+  t.mock.method(console, 'log', (...args) => { lines.push(util.format(...args)); });
+  return () => lines.filter(line => line.startsWith('[connect]'));
+}
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const open = f => f.post(B, WINDOWS, '/api/match/connecting', {map:'Airsoft', host:A});
+
+test('opening a window logs the host and its streams; a host still silent is logged once', {timeout:5000}, async t => {
+  const f = await fixture(t);
+  await f.stream(A, WINDOWS);
+  const logged = captureLog(t);
+  matchFixture(f, 'ready');
+  assert.equal((await open(f)).status, 200);
+  assert.deepEqual(logged(), [`[connect] ${MATCH} opened host=${A} host_streams=1 players=2`]);
+  const watch = f.internals().connectWatch.get(MATCH);
+  assert.equal(watch.timer.hasRef(), false, 'the watch never holds the process open');
+  await sleep(1200);
+  assert.deepEqual(logged().slice(1), [`[connect] ${MATCH} host ${A} silent 1s host_streams=1`]);
+  assert.equal(f.internals().connectWatch.size, 0);
+  assert.equal(f.internals().matches.get(MATCH).state, 'connecting', 'logging only: nothing else moved');
+});
+
+test('a host with no open stream is named as such when the window opens', async t => {
+  const f = await fixture(t);
+  const logged = captureLog(t);
+  matchFixture(f, 'ready');
+  assert.equal((await open(f)).status, 200);
+  assert.deepEqual(logged(), [`[connect] ${MATCH} opened host=${A} host_streams=0 players=2 - the host has no open stream`]);
+});
+
+test('any sign of the host launching ends the watch, and nobody else can end it', {timeout:5000}, async t => {
+  const signs = {
+    'travel permit ask':f => f.service.takeHostPermit(A),
+    'host launching':f => f.service.noteHostLaunching(A),
+    'cleanup worker completion poll':f => f.get(A, WINDOWS, '/api/match/completion?id=' + MATCH),
+    'hub report-in':f => f.post(A, WINDOWS, '/api/match/connected'),
+    'game report-in':f => f.service.gameReportedIn(A, 'ch_lobby_read'),
+  };
+  for (const [name, sign] of Object.entries(signs)) {
+    const f = await fixture(t);
+    matchFixture(f, 'ready');
+    await open(f);
+    await f.get(B, WINDOWS, '/api/match/completion?id=' + MATCH);   // not the host
+    await f.post(B, WINDOWS, '/api/match/connected');
+    assert.equal(f.internals().connectWatch.has(MATCH), true, name);
+    await sign(f);
+    assert.equal(f.internals().connectWatch.has(MATCH), false, name);
+  }
+  const logged = captureLog(t);
+  await sleep(1200);
+  assert.deepEqual(logged(), [], 'no host that showed a sign is reported silent');
+});
+
+test('every exit from the window clears the watch, and none of it reaches the saved match', {timeout:5000}, async t => {
+  const exits = {
+    'the host leaves':f => f.post(A, WINDOWS, '/api/match/leave'),
+    'the window expires':f => f.internals().expireConnect(MATCH),
+    'the match goes live':f => f.internals().goLive(f.internals().matches.get(MATCH)),
+    'shutdown':f => f.service.shutdown(),
+  };
+  for (const [name, exit] of Object.entries(exits)) {
+    const f = await fixture(t);
+    matchFixture(f, 'ready');
+    await open(f);
+    assert.equal(f.internals().connectWatch.size, 1, name);
+    await exit(f);
+    assert.equal(f.internals().connectWatch.size, 0, name);
+  }
+  // The watch is not on the match, so the saved copy is exactly the match; a restored match has
+  // no watch, and rearming it or signalling for it throws nothing.
+  const f = await fixture(t);
+  const match = matchFixture(f, 'ready');
+  await open(f);
+  const I = f.internals(), saved = JSON.parse(JSON.stringify(I.serialiseMatch(match)));
+  assert.deepEqual(Object.keys(saved).filter(key => /watch/i.test(key)), []);
+  clearTimeout(match.timer);
+  const restored = I.reviveMatch(saved);
+  I.matches.set(MATCH, restored);
+  assert.doesNotThrow(() => I.rearm(restored));
+  clearTimeout(restored.timer);
+  assert.doesNotThrow(() => f.service.takeHostPermit(A));
+  assert.equal(I.connectWatch.size, 0, 'the sign still found the watch by match id');
 });
