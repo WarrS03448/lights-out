@@ -3652,10 +3652,13 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   }
 
   // Any sign that the host's launch happened ends the watch: the permit ask, the cleanup worker's
-  // completion poll, a report-in from the hub or from the game.
-  function connectSign(steamId) {
+  // completion poll, a report-in from the hub or from the game. `forMatch` names the match a sign
+  // is about when it names one: a cleanup worker left polling for the host's PREVIOUS match is no
+  // sign that this one launched, and counting it would silence the very line the watch exists for.
+  function connectSign(steamId, forMatch) {
     const id = String(steamId || '');
     const matchId = inMatch.get(id);
+    if (forMatch !== undefined && String(forMatch || '') !== matchId) return;
     if (matchId && connectWatch.get(matchId)?.host === id) unwatchConnect(matchId);
   }
 
@@ -7413,7 +7416,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   }
 
   async function completion(steamId, matchId) {
-    connectSign(steamId);            // the host's cleanup worker starts beside its game
+    connectSign(steamId, matchId);   // this match's cleanup worker starts beside its game
     const id = String(matchId || '');
     const pending = { ok: false, match_id: id, data_collected: false, close_allowed: false };
     if (!/^[0-9a-f]{16}$/.test(id)) return pending;

@@ -363,6 +363,8 @@ test('any sign of the host launching ends the watch, and nobody else can end it'
     await open(f);
     await f.get(B, WINDOWS, '/api/match/completion?id=' + MATCH);   // not the host
     await f.post(B, WINDOWS, '/api/match/connected');
+    // The host's cleanup worker for its PREVIOUS match is still polling: no sign of this launch.
+    await f.get(A, WINDOWS, '/api/match/completion?id=0123456789abcdef');
     assert.equal(f.internals().connectWatch.has(MATCH), true, name);
     await sign(f);
     assert.equal(f.internals().connectWatch.has(MATCH), false, name);
