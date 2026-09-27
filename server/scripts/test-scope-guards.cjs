@@ -16,19 +16,27 @@ const PREFIX = 'scope-guard-test:';
 
 // ------------------------------------------------------------------ party contexts
 
+// server.cjs readBody: a body over the limit rejects (err.tooLarge) instead of arriving cut short.
+async function fixtureBody(req, limit) {
+  const raw = Buffer.from(req.raw ?? JSON.stringify(req.body ?? {}));
+  if (limit && raw.length > limit) throw Object.assign(Error('Request body too large.'), {tooLarge:true});
+  return raw;
+}
+
 function partyFixture(t) {
   const events = [];
   const service = live.create({whoami:async token => ({steam_id:token, auth_method:'steam'}),
     bearer:req => req.token, sendJson:(res, status, body) => Object.assign(res, {status, body}),
-    readBody:async req => Buffer.from(JSON.stringify(req.body || {}))});
+    readBody:fixtureBody});
   const I = service._internals;
   for (const id of ids) {
     I.clients.set(id, {steamId:id, gameSteamId:id, token:id, res:{write:data => events.push([id, data]), end() {}}});
     I.bySteam.set(id, new Set([id]));
   }
-  const request = async (action, body = {}, id = ids[0], scoped = true) => {
+  // `raw`, when given, is the request body exactly as sent, in place of JSON.stringify(body).
+  const request = async (action, body = {}, id = ids[0], scoped = true, raw = undefined) => {
     const res = {};
-    await service.route({token:id, headers:{}, body}, res, 'POST', '/api/party/' + (scoped ? 'scoped/' : '') + action);
+    await service.route({token:id, headers:{}, body, raw}, res, 'POST', '/api/party/' + (scoped ? 'scoped/' : '') + action);
     return res;
   };
   t.after(() => service.shutdown());
@@ -97,8 +105,40 @@ test('an invite to a dissolved party is not listed when a new party reuses its c
   assert.equal(f.I.partyInvites.has(ids[1]), false);
 });
 
+// readPartyActionBody: a body that is not a JSON object, or is over 4096 bytes, reads as
+// {expected_party_context:null}. No context matches null, so even a legacy route refuses it
+// rather than running it as an unscoped create or leave.
+const UNREADABLE = [['cut-off JSON', '{'], ['an array', '[]'], ['null', 'null'], ['a bare value', 'true'],
+  ['a body over 4096 bytes', JSON.stringify({code:'', pad:'x'.repeat(4096)})]];
+for (const [what, raw] of UNREADABLE) {
+  test(`a legacy party create or leave with ${what} is refused as stale and changes nothing`, async t => {
+    const f = partyFixture(t);
+    const create = await f.request('create', undefined, ids[0], false, raw);
+    assert.equal(create.status, 409);
+    assert.equal(create.body.stale_action, true);
+    assert.equal(f.I.partyOf.has(ids[0]), false);
+    assert.equal(f.I.parties.size, 0);
+    const created = await f.request('create', {}, ids[0], false), code = created.body.code;
+    assert.equal((await f.request('join', {code}, ids[1], false)).status, 200);
+    const leave = await f.request('leave', undefined, ids[1], false, raw);
+    assert.equal(leave.status, 409);
+    assert.equal(leave.body.stale_action, true);
+    assert.deepEqual(f.I.parties.get(code).members, [ids[0], ids[1]]);
+  });
+}
+
+test('a legacy party create with an empty body or {} still runs unscoped', async t => {
+  for (const raw of ['', '{}']) {
+    const f = partyFixture(t);
+    const create = await f.request('create', undefined, ids[0], false, raw);
+    assert.equal(create.status, 200);
+    assert.equal(f.I.partyOf.get(ids[0]), create.body.code);
+  }
+});
+
 // ------------------------------------------------------------------ queue admission
 
+// Every player's token is their SteamID. Requests and streams are A's unless a token is passed.
 async function queueFixture(t, {dual = false, store = null} = {}) {
   const A = ids[0];
   let held = null;
@@ -112,7 +152,7 @@ async function queueFixture(t, {dual = false, store = null} = {}) {
         gate.enter();
         await gate.wait;
       }
-      return token === A ? {steam_id:A, auth_method:'steam'} : null;
+      return ids.includes(token) ? {steam_id:token, auth_method:'steam'} : null;
     },
     bearer:req => req.token,
     sendJson:(res, status, body) => Object.assign(res, {status, body}),
@@ -128,15 +168,15 @@ async function queueFixture(t, {dual = false, store = null} = {}) {
     'x-bb5-version':'1.0.27', 'x-bb1-version':'1.0.27', ...extra});
   const measure = (mode, location) => internals(mode).networkRegistry.profile(A, {
     region:'NA', cross_region:false, location, transport:'webrtc-relay-v1', age_seconds:0}, Date.now());
-  async function post(path, body = {}, mode = 'BB5', extra = {}) {
+  async function post(path, body = {}, mode = 'BB5', extra = {}, token = A) {
     if (path.endsWith('/join')) measure(mode, '1'.repeat(32));
     const res = {setHeader() {}};
-    await service.route({token:A, body, headers:headers(mode, extra)}, res, 'POST', path,
+    await service.route({token, body, headers:headers(mode, extra)}, res, 'POST', path,
       new URL('http://fixture' + path));
     return res;
   }
-  async function stream() {
-    const req = Object.assign(new EventEmitter(), {token:A, headers:headers(), socket:{setTimeout() {}}});
+  async function stream(token = A) {
+    const req = Object.assign(new EventEmitter(), {token, headers:headers(), socket:{setTimeout() {}}});
     const events = [];
     const res = {
       headersSent:false, writableEnded:false, destroyed:false,
@@ -255,4 +295,130 @@ test('a queued legacy 1v1 search is dropped by a profile change posted through B
   assert.equal(f.internals('BB1').queueOf.has(f.A), false);
   const unqueued = s.events.filter(e => e.type === 'unqueued');
   assert.deepEqual(unqueued.map(e => e.mode), ['BB1']);
+});
+
+// networkQueueChanged: `if (queued || pending)`. A scoped admission still in flight when the
+// profile goes unavailable is told why, with network_unready and the error text, rather than
+// only getting the generic 409 its fenced join returns. That holds whichever ladder the profile
+// was posted through.
+for (const mode of ['BB5', 'BB1']) {
+  test(`a scoped join in flight is told the profile went unavailable through ${mode}`, {timeout:5000}, async t => {
+    const f = await queueFixture(t, {dual:true}), s = await f.stream();
+    const gate = f.pauseAdmission(), joining = f.post('/api/queue/scoped/join', f.joinBody(s, 1));
+    await gate.entered;
+    try { assert.equal((await f.post('/api/network/profile', {unavailable:true}, mode)).status, 200); }
+    finally { gate.release(); }
+    const joined = await joining;
+    assert.equal(joined.status, 409);
+    assert.equal(f.internals('BB5').queueOf.has(f.A), false);
+    const told = s.events.filter(e => e.type === 'unqueued');
+    assert.equal(told.length, 1);
+    assert.equal(told[0].mode, 'BB5');
+    assert.equal(told[0].network_unready, true);
+    assert.equal(told[0].error, 'Connection measurements are unavailable. Check Settings before searching again.');
+  });
+}
+
+// handleNetwork, /api/network/profile: (inMatch.has(id) || competitionGuard?.inMatch?.(id)).
+// Both ladders share one registry, so a region change posted through BB5 would rotate the profile
+// and its revision underneath a running BB1 match.
+test('a region change through one ladder is refused while the player is in a match on the other', {timeout:5000}, async t => {
+  const f = await queueFixture(t, {dual:true});
+  const registry = f.internals('BB5').networkRegistry;
+  assert.equal(registry, f.internals('BB1').networkRegistry, 'one registry for both ladders');
+  f.measure('BB5', '1'.repeat(32));
+  const before = registry.player(f.A).revision;
+  f.internals('BB1').inMatch.set(f.A, 'duel-match');
+  const change = {region:'EU', cross_region:false, location:'1'.repeat(32), transport:'webrtc-relay-v1', age_seconds:0};
+  const refused = await f.post('/api/network/profile', change, 'BB5');
+  assert.equal(refused.status, 409);
+  assert.equal(refused.body.error, 'Finish your match before changing regions.');
+  assert.equal(registry.player(f.A).revision, before);
+  assert.deepEqual(registry.preferences.get(f.A), {region:'NA', cross_region:false});
+  // With the match over, the same change goes through: the refusal was the match's.
+  f.internals('BB1').inMatch.delete(f.A);
+  const accepted = await f.post('/api/network/profile', change, 'BB5');
+  assert.equal(accepted.status, 200);
+  assert.equal(accepted.body.region, 'EU');
+  assert.notEqual(registry.player(f.A).revision, before);
+});
+
+// The scoped queue routes: all four fields must be present. The ticket logic treats queue_unit
+// as optional, so without this check a join body that leaves it out would be admitted.
+for (const missing of ['queue_actor', 'queue_context', 'queue_attempt', 'queue_unit']) {
+  test(`a scoped join or leave without ${missing} is refused as invalid`, {timeout:5000}, async t => {
+    const f = await queueFixture(t), s = await f.stream(), body = f.joinBody(s, 1);
+    const partial = {...body};
+    delete partial[missing];
+    const refused = await f.post('/api/queue/scoped/join', partial);
+    assert.equal(refused.status, 400);
+    assert.equal(refused.body.code, 'queue_scope_invalid');
+    assert.equal(f.internals('BB5').queueOf.has(f.A), false);
+    // The refusal used nothing up: the complete body for the same attempt still joins.
+    assert.equal((await f.post('/api/queue/scoped/join', body)).status, 200);
+    const unit = s.events.findLast(e => e.type === 'queued')?.queue_unit;
+    assert.match(unit, /^[A-Za-z0-9_-]{16,128}$/);
+    const leave = {...body, queue_unit:unit};
+    delete leave[missing];
+    const kept = await f.post('/api/queue/scoped/leave', leave);
+    assert.equal(kept.status, 400);
+    assert.equal(kept.body.code, 'queue_scope_invalid');
+    assert.equal(f.internals('BB5').queueOf.has(f.A), true);
+  });
+}
+
+// drop: queueScopes.close(...). Without it the scope row of a player whose last stream closed is
+// never collected: one row for every player who ever connected, until the next restart.
+test('closing the last stream collects the player queue-scope row on both ladders', async t => {
+  const f = await queueFixture(t, {dual:true}), s = await f.stream();
+  for (const mode of ['BB5', 'BB1'])
+    assert.equal(f.internals(mode).queueScopes.players.get(f.A)?.actor?.player, f.A, mode);
+  s.close();
+  for (const mode of ['BB5', 'BB1']) {
+    assert.equal(f.internals(mode).bySteam.has(f.A), false, mode);
+    assert.equal(f.internals(mode).queueScopes.players.has(f.A), false, mode);
+  }
+});
+
+// ------------------------------------------------------------------ the connect-time party_update
+
+// handleStream: send(clientId, partyPayload(partyOf.get(account.player_id))) on every connect,
+// solo or not. For a solo player it is the only event that carries a party_context, and the
+// Linux client sends the context it holds as expected_party_context on every party action
+// (hub/live.py prepare_party_action). Without it a solo player's create, join by code and invite
+// accept are all refused as stale.
+const partyUpdates = s => s.events.filter(e => e.type === 'party_update');
+
+test('a solo stream is handed its party context on connect, and a scoped create accepts it', async t => {
+  const f = await queueFixture(t), s = await f.stream();
+  const [update, ...more] = partyUpdates(s);
+  assert.deepEqual(more, []);
+  assert.equal(update?.code, null);
+  assert.match(update.party_context, /^[a-f0-9]{32}$/);
+  const created = await f.post('/api/party/scoped/create', {expected_party_context:update.party_context});
+  assert.equal(created.status, 200);
+  assert.equal(f.internals('BB5').partyOf.get(f.A), created.body.code);
+});
+
+test('a party member who reconnects inside the grace window is handed the roster again', async t => {
+  const f = await queueFixture(t), B = ids[1];
+  const a = await f.stream(), b = await f.stream(B);
+  const created = await f.post('/api/party/scoped/create', {expected_party_context:partyUpdates(a)[0].party_context});
+  assert.equal(created.status, 200);
+  const code = created.body.code;
+  const joined = await f.post('/api/party/scoped/join', {code, expected_party_context:partyUpdates(b)[0].party_context},
+    'BB5', {}, B);
+  assert.equal(joined.status, 200);
+  b.close();
+  assert.equal(f.internals('BB5').partyGrace.has(B), true);
+  const back = await f.stream(B);
+  const [update, ...more] = partyUpdates(back);
+  assert.deepEqual(more, []);
+  assert.equal(update.code, code);
+  assert.deepEqual(update.members.map(m => m.player_id), [f.A, B]);
+  assert.equal(f.internals('BB5').partyGrace.has(B), false);
+  // The context it carries is the current one: a scoped leave built from it is accepted.
+  const left = await f.post('/api/party/scoped/leave', {expected_party_context:update.party_context}, 'BB5', {}, B);
+  assert.equal(left.status, 200);
+  assert.deepEqual(f.internals('BB5').parties.get(code).members, [f.A]);
 });

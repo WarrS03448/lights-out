@@ -9678,6 +9678,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     takeJoinPermit: nativePermit(takeJoinPermit),
     revokeJoinPermit: nativePermit(revokeJoinPermit),
     _internals: { networkRegistry, hostPermits,   // exposed for focused policy tests
+                  queueScopes,   // its per-player rows: a closed stream must not leave one behind
                   clients, bySteam, queue, queueOf, matches, inMatch, penalties, history, archived,
                   parties, partyOf, partyGrace, partyInvites, partyContext, partyContexts, prunePartyContexts, ratings,
                   inviteToParty, acceptPartyInvite, declinePartyInvite, invitePayload,
