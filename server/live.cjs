@@ -8086,8 +8086,11 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const affected = new Set(party ? party.members : [id]);
     const queued = queueOf.get(id);
     if (queued) for (const member of queued.members) affected.add(member);
-    const pending = [...affected].some(member => queueIntents.has(member) || queueScopes.pending.has(member));
-    for (const member of affected) queueIntents.delete(member);
+    // Only a scoped admission is fenced here: invalidate retires its ticket. A legacy join in
+    // flight is left alone, as it was before scoped queues: it reads every member's profile again,
+    // synchronously, before it enqueues, so it queues on the new measurements or refuses with
+    // network_unready, and a Windows hub is not told 'unqueued' about a search it has not joined.
+    const pending = [...affected].some(member => queueScopes.pending.has(member));
     queueScopes.invalidate([...affected]);
     for (const member of affected) removeFromQueue(member);
     if (queued || pending) {
