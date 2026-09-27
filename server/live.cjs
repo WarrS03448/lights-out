@@ -455,7 +455,8 @@ NEEDS_AUTH.push(...SCOPED_PARTY_ACTIONS.map(action => '/api/party/scoped/' + act
  * THE ONE SWITCH BETWEEN THE TWO PROTOCOLS. The native Linux beta names itself on every request,
  * the stream included (`x-hub-platform: linux`, hub/live.py _stamp); `x-hub-action-scopes: 1` is
  * the same opt-in for any other build that implements them. Everything else - every Windows hub
- * in the field - is answered exactly as 2d25405 answered it: no capabilities in hello, no
+ * in the field - is answered exactly as the server without the scopes answers it (2d25405, then
+ * d80ac059, the parity reference: scripts/wire-parity.cjs): no capabilities in hello, no
  * queue_* or party_context on any event, no solo party_update, the old body fallbacks and the
  * old response bodies. The 2026-09-27 deploy stalled the only two matches that reached the
  * connect window, with the cause unknown and the hubs' telemetry out of reach, so the scopes

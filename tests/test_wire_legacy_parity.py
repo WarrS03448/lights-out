@@ -3,8 +3,9 @@
 
 Run:  <venv python> tests/test_wire_legacy_parity.py [--ref SERVER_DIR | --ref-commit REV]
                           [--gate SERVER_DIR] [--self-check] [--skip SECTION] [--keep DIR]
-Needs `node` on PATH, a python with fakeredis[lua] (the shared .venv has it) and a Windows 3.0.3
-hub checkout (HUB303_DIR, default C:/w/hub303). Ports: PARITY_PORT_BASE (default 19200) to +21.
+Needs `node` on PATH, a python with fakeredis[lua] (the shared .venv has it) and a Windows hub
+checkout (HUB303_DIR, default C:/w/hub303 = eb1f9e37 = 3.0.3; C:/w/hub306 = d80ac059 = 3.0.6 is
+the current release). Ports: PARITY_PORT_BASE (default 19200) to +21.
 Takes about three minutes per server run.
 
 WHY THIS EXISTS. Deploy a78f9384 (the queue/match/party action scopes and the per-platform version
@@ -16,18 +17,24 @@ cannot meet it again. This proves that on the wire, with the real hub.
 
 WHAT RUNS. The UNMODIFIED Windows hub (hub/live.py LiveClient and hub/competitive.py LiveSession,
 imported from HUB303_DIR, default C:/w/hub303 = eb1f9e37 = 3.0.3) over real HTTP and SSE, against
-  A  the reference server, origin/main 2d25405b: --ref names a checkout's server/, and without it
-     `git archive <--ref-commit, default 2d25405b> server` of this repository is unpacked into the
-     work dir (the server needs no npm packages for any of this), and
+  A  the reference server, which has to be what production runs NOW: origin/main d80ac059 (hub
+     3.0.6; it was 2d25405b, hub 3.0.4, until main moved past it). --ref names a checkout's
+     server/, and without it `git archive <--ref-commit, default d80ac059> server` of this
+     repository is unpacked into the work dir (the server needs no npm packages for any of this),
+     and
   B  the gate server, this tree's server/ (--gate),
 each with its own fakeredis-backed Upstash REST stand-in, one after the other, then compares.
 Nothing here edits the hub: it is instrumented from outside (transport.urlopen, the session's
 _action seam, the panel it posts to, and the game/pak stand-ins test_wire_ban_launch uses).
 
-The hub reports itself as 3.0.4. 2d25405 publishes hub 3.0.4 with the gate STRICT, so a 3.0.3 hub
-cannot queue on either server; 3.0.3 -> 3.0.4 changed only hub/version.py, hub/state.py and a
-Settings screen, so hub303's live.py and competitive.py ARE the 3.0.4 wire code. One extra hub
-(111) still reports 3.0.3 and is refused at the queue (the 426 body is part of the comparison).
+The hubs report the hub version the reference publishes (hub.version in its public/catalogue.json:
+3.0.6 at d80ac059; PARITY_HUB_VERSION overrides it). The gate is STRICT, so a hub reporting
+anything older cannot queue on either server. 3.0.3 -> 3.0.6 left hub/live.py alone and changed
+the wire code only where a relaunch meets a stale host world (3c1cd127: competitive.py
+relaunch_game and match_recovery.launch_allowed), which the day never reaches, so hub303 drives
+the 3.0.6 wire; point HUB303_DIR at a d80ac059 checkout to run 3.0.6's own code as well. One
+extra hub (111) still reports 3.0.3 and is refused at the queue (the 426 body is part of the
+comparison).
 
 THE DAY (one server process per target, everything in this order):
   party   friend requests; a party created and an invite accepted; a join by code; a bad code
@@ -121,10 +128,22 @@ HERE = pathlib.Path(__file__).resolve()
 REPO = HERE.parent.parent
 HUB303 = pathlib.Path(os.environ.get("HUB303_DIR") or "C:/w/hub303")
 REF_SERVER = os.environ.get("PARITY_REF_SERVER") or ""
-REF_COMMIT = os.environ.get("PARITY_REF_COMMIT") or "2d25405b"   # origin/main, the pre-scopes wire
+# origin/main, the pre-scopes wire production runs: 3.0.6 (it was 2d25405b, 3.0.4, before main moved)
+REF_COMMIT = os.environ.get("PARITY_REF_COMMIT") or "d80ac059"
 GATE_SERVER = REPO / "server"
 PORT_BASE = int(os.environ.get("PARITY_PORT_BASE") or 19200)
-REPORTED_HUB_VERSION = "3.0.4"
+# What the hubs report: the reference's published hub version, which orchestrate() reads from its
+# catalogue and hands to each driver through PARITY_HUB_VERSION (set it to override).
+REPORTED_HUB_VERSION = os.environ.get("PARITY_HUB_VERSION") or "3.0.6"
+
+
+def published_hub_version(server_dir):
+    """hub.version in a server's public/catalogue.json: the oldest hub its STRICT gate queues."""
+    try:
+        catalogue = json.loads((pathlib.Path(server_dir) / "public" / "catalogue.json").read_text("utf-8"))
+        return str(catalogue["hub"]["version"] or "")
+    except (OSError, ValueError, KeyError, TypeError):
+        return ""
 
 
 def sid(n):
@@ -619,14 +638,22 @@ def orchestrate(args):
         tempfile.mkdtemp(prefix="wire-parity-"))
     work.mkdir(parents=True, exist_ok=True)
     if not (HUB303 / "hub" / "live.py").exists():
-        print("SKIPPED: no Windows 3.0.3 hub checkout at %s (set HUB303_DIR; e.g. "
-              "git worktree add --detach <dir> eb1f9e37)" % HUB303)
+        print("SKIPPED: no Windows hub checkout at %s (set HUB303_DIR; e.g. "
+              "git worktree add --detach <dir> eb1f9e37, or d80ac059 for 3.0.6)" % HUB303)
         return 0
     ref = pathlib.Path(args.ref).resolve() if args.ref else reference_server(args.ref_commit, work)
     gate = pathlib.Path(args.gate).resolve()
     for d in (ref, gate):
         if not (d / "server.cjs").exists():
             raise SystemExit("not a server directory: %s" % d)
+    global REPORTED_HUB_VERSION
+    if not os.environ.get("PARITY_HUB_VERSION"):
+        published = {d: published_hub_version(d) for d in (ref, gate)}
+        if published[ref] != published[gate]:
+            raise SystemExit("the reference publishes hub %r and the gate %r: a hub cannot report "
+                             "both (set PARITY_HUB_VERSION)" % (published[ref], published[gate]))
+        REPORTED_HUB_VERSION = published[ref] or REPORTED_HUB_VERSION
+        os.environ["PARITY_HUB_VERSION"] = REPORTED_HUB_VERSION   # the drivers inherit it
     print("hub under test: %s (reporting %s)" % (HUB303, REPORTED_HUB_VERSION))
     print("work dir: %s" % work)
     if args.recompare:
@@ -1677,7 +1704,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--ref", default=REF_SERVER, help="reference server dir (default: --ref-commit)")
     parser.add_argument("--ref-commit", default=REF_COMMIT,
-                        help="unpack the reference server from this commit (default 2d25405b)")
+                        help="unpack the reference server from this commit (default %s)" % REF_COMMIT)
     parser.add_argument("--gate", default=str(GATE_SERVER), help="server dir under test")
     parser.add_argument("--self-check", action="store_true", help="also run the reference twice")
     parser.add_argument("--only-ref", action="store_true", help="run only the reference (harness work)")

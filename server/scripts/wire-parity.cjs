@@ -6,8 +6,10 @@
 // server and against this one. Every event on every Windows stream and every answer has to
 // match, key order included, once random ids are numbered by first appearance.
 //
-// Not part of npm test: it needs a reference checkout. Before redeploying the action scopes:
-//   git worktree add --detach ../../ref 2d25405b
+// Not part of npm test: it needs a reference checkout, which has to be what production runs NOW
+// (the reference moves with main; it was 2d25405b until main reached d80ac059, hub 3.0.6).
+// Before redeploying the action scopes:
+//   git worktree add --detach ../../ref d80ac059
 //   node scripts/wire-parity.cjs ../../ref/server             # malformed bodies as well
 //   node scripts/wire-parity.cjs ../../ref/server --hub-exact # only what a 3.0.x hub sends
 //   node scripts/wire-parity.cjs ../../ref/server --linux     # a Linux stream alongside
@@ -28,7 +30,7 @@ const hubExact = process.argv.includes('--hub-exact');
 const [A, B, C, D, E] = ['76561198000000001', '76561198000000002', '76561198000000003',
   '76561198000000004', '76561198000000005'];
 const T = 1790000000000;
-const WIN = {'x-hub-version':'3.0.4', 'x-bb5-version':'1.0.31', 'x-bb1-version':'1.0.5'};
+const WIN = {'x-hub-version':'3.0.6', 'x-bb5-version':'1.0.31', 'x-bb1-version':'1.0.5'};
 const LINUX = {...WIN, 'x-hub-platform':'linux'};
 
 function normaliser() {
@@ -112,7 +114,8 @@ async function run(dir) {
     await call('invite', D, 'POST', '/api/party/invite', {target:A}, 'BB5');
     await call('decline', A, 'POST', '/api/party/invite/decline', {from:D}, 'BB5');
     await call('invite again', D, 'POST', '/api/party/invite', {target:A}, 'BB5');
-    // Re-sent while pending: 2d25405 empties the sole invite's inbox and the accept expires.
+    // Re-sent while pending: the pre-scopes server (2d25405, d80ac059) empties the sole invite's
+    // inbox and the accept expires.
     await call('invite resent', D, 'POST', '/api/party/invite', {target:A}, 'BB5');
     await call('accept resent', A, 'POST', '/api/party/invite/accept', {from:D}, 'BB5');
     if (I('BB5').partyOf.has(A)) await call('leave (a server that kept it)', A, 'POST', '/api/party/leave', {}, 'BB5');

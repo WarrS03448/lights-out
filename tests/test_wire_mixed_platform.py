@@ -93,7 +93,8 @@ def worker_main(platform, root):
     i18n.set_language("en")
     catalogue = json.loads(pathlib.Path(os.environ["MIXED_CATALOGUE"]).read_text("utf-8"))
     # The service queues nothing behind the release it publishes, so both report that release.
-    # 3.0.3 -> 3.0.4 changed only the settings screen and the version (git diff eb1f9e37 2d25405b).
+    # 3.0.3 -> 3.0.6 changed the wire code only where a relaunch meets a stale host world
+    # (git diff eb1f9e37 d80ac059 -- hub/live.py hub/competitive.py hub/match_recovery.py).
     C.HUB_VERSION = live_mod.HUB_VERSION = catalogue["hub"]["version"]
     installed = {g["id"]: {"version": g.get("version", "")} for g in catalogue.get("gamemodes", [])
                  if g.get("id") in ("BB5", "BB1")}
