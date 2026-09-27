@@ -2,14 +2,19 @@
 // node --test scripts/test-platform-gate.cjs; synthetic streams, no external services.
 //
 // The per-platform hub gate. A native Linux build names itself with `x-hub-platform: linux` and
-// is held to requiredVersions().linux when server.cjs publishes one; every other build, and a
-// Linux build before that field exists, is held to requiredVersions().hub exactly as before.
-// The gamemode (pak) requirement is shared by both.
+// is held to requiredVersions().linux, which server.cjs reads from the catalogue's top-level
+// `linux` entry; every other build, and a Linux build while that entry is absent, is held to
+// requiredVersions().hub exactly as before. The gamemode (pak) requirement is shared by both.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const {EventEmitter} = require('node:events');
 delete process.env.COMP_NETWORK_TEST_BYPASS;
 delete process.env.COMP_VERSION_GATE;
+// The last test runs the real server.cjs in process: never against real storage or Steam.
+for (const key of ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'STEAM_API_KEY', 'COMP_GAME_RULES_OVERRIDE'])
+  delete process.env[key];
 process.env.COMP_MATCH_SIZE = '10';
 const live = require('../live.cjs');
 
@@ -263,4 +268,62 @@ test('the ranked router carries the platform to both ladders', async t => {
     assert.equal(I.versions.get(A).platform, 'linux');
     assert.equal((await call('/api/queue/leave', ladder, 'linux')).status, 200);
   }
+});
+
+// hello announces hub_platform_gate_v1, and the Linux client then gates Find match on the
+// catalogue's `linux` entry. That is only true if the real server.cjs hands live.cjs that entry,
+// so this drives the real server over HTTP with the catalogue swapped in memory.
+test('the served catalogue holds a Linux hub to its linux entry, and to hub.version without one', async t => {
+  const saved = {NODE_ENV:process.env.NODE_ENV, HUB_TEST_TOKENS:process.env.HUB_TEST_TOKENS};
+  process.env.NODE_ENV = 'test';
+  process.env.HUB_TEST_TOKENS = 'tok-a=' + A;
+  t.after(() => {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  const cataloguePath = path.resolve(__dirname, '../public/catalogue.json');
+  const read = fs.readFileSync;
+  let catalogue = null;
+  t.mock.method(fs, 'readFileSync', (file, ...args) =>
+    typeof file === 'string' && path.resolve(file) === cataloguePath ? JSON.stringify(catalogue) : read(file, ...args));
+  const {createServer} = require('../server.cjs');
+  const server = createServer();
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  // The headers hub/live.py _stamp sends, for one ladder and one build.
+  async function join(ladder, hub, pack, platform) {
+    const headers = {authorization:'Bearer tok-a', 'content-type':'application/json', 'x-ranked-mode':ladder,
+      'x-hub-version':hub, 'x-mode-version':pack, ['x-' + ladder.toLowerCase() + '-version']:pack};
+    if (platform) headers['x-hub-platform'] = platform;
+    const res = await fetch(base + '/api/queue/join', {method:'POST', headers, body:'{}'});
+    return {status:res.status, body:await res.json()};
+  }
+  // requiredVersions caches each ladder's answer for ten seconds, so each catalogue is read
+  // through its own ladder: BB5 while it has a Linux entry, BB1 after the entry is gone.
+  catalogue = {hub:{version:'3.0.4'}, linux:{version:'3.0.3.1'},
+               gamemodes:[{id:'BB5', version:'1.0.31'}, {id:'BB1', version:'1.0.5'}]};
+  const behind = await join('BB5', '3.0.3', '1.0.31', 'linux');
+  assert.equal(behind.status, 426);
+  assert.equal(behind.body.what, 'hub');
+  assert.equal(behind.body.need_hub, '3.0.3.1');
+  // Past the version gate, and stopped at the next check: this player has no relay measurements.
+  const current = await join('BB5', '3.0.3.1', '1.0.31', 'linux');
+  assert.equal(current.status, 409);
+  assert.equal(current.body.network_unready, true);
+  const windows = await join('BB5', '3.0.3.1', '1.0.31');
+  assert.equal(windows.status, 426);
+  assert.equal(windows.body.need_hub, '3.0.4');
+
+  catalogue = {hub:{version:'3.0.4'}, gamemodes:[{id:'BB5', version:'1.0.31'}, {id:'BB1', version:'1.0.6'}]};
+  const lockstep = await join('BB1', '3.0.3.1', '1.0.6', 'linux');
+  assert.equal(lockstep.status, 426);
+  assert.equal(lockstep.body.what, 'hub');
+  assert.equal(lockstep.body.need_hub, '3.0.4');
+  assert.equal(lockstep.body.need_mode, '1.0.6', 'the catalogue without a Linux entry was the one read');
 });
