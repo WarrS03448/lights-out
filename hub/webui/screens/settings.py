@@ -220,7 +220,7 @@ _S = {
         "network_same_region": "Par défaut, les parties restent dans ta région.",
         "network_cross_short": "Interrégion",
         "network_cross_region": "Autoriser les parties entre régions",
-        "network_cross_hint": "Tous les joueurs concernés doivent l’activer. Il n’y a pas de limite de ping, mais les parties dans votre région et sous 120 ms restent prioritaires.",
+        "network_cross_hint": "Tous les joueurs concernés doivent l’activer. Il n’y a pas de limite de ping, mais les parties dans ta région et sous 120 ms restent prioritaires.",
         "network_preparing": "Préparation des mesures de connexion par relais…",
         "network_unavailable": "Estimations de latence indisponibles",
         "network_ready": "Estimations de latence prêtes",
