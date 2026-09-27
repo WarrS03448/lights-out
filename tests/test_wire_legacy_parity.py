@@ -83,8 +83,11 @@ DETERMINISM, without which "A == B" would mean nothing:
   - Heartbeats are dropped: a `stats` event followed at once by `: ping` is the 15 s heartbeat.
   - Requests a hub makes because a clock ran (the stats-driven /api/tournament poll every >=15 s,
     the live-phase /api/match/recovery `status` poll every 5 s) are neither held nor ordered: they
-    are compared as a SET of distinct exchanges. A poll whose connection failed before an answer
-    (status 0) is counted and left out - see the recovery note below.
+    are compared as a SET of distinct exchanges, with their countdowns (live_seconds) blanked. A
+    poll whose connection failed before an answer (status 0) is counted and left out, and so is a
+    status poll answered 409 "Superseded recovery request" before that match's first 200: it
+    went out on the hub's clock as the match went live and beat the server's write of the
+    match's recovery records (either server, and the reference against itself).
   - Timestamps (epoch ms/s, ISO) are blanked; countdown fields (TIMER_KEYS) compare within 2 s.
   - Nothing reads this machine's state: game running/launch, the pak, the cleanup worker and the
     recovery poll's tasklist observation ("running") are all stood in for.
@@ -175,7 +178,7 @@ SDP = "\r\n".join(["v=0", "o=- 1 2 IN IP4 0.0.0.0", "s=-", "c=IN IP4 0.0.0.0", "
 # Compared numerically within TIMER_SLACK rather than blanked, so a wrong clock still shows.
 TIMER_KEYS = {"seconds", "accept_seconds", "lobby_seconds", "connect_seconds", "stage_seconds",
               "ban_seconds", "expires_in", "join_seconds", "wait_seconds", "waited", "left",
-              "seconds_left", "remaining", "age"}
+              "seconds_left", "remaining", "age", "live_seconds"}
 TIMER_SLACK = 2
 # The preload tags every SSE line a server timer writes (see PRELOAD_JS). Broadcasts from these
 # files' timers run on a wall clock of their own, not on anything a hub did, so they are dropped
@@ -437,7 +440,10 @@ HEX = re.compile(r"^[0-9a-f]{16,128}$")
 
 
 class Normaliser:
-    """Blank what is clock-derived; number random hex by first appearance (per run)."""
+    """Blank what is clock-derived; number random hex by first appearance (per run).
+
+    number=False (the polls): random hex is not numbered and countdowns are blanked outright. A
+    poll is sent on the hub's own clock, so which countdown value it catches is the clock's."""
 
     def __init__(self, number=True):
         self.tags, self.number = {}, number
@@ -458,7 +464,7 @@ class Normaliser:
             if 1.5e9 <= v <= 2.5e9 and key not in TIMER_KEYS:
                 return "<ts-s>"
             if key in TIMER_KEYS:
-                return {"~": v}
+                return {"~": v} if self.number else "<countdown>"
             return v
         if isinstance(v, str):
             if ISO.match(v):
@@ -493,7 +499,7 @@ def digest(run):
         # numbered at all (their order would decide the numbers).
         n, unnumbered = Normaliser(), Normaliser(number=False)
         raw = run["streams"].get(label, [])
-        kept, before, dropped, clocked, failed_polls = [], [], 0, 0, 0
+        kept, before, dropped, clocked, failed_polls, raced_polls = [], [], 0, 0, 0, 0
         i = 0
         while i < len(raw):
             before.append(len(kept))
@@ -518,7 +524,7 @@ def digest(run):
             kept.append(n({k: v for k, v in e.items() if k != "timer"}))
             i += 1
         before.append(len(kept))
-        ordered, polls = [], set()
+        ordered, polls, answered = [], set(), set()
         for rec in run["http"].get(label, []):
             view = {"m": rec["m"], "p": rec["p"], "q": rec.get("q") or "", "mode": rec.get("mode"),
                     "b": rec.get("b"), "s": rec.get("s"), "r": rec.get("r")}
@@ -530,6 +536,20 @@ def digest(run):
                 if rec.get("s") == 0:
                     failed_polls += 1
                     continue
+                # The hub's first recovery status poll goes out on its own 5 s clock as the match
+                # goes live, and can land before the server has written the match's recovery
+                # records: 409 "Superseded recovery request" instead of 200. Whether it does is the
+                # wall clock's doing (seen on either server, and on the reference against itself),
+                # so a superseded poll before that match's first answered one is counted and left
+                # out. After it, a superseded poll is compared like any other.
+                match = (rec.get("b") or {}).get("match_id") if isinstance(rec.get("b"), dict) else None
+                if rec["p"] == "/api/match/recovery":
+                    if rec.get("s") == 200:
+                        answered.add(match)
+                    elif (rec.get("s") == 409 and match not in answered and
+                          (rec.get("r") or {}).get("error") == "Superseded recovery request"):
+                        raced_polls += 1
+                        continue
                 polls.add(json.dumps(unnumbered({k: view[k] for k in ("m", "p", "s", "r")}),
                                      sort_keys=True))
                 continue
@@ -539,7 +559,7 @@ def digest(run):
             ordered.append(n(view))
         out["hubs"][label] = {"stream": kept, "http": ordered, "polls": sorted(polls),
                               "heartbeats": dropped, "clock_broadcasts": clocked,
-                              "failed_polls": failed_polls}
+                              "failed_polls": failed_polls, "raced_polls": raced_polls}
     out["facts"] = Normaliser()({"launches": run.get("launches", []), "prepared": run.get("prepared", []),
                                  "steps": [(s["name"], s["ok"]) for s in run.get("steps", [])]})
     return out
@@ -705,10 +725,12 @@ def orchestrate(args):
     for tag, d in digests.items():
         hubs = d["hubs"].values()
         print("[%s] compared %d stream entries, %d ordered HTTP exchanges, %d distinct polls; "
-              "left out: %d heartbeats, %d directory-clock broadcasts, %d polls with no answer" % (
+              "left out: %d heartbeats, %d directory-clock broadcasts, %d polls with no answer, "
+              "%d status polls that raced the go-live write" % (
                   tag, sum(len(h["stream"]) for h in hubs), sum(len(h["http"]) for h in hubs),
                   sum(len(h["polls"]) for h in hubs), sum(h["heartbeats"] for h in hubs),
-                  sum(h["clock_broadcasts"] for h in hubs), sum(h["failed_polls"] for h in hubs)))
+                  sum(h["clock_broadcasts"] for h in hubs), sum(h["failed_polls"] for h in hubs),
+                  sum(h.get("raced_polls", 0) for h in hubs)))
     print("\nrecordings, digests and logs: %s" % work)
     print("WIRE PARITY TEST %s" % ("FAILED" if failed else "PASSED"))
     return 1 if failed else 0
