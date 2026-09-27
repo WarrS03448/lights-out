@@ -1871,9 +1871,11 @@ function requestListener(req, res) {
   res.setHeader('x-request-id',requestId);
   res.on('finish',()=>{
     const route=String(req.url||'').split('?')[0];
-    if (route==='/api/telemetry'||!route.startsWith('/api/')||/probe|live|network/.test(route)&&res.statusCode<400)return;
+    // /api/match-report is the native reporter's beat (~260 successes a minute during matches, half
+    // of all stored events on 2026-09-27); like probe/live/network, only its failures are worth a row.
+    if (route==='/api/telemetry'||!route.startsWith('/api/')||/probe|live|network|match-report/.test(route)&&res.statusCode<400)return;
     const duration=performance.now()-started;
-    const action=/^\/api\/[a-z_]+(?:\/[a-z_]+){0,2}$/.test(route)?route.replaceAll('/','.').slice(1):'api.other';
+    const action=/^\/api\/[a-z_-]+(?:\/[a-z_-]+){0,2}$/.test(route)?route.replaceAll('/','.').slice(1):'api.other';
     analytics().emit('request.outcome',{action,status:res.statusCode,duration_ms:Math.round(duration),method:req.method},{actor_id:req.analyticsActor,match_id:req.analyticsMatch,request_id:requestId,severity:res.statusCode>=500?'error':res.statusCode>=400?'warn':'info'});
   });
   Promise.resolve()

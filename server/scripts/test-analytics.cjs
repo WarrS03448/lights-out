@@ -121,15 +121,42 @@ test('a corrupt receipt does not starve healthy work in the same backfill or out
     if(op==='SSCAN')return ['0',['hub:settlement:bad','hub:settlement:good']];
     if(op==='EVAL'){saved.push(args);return 'stored';}
     if(op==='SREM'){removed.push(args[0]);return 1;}
-    if(op==='ZREMRANGEBYSCORE')return 0;
+    if(op==='ZREMRANGEBYSCORE'||op==='ZCARD')return 0;
     throw Error('Unexpected command '+op);
   };
   const service=api.create({store});try{await service.maintenance();assert.equal(saved.length,1);assert.deepEqual(removed,['hub:settlement:good']);}finally{await service.close();}
+});
+
+test('maintenance brings an overfull events index back under its limit in steps, with plain commands',async()=>{
+  let size=120000;const trims=[];
+  const store=async([op,key,...args])=>{
+    if(op==='ZCARD'){assert.equal(key,'hub:analytics:events');return size;}
+    if(op==='ZREMRANGEBYRANK'){assert.equal(key,'hub:analytics:events');assert.equal(args[0],'0');const n=Number(args[1])+1;trims.push(n);size-=n;return n;}
+    if(op==='ZREMRANGEBYSCORE')return 0;
+    if(op==='SSCAN')return ['0',[]];
+    if(op==='GET')return '1';
+    throw Error('Unexpected command '+op);   // an EVAL naming the key would be refused by Upstash
+  };
+  const service=api.create({store,eventIndexLimit:10000});try{
+    for(let i=0;i<4;i++)await service.maintenance();
+    assert.deepEqual(trims,[50000,50000,10000]);assert.equal(size,10000);
+  }finally{await service.close();}
+  // ~118 bytes a member was measured on production; stay well under Upstash's 100 MiB a value.
+  assert.ok(api.EVENT_INDEX_LIMIT*118<0.8*100*1024*1024);
 });
 
 test('reliability retry totals retain event durations and severity',async()=>{
   const service=api.create();try{const ev={id:'latency',type:'request.outcome',at:Date.now(),severity:'error',version:'2.3.83',data:{duration_ms:320,status:503}};
     await service.ingest([ev],{source:'client',actor_id:sid});await service.ingest([ev],{source:'client',actor_id:sid});
     const d=await service.reliability();assert.equal(d.rows[0].events,1);assert.equal(d.rows[0].errors,1);assert.equal(d.rows[0].latency_500,1);
+  }finally{await service.close();}
+});
+
+test('a client\'s routine network successes drain without being stored; its failures are kept',async()=>{
+  const service=api.create();try{
+    const ev=(id,status,action='api.network.profile')=>({id,type:'request.outcome',at:Date.now(),version:'3.0.5',data:{action,status,duration_ms:40}});
+    const batch=[ev('ok',200),ev('lost',0),ev('down',503),ev('queue',200,'api.queue')];
+    assert.deepEqual((await service.ingest(batch,{source:'client',actor_id:sid})).sort(),['down','lost','ok','queue']);
+    assert.deepEqual((await service.query('events',{})).rows.map(r=>r.id).sort(),['down','lost','queue']);
   }finally{await service.close();}
 });

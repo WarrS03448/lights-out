@@ -11,6 +11,10 @@ const CLIENT=/^(app|session|ui|request|connection|operation|update|launch|teleme
 const CLIENT_TYPES=new Set('app.action app.error app.fallback session.start session.end session.previous_unclean ui.action ui.screen request.outcome connection.start connection.state connection.connected connection.disconnected operation.start operation.outcome operation.complete operation.failed update.start update.downloaded update.launched update.failed launch.request launch.outcome telemetry.gap auth.signout auth.sign_out'.split(' '));
 const KEYS=new Set('action status duration_ms code screen reason connected count gap error_class phase method route bytes attempt quality queue_players wait_seconds host target_id match_size team round winner score1 score2 delay_ms before after mmr rr prefix persisted category batch_count rejected duplicates'.split(' '));
 const SID={test:require('./player-identity.cjs').validPlayer};
+// The server never records its own successful probe/live/network requests (server.cjs). A hub
+// reports every POST it makes, including its network profile every few seconds, which was 22% of
+// all stored events on 2026-09-27; hold what clients report to the same rule. Failures still count.
+const routine=e=>e.type==='request.outcome'&&e.data.status>0&&e.data.status<400&&/probe|live|network/.test(e.data.action||'');
 function cleanEvent(raw,context={},now=Date.now()){
   if(!raw||typeof raw!=='object'||Array.isArray(raw)||typeof raw.id!=='string'||!/^[A-Za-z0-9_.:-]{1,96}$/.test(raw.id))return null;
   if(typeof raw.type!=='string'||!(/^[a-z][a-z0-9_.]{1,63}$/).test(raw.type)||(context.source==='client'&&(!CLIENT.test(raw.type)||!CLIENT_TYPES.has(raw.type))))return null;
@@ -47,7 +51,12 @@ function filters(raw={},now=Date.now(),permanent=false){
     offset:Math.min(1e7,Math.max(0,Math.floor(Number(raw.offset)||0))),limit:Math.min(200,Math.max(1,Math.floor(Number(raw.limit)||50)))};
 }
 function csvCell(value){let s=value==null?'':String(value);if(/^[\s]*[=+@-]/.test(s)||/^[\t\r\n]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}
-function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB_GAME_DATA_RESET_AT||0),projectTournament,backfillVersion='v1'}={}){
+// The events index is ONE Redis value, and Upstash refuses every write to a value past 100 MiB
+// ("max single record size exceeded"). Measured 2026-09-27: ~118 bytes a member, so it filled at
+// 891k rows and every event write failed from then on. 400k is about 47 MB, under half the limit.
+// A row the index forgets still expires on its own TTL.
+const EVENT_INDEX_LIMIT=400000;
+function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB_GAME_DATA_RESET_AT||0),projectTournament,backfillVersion='v1',eventIndexLimit=EVENT_INDEX_LIMIT}={}){
   if(!Number.isSafeInteger(resetAt)||resetAt<0)throw Error('Invalid game data reset timestamp');
   const db=storage.create({store,prefix,now}),pending=[],terminals=new Map(),health={dropped:0,write_failures:0,rejected:0,last_error:null};
   let flushing=null,working=null,stopped=false,outboxCursor='0',suspicionCache=null,suspicionRead=null;
@@ -71,10 +80,11 @@ function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB
     if(!Array.isArray(raw)||!raw.length||raw.length>40)throw Error('Expected 1 to 40 events');
     const events=raw.map(e=>cleanEvent(e,context,now()));
     if(events.some(e=>!e)){health.rejected++;throw Error('Invalid telemetry event');}
-    // Acknowledge old desktop outboxes so they drain without reviving pre-release diagnostics.
-    const current=events.filter(e=>e.at>=resetAt),expired=events.filter(e=>e.at<resetAt);
+    // Acknowledge old desktop outboxes so they drain without reviving pre-release diagnostics,
+    // and routine successes (see routine) so they drain without being stored.
+    const current=events.filter(e=>e.at>=resetAt&&!routine(e)),skipped=events.filter(e=>e.at<resetAt||routine(e));
     const accepted=current.length?await db.writeEvents(current):[];
-    return [...accepted,...expired.map(e=>e.id)];
+    return [...accepted,...skipped.map(e=>e.id)];
   }
   async function flush(){
     if(flushing)return flushing;
@@ -178,6 +188,11 @@ function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB
       async function consume(key){try{const raw=await db.call(['GET',key]);if(!raw)throw Error('Missing receipt');await project(JSON.parse(raw),key);await db.call(['SREM',db.base+'outbox',key]);}catch{failed=true;health.write_failures++;health.last_error='Some match evidence is waiting for storage or repair';}}
       await saveTerminals();
       await db.call(['ZREMRANGEBYSCORE',db.base+'events','-inf',String(now()-db.retention.events*DAY)]);
+      // Keep the newest rows only. This has to be a plain command: Upstash rejects a whole EVAL
+      // that names an over-limit key before it runs (measured), but still allows removals. Stepped,
+      // so an overfull index is never one huge removal.
+      const excess=await db.call(['ZCARD',db.base+'events'])-eventIndexLimit;
+      if(excess>0)await db.call(['ZREMRANGEBYRANK',db.base+'events','0',String(Math.min(excess,50000)-1)]);
       await db.call(['ZREMRANGEBYSCORE',db.base+'matches','-inf',String(now()-db.retention.matches*DAY)]);
       const out=await db.call(['SSCAN',db.base+'outbox',outboxCursor,'COUNT','4']);
       outboxCursor=String(out[0]);
@@ -210,4 +225,4 @@ function create({store,prefix='hub:',now=Date.now,resetAt=Number(process.env.HUB
   async function close(){stopped=true;clearInterval(timer);clearInterval(worker);await saveTerminals();if(working)await working;for(let i=0;i<25&&pending.length;i++){const before=pending.length;await flush();if(pending.length===before)break;}}
   return {emit,ingest,flush,project,terminal,query,detail,fairPlay,suspicionEvidence,combat,summary,reliability,status,maintenance,close,db};
 }
-module.exports={create,cleanEvent,projectReceipt,filters,csvCell,ruleSnapshot:metrics.ruleSnapshot};
+module.exports={create,cleanEvent,projectReceipt,filters,csvCell,ruleSnapshot:metrics.ruleSnapshot,EVENT_INDEX_LIMIT};
