@@ -3437,6 +3437,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   }
 
   async function applyRecovery(match,player,token,fields) {
+    // recovery.cjs judges the stored match. Let a queued write of what the players were already
+    // told land first, or a poll right after go-live is refused as "Superseded" (2026-09-27).
+    await matchWriting.get(match.id)?.catch(()=>{});
     await syncRecoveryRoster(match);
     const result=await recoveryTransition(match,player,token,fields);
     if(result.ok&&fields.operation==='pulse')await syncRecoveryRoster(match);
@@ -4071,6 +4074,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     // ending would lose the matches that actually got played. The score and the winner are
     // filled in later, by whatever reports the scoreboard.
     if (!match.start_ready_verified) archiveMatch(match, { outcome: 'played', reason: '' });
+    // Stored now, not on the next match tick: every hub polls recovery the moment it hears this,
+    // and that poll reads the STORED match (applyRecovery waits for this write). A failed write
+    // is retried by the tick.
+    persistLive(match).catch(() => {});
     for (const p of match.players) sendTo(p.player_id, livePayload(match, p.player_id));
   }
 

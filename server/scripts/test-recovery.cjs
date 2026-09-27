@@ -208,6 +208,27 @@ test('public recovery health distinguishes stale session evidence from permissio
   assert.equal(status.session_stale,false,'a healthy participant suppresses cold-recovery instructions');
 });
 
+// Wire parity, 2026-09-27: go-live changed the match in memory and told every hub at once, but the
+// stored match the recovery record is read from still said `connecting` until the next match tick,
+// so each hub's first status poll after go-live was refused "Superseded recovery request".
+test('the first recovery poll after go-live reads the live match, and stale scopes are still refused',async t=>{
+  await store(['FLUSHALL']);
+  const L=require('../live.cjs').create({upstashCmd:store,prefix:'golive:'});await L._internals.ready;t.after(()=>L.shutdown());
+  const m={id:'0123456789abcdef',mode:'BB5',state:'connecting',host:ids[0],map:'Rome',deadline:Date.now()+60000,
+    expected_score_limit:7,expected_max_rounds:12,players:ids.map(player_id=>({player_id,game_steam_id:player_id})),left:[],
+    game_bindings:Object.fromEntries(ids.map(id=>[id,id])),teams:{1:[ids[0],ids[2]],2:[ids[1],ids[3]]}};
+  m.assigned_teams=structuredClone(m.teams);
+  L._internals.matches.set(m.id,m);ids.forEach(id=>L._internals.inMatch.set(id,m.id));
+  L._internals.connectPayload(m,m.host);await L._internals.flushMatches();
+  const rows=ids.map(player_id=>({player_id,team:m.teams[1].includes(player_id)?0:1,active:1}));
+  assert.equal(L._internals.startReady(m.host,m.id,rows).started,true);
+  const scope={match_id:m.id,epoch:0,session:'chm-'+m.id,operation:'status'};
+  const first=await L.recoveryAction(ids[1],scope);
+  assert.equal(first.ok,true,first.error);assert.equal(first.recovery.phase,'playing');
+  for(const stale of [{epoch:1},{session:'chm-'+m.id+'-r1111111111111111'}])
+    assert.equal((await L.recoveryAction(ids[1],{...scope,...stale})).error,'Superseded recovery request');
+});
+
 test('a failed replacement host cannot turn a return deadline into penalties for everyone',async()=>{
   await eligible();await call('claim',1);const m=JSON.parse(await store(['GET',keys[1]]));
   const auth={epoch:1,session:m.session_key,token:m.reportToken};
