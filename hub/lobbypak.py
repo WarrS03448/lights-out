@@ -22,6 +22,7 @@ pak; `installed()` and `remove()` are safe to call regardless).
 """
 import hashlib
 import os
+import re
 import shutil
 import sys
 
@@ -313,6 +314,45 @@ def remove(game):
         except OSError:
             return False
     return True
+
+
+def remove_stale(game):
+    """HUB STARTUP: take out a lobby pak that no running game has mounted.
+
+    Removal otherwise lives in the hub process: reset_match() (which a finished match reaches only
+    when the player leaves the result screen) and the in-memory _pending_lobby_cleanup. Quit the
+    hub from the result screen, let an update restart it, or reboot, and the pak outlives both.
+    Bodycam then boots with it however it is started - from Steam too. A joiner pak searches for
+    a match that is over ("waiting for connection", then a black screen instead of the range);
+    found 2026-09-27 on a player's machine and on Sam's.
+
+    Safe because this process has installed nothing yet, and every launch path (_prepare_launch)
+    installs a fresh pak before it opens the game. A running game keeps its copy: it is mounted,
+    and the match it belongs to may still be live."""
+    if not game or not installed(game) or game_mod.game_running():
+        return False
+    return remove(game)
+
+
+def remove_for_match(game, match_id):
+    """Remove the installed lobby pak only if it was cut for `match_id` and no game is running.
+
+    For match_cleanup's detached worker, which outlives the hub. By the time it sees its game exit
+    the hub may already have installed the NEXT match's pak, and that one must stay. Every token is
+    chm-<match_id>[-r<16 hex>] (competitive._match_token), written as a plain FName into a pak
+    stored uncompressed (retarget_lobby's compress=()), so the bytes say which match it is for."""
+    if not game or not re.fullmatch(r"[0-9a-f]{16}", str(match_id or "")):
+        return False
+    try:
+        with open(installed_path(game), "rb") as fh:
+            data = fh.read()
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    if ("chm-" + match_id).encode("ascii") not in data or game_mod.game_running():
+        return False
+    return remove(game)
 
 
 def _complain(message, log=None):

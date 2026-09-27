@@ -261,6 +261,27 @@ def _receipt(job):
         return None
 
 
+def _release_lobby_pak(job, receipt):
+    """The watched game is gone: take out the lobby pak cut for this match, once the match is over.
+
+    The hub removes it too, but only from reset_match() and an in-memory retry list, and both die
+    with the hub, which this worker outlives by design. A pak left behind makes the NEXT launch,
+    even a plain one from Steam, try to rejoin a finished match (lobbypak.remove_stale).
+
+    Mid-match (no completion receipt) the pak stays: the hub's Relaunch reuses it without
+    reinstalling, so removing it would boot a crashed player into the range instead of the match."""
+    try:
+        if receipt is None:
+            receipt = _receipt(job)   # the game closed on the final scoreboard, before we asked
+        exe = Path(job["expected_exe"])
+        if receipt is None or [p.lower() for p in exe.parts[-4:-1]] != ["bodycam", "binaries", "win64"]:
+            return False
+        from . import lobbypak
+        return lobbypak.remove_for_match(str(exe.parents[3]), job["match_id"])
+    except Exception:  # noqa: BLE001 - a leftover file must never fail the cleanup job
+        return False
+
+
 def _graceful_close(handle, pid):
     _, user, callback = _apis()
     @callback
@@ -311,7 +332,8 @@ def run_worker(job_id):
                 if handle is None:
                     handle = _open_process(identity["pid"])
                     if handle is None:
-                        _status(job_id, "done", reason="verified_process_absent"); return 0
+                        _status(job_id, "done", reason="verified_process_absent")
+                        _release_lobby_pak(job, receipt); return 0
                     try:
                         actual = _identity(handle, identity["pid"])
                     except OSError:
@@ -320,7 +342,8 @@ def run_worker(job_id):
                     if actual != identity:
                         _status(job_id, "superseded", reason="process_identity_changed"); return 0
                 if _exited(handle):
-                    _status(job_id, "done", reason="verified_exit", attempts=attempts); return 0
+                    _status(job_id, "done", reason="verified_exit", attempts=attempts)
+                    _release_lobby_pak(job, receipt); return 0
                 if receipt is None:
                     receipt = _receipt(job)
                     if receipt is None:

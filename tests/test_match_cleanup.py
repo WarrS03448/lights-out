@@ -3,6 +3,7 @@ import ctypes
 import json
 
 import pytest
+from hub import game
 from hub import match_cleanup as cleanup
 
 
@@ -136,3 +137,73 @@ def test_captured_identity_must_be_saved_before_it_can_authorize_cleanup(monkeyp
     assert cleanup.run_worker(job_id) == 0
     assert captured[0] == 2
     assert cleanup._read(cleanup._job_path(job_id))['identity'] == candidate
+
+
+def fake_install(tmp_path, token):
+    """A game folder with a lobby pak carrying `token`; returns (expected_exe, pak)."""
+    root = tmp_path / 'game'
+    mods = root / 'Bodycam' / 'Content' / 'Paks' / '~mods'
+    mods.mkdir(parents=True)
+    pak = mods / 'CommunityLobby_P.pak'
+    pak.write_bytes(b'\x00GM_CHJoin_C\x00' + token.encode('ascii') + b'\x00')
+    exe = root / 'Bodycam' / 'Binaries' / 'Win64' / 'Bodycam-Win64-Shipping.exe'
+    return cleanup._normal_path(str(exe)), pak
+
+
+def with_lobby_pak(monkeypatch, tmp_path, token='chm-' + '1' * 16, others_running=False):
+    job_id, job, calls, clock, _ = setup_worker(monkeypatch)
+    job['expected_exe'], pak = fake_install(tmp_path, token)
+    cleanup._write(cleanup._job_path(job_id), job)
+    monkeypatch.setattr(game, 'game_pids', lambda: [99] if others_running else [])
+    return job_id, job, pak
+
+
+@pytest.mark.parametrize('token', ['chm-' + '1' * 16, 'chm-' + '1' * 16 + '-r' + 'c' * 16])
+def test_a_finished_match_takes_its_lobby_pak_with_it(monkeypatch, tmp_path, token):
+    job_id, _, pak = with_lobby_pak(monkeypatch, tmp_path, token)
+    assert cleanup.run_worker(job_id) == 0
+    assert cleanup.read_status(job_id)['reason'] == 'verified_exit'
+    assert not pak.exists(), 'a plain launch after this match would rejoin a finished lobby'
+
+
+def test_the_next_matchs_pak_is_never_touched(monkeypatch, tmp_path):
+    job_id, _, pak = with_lobby_pak(monkeypatch, tmp_path, 'chm-' + '2' * 16)
+    assert cleanup.run_worker(job_id) == 0
+    assert pak.exists()
+
+
+def test_a_pak_another_running_game_has_mounted_stays(monkeypatch, tmp_path):
+    job_id, _, pak = with_lobby_pak(monkeypatch, tmp_path, others_running=True)
+    assert cleanup.run_worker(job_id) == 0
+    assert pak.exists()
+
+
+def test_a_game_that_dies_mid_match_keeps_its_pak_for_relaunch(monkeypatch, tmp_path):
+    job_id, _, pak = with_lobby_pak(monkeypatch, tmp_path)
+    monkeypatch.setattr(cleanup, '_exited', lambda _: True)
+    monkeypatch.setattr(cleanup, '_receipt', lambda _: None)
+    assert cleanup.run_worker(job_id) == 0
+    assert cleanup.read_status(job_id)['reason'] == 'verified_exit'
+    assert pak.exists(), "Relaunch reuses this pak; without it the player boots into the range"
+
+
+@pytest.mark.parametrize('gone', ['exited', 'absent'])
+def test_a_game_closed_on_the_final_scoreboard_still_takes_its_pak(monkeypatch, tmp_path, gone):
+    """The player (or a crash) closed Bodycam before the worker had asked for the receipt."""
+    job_id, job, pak = with_lobby_pak(monkeypatch, tmp_path)
+    if gone == 'exited':
+        monkeypatch.setattr(cleanup, '_exited', lambda _: True)
+    else:
+        monkeypatch.setattr(cleanup, '_open_process', lambda pid: None)
+    assert cleanup.run_worker(job_id) == 0
+    assert not pak.exists()
+
+
+def test_lobby_pak_trouble_never_fails_the_job(monkeypatch, tmp_path):
+    job_id, _, pak = with_lobby_pak(monkeypatch, tmp_path)
+    def boom(*_):
+        raise OSError('locked')
+    from hub import lobbypak
+    monkeypatch.setattr(lobbypak, 'remove_for_match', boom)
+    assert cleanup.run_worker(job_id) == 0
+    assert cleanup.read_status(job_id)['state'] == 'done'

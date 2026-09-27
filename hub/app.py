@@ -1363,6 +1363,19 @@ def selfcheck(show: bool = True, verify_own_signature: bool = False) -> int:
     return code
 
 
+def remove_stale_lobby_pak():
+    """Take out a lobby pak a previous hub process left behind (lobbypak.remove_stale).
+
+    Resolves the game folder the way HubApp and the web shell do. Never stops the hub starting."""
+    try:
+        from . import lobbypak
+        remembered = state_mod.load().get("game_dir")
+        game = remembered if game_mod.is_game_dir(remembered) else game_mod.find_game_dir()
+        return lobbypak.remove_stale(game)
+    except Exception:                            # noqa: BLE001
+        return False
+
+
 def main():
     import sys as _sys
     if "--selfcheck" in _sys.argv:
@@ -1398,6 +1411,8 @@ def main():
     from . import telemetry
     telemetry.start()
     match_cleanup.resume_pending_jobs()
+    # Before any UI exists, so no match of THIS process can have installed a pak yet.
+    remove_stale_lobby_pak()
     # Capture the directory before scheduling; only the app lifecycle retries revocations.
     from . import auth as auth_mod
     import threading
