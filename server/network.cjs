@@ -6,6 +6,8 @@ const positive = (name, fallback) => {
   const n = Number(process.env[name]);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 };
+// The host RTT ceiling for the regional pools. The cross-region pool has none (Sam, 2026-09-27):
+// everyone in it opted in to playing other regions, and across regions 120 ms rarely fits.
 const MAX_PING = Math.min(120, positive('COMP_MAX_PING_MS', 120));
 const TARGET_PING = Math.min(80, MAX_PING, positive('COMP_TARGET_PING_MS', 80));
 const PROFILE_TTL = 120000;
@@ -31,7 +33,8 @@ function pairPing(a, b, now) {
   return ab === null || ba === null ? null : Math.max(ab,ba);
 }
 
-function selectHost(players, now) {
+// `maxPing` is Infinity for the cross-region pool. A fresh estimate is still required either way.
+function selectHost(players, now, maxPing = MAX_PING) {
   if (!players.length || !players.every(p => ready(p,now)) || !compatible(players)) return null;
   let best = null;
   for (const host of players) {
@@ -39,13 +42,17 @@ function selectHost(players, now) {
     let total = 0, worst = 0, valid = true;
     for (const peer of players) {
       const ping = peer.id === host.id ? 0 : pairPing(host,peer,now);
-      if (ping === null || ping > MAX_PING) { valid = false; break; }
+      if (ping === null || ping > maxPing) { valid = false; break; }
       pings[peer.id] = ping; total += ping; worst = Math.max(worst,ping);
     }
     if (!valid) continue;
     const average = total / Math.max(1,players.length - 1);
-    if (!best || average < best.average || (average === best.average && (worst < best.worst
-        || (worst === best.worst && host.id < best.host)))) {
+    // Without a cap, a host that keeps everyone under MAX_PING still beats a lower average that
+    // does not, so a roster the ceiling allowed keeps the host it always had.
+    const over = worst > MAX_PING, bestOver = best && best.worst > MAX_PING;
+    if (!best || (over !== bestOver ? !over : average < best.average
+        || (average === best.average && (worst < best.worst
+          || (worst === best.worst && host.id < best.host))))) {
       best = { host:host.id, average, worst, pings,
         cross_region:new Set(players.map(p => p.region)).size > 1,
         region:host.region, estimated:true };

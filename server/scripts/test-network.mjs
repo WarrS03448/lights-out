@@ -80,6 +80,36 @@ assert.ok(mixedMatch);
 assert.ok(Object.values(mixedMatch.teams).some(team=>team.length===1 && team[0].key==='mixed-good'));
 mixedPlayers[3].cross_region=false;
 assert.equal(mm.findMatch([mixedUnit,u(mixedPlayers[2],2),u(mixedPlayers[3],3)],{now,matchSize:4,teamSize:2}),null);
+// The cross-region pool has no RTT ceiling (Sam, 2026-09-27); regional pools keep it.
+const far = [player('far-na','NA',true),player('far-eu','EU',true)];
+link(far[0],far[1],250);
+assert.equal(net.selectHost(far,now),null,'the default ceiling still applies');
+assert.equal(net.selectHost(far,now,Infinity).worst,250,'an uncapped pool accepts any measured ping');
+const farMatch = mm.findMatch([u(far[0],1),u(far[1],2)],{now,matchSize:2,teamSize:1});
+assert.ok(farMatch,'opted-in players in different regions match above 120 ms');
+assert.equal(farMatch.network.cross_region,true);
+assert.equal(farMatch.network.worst,250);
+const slowLocal = [player('slow-1','AS'),player('slow-2','AS')];
+link(slowLocal[0],slowLocal[1],250);
+assert.equal(mm.findMatch(slowLocal.map((p,i)=>u(p,i+1)),{now,matchSize:2,teamSize:1}),null,
+  'players who did not opt in keep the ceiling');
+slowLocal.forEach(p => { p.cross_region = true; });
+assert.ok(mm.findMatch(slowLocal.map((p,i)=>u(p,i+1)),{now,matchSize:2,teamSize:1}),
+  'opting in lifts the ceiling for a same-region roster too');
+assert.equal(net.selectHost([far[0],player('far-x','NA',true)],now,Infinity),null,
+  'an uncapped pool still needs a fresh estimate');
+const hp = ['hp','hq','hr','hs'].map((id,i) => player(id,['NA','EU','EU','OC'][i],true));
+link(hp[0],hp[1],10); link(hp[0],hp[2],10); link(hp[0],hp[3],130);
+link(hp[1],hp[2],100); link(hp[1],hp[3],100); link(hp[2],hp[3],200);
+assert.equal(net.selectHost(hp,now,Infinity).host,'hq','a host under the ceiling beats a lower average over it');
+link(hp[0],hp[3],120);
+assert.equal(net.selectHost(hp,now,Infinity).host,'hp','lowest average still wins under the ceiling');
+const rx = player('rx','NA',true), ry = player('ry','EU',true), rz = player('rz','AS',true);
+link(rx,ry,250); link(rx,rz,110); link(ry,rz,300);
+const ru = (p,joined,rating) => ({key:p.id,joined,ratings:[{rating,rd:60}],network:[p]});
+const underFirst = mm.findMatch([ru(rx,1,1500),ru(ry,2,1500),ru(rz,3,1700)],{now,matchSize:2,teamSize:1});
+assert.deepEqual(underFirst.units.map(x=>x.key).sort(),['rx','rz'],
+  'a roster under the ceiling beats a better-balanced one over it');
 const registry = new net.Registry();
 assert.throws(()=>registry.profile('a',{region:'?',location:'marker',age_seconds:0},now));
 const markerA = 'a'.repeat(32), markerB = 'b'.repeat(32);

@@ -30,7 +30,8 @@
  *
  * Network eligibility is checked before rating balance, through network.cjs. Regions and
  * the host RTT ceiling never widen with queue time. Each regional pool has its own anchor;
- * cross-region candidates require every member's explicit opt-in.
+ * cross-region candidates require every member's explicit opt-in, and the cross-region pool
+ * has no RTT ceiling at all (a roster under it is still preferred when one exists).
  */
 const rating = require('./rating.cjs');
 const network = require('./network.cjs');
@@ -251,7 +252,7 @@ function findMatchPool(units, options = {}) {
   const consider = (chosen) => {
     seen += 1;
     const connection = network.enforced()
-      ? network.selectHost(chosen.flatMap(u => u.network || []), now) : null;
+      ? network.selectHost(chosen.flatMap(u => u.network || []), now, options.maxPing) : null;
     if (network.enforced() && !connection) return;
     // Odd-sized test matches put the extra player on side two. Production
     // still requires five per side, and parties remain indivisible.
@@ -318,10 +319,14 @@ function findMatchPool(units, options = {}) {
 }
 
 // Network rules never widen with time. Separate anchors let EU form while NA lacks a game.
+// Only the uncapped cross-region pool can offer a roster over the ceiling, and it loses to any
+// roster under it, so lifting the cap adds games without replacing better ones.
 function compareMatches(a,b) {
   if (a.network && b.network) {
     const cross = Number(a.network.cross_region) - Number(b.network.cross_region);
     if (cross) return cross;
+    const ceiling = Number(a.network.worst > network.MAX_PING) - Number(b.network.worst > network.MAX_PING);
+    if (ceiling) return ceiling;
     const target = Number(a.network.worst > network.TARGET_PING) - Number(b.network.worst > network.TARGET_PING);
     if (target) return target;
   }
@@ -334,13 +339,16 @@ function findMatch(units, options = {}) {
   const eligible = (units || []).filter(u => Array.isArray(u.network)
     && u.network.length === (u.ratings || []).length && u.network.length
     && u.network.every(p => network.ready(p,now)) && network.compatible(u.network));
-  const pools = network.REGIONS.map(region => eligible.filter(u => u.network.every(p => p.region === region)));
-  pools.push(eligible.filter(u => u.network.every(p => p.cross_region === true)));
+  // Regional pools keep the RTT ceiling. The cross-region pool has none (Sam, 2026-09-27).
+  const pools = network.REGIONS.map(region => ({maxPing:network.MAX_PING,
+    units:eligible.filter(u => u.network.every(p => p.region === region))}));
+  pools.push({maxPing:Infinity, units:eligible.filter(u => u.network.every(p => p.cross_region === true))});
   let best = null;
-  const groups = pools.flatMap(pool=>networkFeasiblePools(pool,options,now)).slice(0,MAX_CANDIDATES);
+  const groups = pools.flatMap(pool=>networkFeasiblePools(pool.units,options,now,pool.maxPing)).slice(0,MAX_CANDIDATES);
   const budget = Math.max(1,Math.floor(MAX_CANDIDATES / Math.max(1,groups.length)));
   for (const star of groups) {
-      const candidate = findMatchPool(star.units,{...options,requiredKeys:star.requiredKeys,witness:star.witness,budget});
+      const candidate = findMatchPool(star.units,{...options,requiredKeys:star.requiredKeys,witness:star.witness,budget,
+        maxPing:star.maxPing});
       if (candidate && (!best || compareMatches(candidate,best) < 0)) best = candidate;
   }
   return best;
@@ -349,7 +357,7 @@ function findMatch(units, options = {}) {
 // A fresh local marker alone is not enough to anchor a pool: there must be a host that can
 // actually accommodate that unit in two whole teams. DP checks party sizes before the more
 // expensive rating search. This stops one player with no peer estimates blocking everyone.
-function networkFeasiblePools(pool, options, now) {
+function networkFeasiblePools(pool, options, now, maxPing = network.MAX_PING) {
   const matchSize = Math.max(1,Math.floor(Number(options.matchSize) || 10));
   const sizeA = Math.max(1,Math.floor(Number(options.teamSize) || Math.floor(matchSize/2)));
   const sizeB = matchSize - sizeA;
@@ -357,7 +365,7 @@ function networkFeasiblePools(pool, options, now) {
   for (const hostUnit of pool) for (const host of hostUnit.network) {
     const connected = pool.filter(u => u.network.every(p => p.id === host.id || (() => {
       const ping = network.pairPing(host,p,now);
-      return ping !== null && ping <= network.MAX_PING;
+      return ping !== null && ping <= maxPing;
     })()));
     if (!connected.includes(hostUnit) || connected.reduce((n,u)=>n+u.network.length,0) < matchSize) continue;
     stars.push({hostUnit,connected});
@@ -389,7 +397,7 @@ function networkFeasiblePools(pool, options, now) {
       // Keep each host's feasible group intact so invalid mixtures cannot exhaust
       // the bounded candidate search before a playable match is considered.
       return validStars.map(({hostUnit,connected,witness}) => ({
-        units:connected,requiredKeys:[anchor.key,hostUnit.key],witness}));
+        units:connected,requiredKeys:[anchor.key,hostUnit.key],witness,maxPing}));
     }
     skipped.add(anchor);
   }
