@@ -1009,7 +1009,6 @@ function create({ upstashCmd, prefix = 'hub:', live, verifyWithSteam, analytics,
         ${named(b.persona, b.by)}
         <span class="tag">${esc(new Date(n(b.at)).toISOString().slice(0, 16).replace('T', ' '))}</span>
         ${b.hub ? `<span class="tag">hub ${esc(b.hub)}</span>` : ''}
-        ${b.platform ? `<span class="tag">${esc(b.platform)}</span>` : ''}
         ${b.mode ? `<span class="tag">mode ${esc(b.mode)}</span>` : ''}
       </div>
       <p class="bug-text">${esc(b.text)}</p></div>`).join('')

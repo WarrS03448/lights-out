@@ -5,8 +5,6 @@ function create(options){
   const sharedNetworkRegistry=new (require('./network.cjs').Registry)();
   const engines=new Map();let recovered=false;
   const guard={
-    inMatch(id){return [...engines.values()].some(engine=>engine._internals.inMatch.has(id));},
-    networkChanged(id,unavailable){for(const engine of engines.values())engine.networkQueueChanged(id,unavailable);},
     inParty(id){return engines.get('BB5')._internals.partyOf.has(id);},
     canChangeParty(ids){return !engines.get('BB1').activity().some(a=>ids.includes(a.player_id));},
     canEnter(mode,ids,games){

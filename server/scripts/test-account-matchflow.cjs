@@ -171,7 +171,7 @@ test('two persistent accounts cannot queue the same verified game identity in on
 test('leaving a continuing match revokes the native one-shot join permit',async t=>{
   const account={player_id:PLAYERS[2],game_steam_id:GAME[2],auth_method:'lightsout'};
   const {L,match,host}=fixture(t,0,{whoami:async()=>account,bearer:()=> 'child',
-    sendJson:(res,status,body)=>Object.assign(res,{status,body}), readBody:async()=>Buffer.alloc(0)});
+    sendJson:(res,status,body)=>Object.assign(res,{status,body})});
   L.gameReportedIn(host,'ch_lobby_read');
   match.players[2].connected=true;
   const res={};

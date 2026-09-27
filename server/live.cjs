@@ -39,7 +39,6 @@
  * be exercised by one person. Sam cannot summon ten players to test a queue.
  */
 const crypto = require('crypto');
-const {QueueScopes} = require('./queue-scopes.cjs');
 const identity = require('./player-identity.cjs');
 const ratingLib = require('./rating.cjs');
 const matchmaker = require('./matchmaker.cjs');
@@ -421,7 +420,6 @@ const PARTY_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 // paths in the caller is what made a fully-implemented feature dead on arrival, so there is one
 // list now and `owns()` is what server.cjs asks. ADD A ROUTE HERE OR IT IS NOT REACHABLE.
 const NEEDS_AUTH = ['/api/match/concede', '/api/messages', '/api/messages/thread', '/api/messages/send', '/api/messages/read', '/api/messages/block', '/api/tournament', '/api/tournament/register', '/api/tournament/support', '/api/match/combat-warning', '/api/live', '/api/queue/join', '/api/queue/leave',
-                    '/api/queue/scoped/join', '/api/queue/scoped/leave',
                     '/api/network/relay', '/api/network/profile', '/api/network/peers',
                     '/api/network/signal', '/api/network/pings',
                     '/api/match/accept', '/api/match/leave',
@@ -440,11 +438,6 @@ const NEEDS_AUTH = ['/api/match/concede', '/api/messages', '/api/messages/thread
                     '/api/party/create', '/api/party/join', '/api/party/leave',
                     '/api/party/refresh-code',
                     '/api/party/invite', '/api/party/invite/accept', '/api/party/invite/decline'];
-
-const SCOPED_MATCH_ACTIONS = ['accept','leave','coin','choose','side','ban','chat','connecting','connected'];
-NEEDS_AUTH.push(...SCOPED_MATCH_ACTIONS.map(action => '/api/match/scoped/' + action));
-const SCOPED_PARTY_ACTIONS = ['create','join','leave','refresh-code','invite','invite/accept','invite/decline'];
-NEEDS_AUTH.push(...SCOPED_PARTY_ACTIONS.map(action => '/api/party/scoped/' + action));
 
 // /api/live/stats is the one route that answers before the auth check, so it is not in NEEDS_AUTH
 // - but it is still ours, and server.cjs still has to hand it over.
@@ -827,25 +820,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   //           "front of the queue" survives a queue that is no longer an ordered list.
   const queue = [];
   const queueIntents = new Map();   // caller -> pending admission identity
-  const queueScopes = new QueueScopes({
-    mode:mode.id,
-    isCurrent:({player, token, clientId}) => {
-      const client = clients.get(clientId);
-      return !!client && client.steamId === player && client.token === token
-        && bySteam.get(player)?.has(clientId) === true
-        && !client.res.destroyed && !client.res.writableEnded;
-    },
-  });
-  function queueParty(id) {
-    const code = partyOf.get(id) || '', party = code ? parties.get(code) : null;
-    const members = party ? party.members.slice() : [id];
-    return {code, leader:party ? party.leaderId : id, members,
-      contexts:Object.fromEntries(members.map(member => [member, partyContext(member)]))};
-  }
-  function queueRejection(res, result) {
-    return sendJson(res, result.status || 409, {ok:false, stale_action:true,
-      code:result.code, error:'That search changed. Please start the search again.'});
-  }
   const queueOf = new Map();         // steamId -> unit, the reverse index
   const matches = new identity.MatchMap();         // matchId -> match
   const inMatch = new Map();         // steamId -> matchId
@@ -931,66 +905,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   // steamId -> timer. A member's last window closed; they are removed from their party only if
   // this fires before they reconnect. Cleared in handleStream on reconnect.
   const partyGrace = new Map();
-  const partyContexts = new Map();
-  // HTTP-only callers have no stream-close hook. Retain their solo context just long
-  // enough for a response/follow-up, with a hard bound as well as expiry.
-  const soloPartyContexts = new Map();
-  function prunePartyContexts(now=Date.now()) {
-    for (const [id, until] of soloPartyContexts) {
-      if (bySteam.has(id) || partyOf.has(id)) soloPartyContexts.delete(id);
-      else if (until <= now || soloPartyContexts.size > 10000) {
-        soloPartyContexts.delete(id); partyContexts.delete(id);
-      } else break; // insertion order is oldest first; avoid scanning every retained caller
-    }
-  }
-  const partyContextPruner = setInterval(prunePartyContexts, 60000);
-  partyContextPruner.unref?.();
-  function touchPartyContext(id) {
-    if (bySteam.has(id) || partyOf.has(id)) soloPartyContexts.delete(id);
-    else { soloPartyContexts.delete(id); soloPartyContexts.set(id, Date.now() + 300000); }
-    prunePartyContexts();
-  }
-  function partyContext(id) {
-    prunePartyContexts();
-    if (!partyContexts.has(id)) rotatePartyContext(id);
-    touchPartyContext(id);
-    return partyContexts.get(id);
-  }
-  function rotatePartyContext(id) {
-    const context = crypto.randomBytes(16).toString('hex');
-    partyContexts.set(id, context);
-    touchPartyContext(id);
-    const party = parties.get(partyOf.get(id));
-    queueScopes.invalidate(party ? [...party.members, id] : [id]);
-    return context;
-  }
-  const stalePartyAction = () => ({ok:false, stale_action:true, error:'That party or invitation has changed.'});
-  function partyActionProblem(id, body, required=false) {
-    prunePartyContexts();
-    if (!bySteam.has(id) && !partyOf.has(id) && soloPartyContexts.get(id) <= Date.now()) {
-      soloPartyContexts.delete(id); partyContexts.delete(id);
-    }
-    if (!required && !Object.hasOwn(body || {}, 'expected_party_context')) return null;
-    const expected = body?.expected_party_context;
-    return typeof expected === 'string' && /^[a-f0-9]{32}$/.test(expected) &&
-      partyContexts.get(id) === expected ? null : stalePartyAction();
-  }
-  function inviteActionProblem(id, body, required=false) {
-    const problem = partyActionProblem(id, body, required);
-    if (problem) return problem;
-    if (!required && !Object.hasOwn(body || {}, 'expected_invite_id')) return null;
-    const expected = body?.expected_invite_id;
-    return typeof expected === 'string' && /^[a-f0-9]{32}$/.test(expected) &&
-      partyInvites.get(id)?.get(body?.from)?.invite_id === expected ? null : stalePartyAction();
-  }
-  async function readPartyActionBody(req) {
-    try {
-      const raw = await readBody(req, 4096);
-      const body = raw?.length ? identity.parse(raw.toString('utf8')) : {};
-      if (body && typeof body === 'object' && !Array.isArray(body)) return body;
-    } catch { /* malformed action must not turn into an unscoped mutation */ }
-    return {expected_party_context:null};
-  }
   // invitee steamId -> Map(inviter steamId -> { code, at, expires, timer }).
   // IN MEMORY ONLY, deliberately: an invite points at a party code, parties are ephemeral live
   // state that dies with the process, and a persisted invite would come back after a redeploy
@@ -1067,8 +981,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   function send(clientId, event) {
     const client = clients.get(clientId);
     if (!client) return;
-    if (event.type === 'party_update') event = {...event, party_context:partyContext(client.steamId)};
-    event = {...event, ...queueScopes.forStream(client.steamId, client.token, clientId)};
     try {
       client.res.write(`data: ${JSON.stringify(identity.wire(event))}\n\n`);
     } catch {
@@ -1108,37 +1020,13 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    *
    * HEADERS AND NOT A BODY, because the request that matters most for a party is the STREAM -
    * a GET with no body at all - and a member who is not the leader never sends anything else.
-   *
-   * The platform rides with the version it describes. The native Linux build sends
-   * `x-hub-platform: linux`; the value has to be exactly that, and anything else, including no
-   * header at all (every Windows hub), is recorded as Windows. See hubRequirement for what it
-   * changes.
    */
   function noteVersions(req, steamId) {
     const h = (req && req.headers) || {};
     const hub = String(h['x-hub-version'] || '').trim().slice(0, 32);
     const mode = String(h['x-mode-version'] || '').trim().slice(0, 32);
     if (!hub && !mode) return;                // an old hub says nothing; leave what we had
-    const platform = h['x-hub-platform'] === 'linux' ? 'linux' : 'windows';
-    versions.set(steamId, { hub, mode, platform, at: Date.now() });
-  }
-
-  /**
-   * The hub version this player's build has to reach.
-   *
-   * THE PER-PLATFORM GATE. The Linux build ships on its own schedule, so it is held to the Linux
-   * catalogue entry (requiredVersions().linux) once server.cjs publishes one as a non-empty
-   * string. Until then, and for every other build, it is requiredVersions().hub, which is the
-   * lockstep rule every hub had before. The gamemode (pak) requirement is not per platform:
-   * both builds install the same pack. Each party member is judged by their own record.
-   *
-   * THIS IS A COMPATIBILITY GATE, NOT A SECURITY BOUNDARY. The platform is self-declared, like
-   * the version beside it; a client that claims the other platform only changes which published
-   * version it is compared with, and gains nothing a modified client could not already claim.
-   */
-  function hubRequirement(need, have) {
-    const linux = need.linux;
-    return have.platform === 'linux' && typeof linux === 'string' && linux.trim() ? linux : need.hub;
+    versions.set(steamId, { hub, mode, at: Date.now() });
   }
 
   /**
@@ -1161,8 +1049,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
                need_hub: String(need.hub || ''), need_mode: String(need.mode || ''),
                have_hub: '', have_mode: '' };
     }
-    const needHub = hubRequirement(need, have);
-    const hubStale = versionOlder(have.hub, needHub);
+    const hubStale = versionOlder(have.hub, need.hub);
     // A hub that reports a hub version but NO mode version has no ranked pack installed. This
     // used to be waved through on the reasoning that "the tab cannot reach the queue without
     // one" - which was true of the Tk tab, whose gate screen replaces the Find match button, and
@@ -1183,7 +1070,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       // "update"); an older hub that does not know the flag still reads the rest and tells them
       // to go to Gamemodes, which is the right screen either way.
       missing_mode: missing,
-      need_hub: String(needHub || ''),
+      need_hub: String(need.hub || ''),
       need_mode: String(need.mode || ''),
       have_hub: have.hub || '',
       have_mode: have.mode || '',
@@ -1193,7 +1080,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   function drop(clientId) {
     const client = clients.get(clientId);
     if (!client) return;
-    queueScopes.close(client.steamId, client.token, clientId);
     clients.delete(clientId);
     const set = bySteam.get(client.steamId);
     if (set) {
@@ -1229,15 +1115,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
               leaveParty(steamId);
               sendTo(steamId, { type: 'party_update', code: null });  // harmless if truly gone
             }
-            if (!bySteam.has(steamId) && !partyOf.has(steamId)) {
-              partyContexts.delete(steamId); soloPartyContexts.delete(steamId);
-            }
           }, PARTY_GRACE_SECONDS * 1000);
           if (typeof timer.unref === 'function') timer.unref();
           partyGrace.set(steamId, timer);
-        }
-        if (!partyOf.has(client.steamId)) {
-          partyContexts.delete(client.steamId); soloPartyContexts.delete(client.steamId);
         }
       }
     }
@@ -1282,7 +1162,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       code: code || '',
       joined: Number(joined) || Date.now(),
     };
-    queueScopes.track(unit);
     queue.push(unit);
     for (const id of ids) queueOf.set(id, unit);
     return unit;
@@ -1305,7 +1184,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       queueOf.delete(id);
       networkRegistry.retirePlayer(id);
     }
-    queueScopes.retire(unit);
     return unit;
   }
 
@@ -2849,27 +2727,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     drainQueue();
   }
 
-  function matchActionProblem(steamId, body) {
-    const has = key => Object.prototype.hasOwnProperty.call(body || {}, key);
-    const scoped = has('expected_match_id'), stage = has('expected_stage'), count = has('expected_ban_count');
-    if (!scoped && !stage && !count) return null; // Earlier clients remain compatible.
-    const stale = {ok:false, stale_action:true, error:'The match or decision has changed.'};
-    if (!scoped || typeof body.expected_match_id !== 'string' || !/^[a-f0-9]{16}$/.test(body.expected_match_id)) return stale;
-    const match = matches.get(inMatch.get(steamId));
-    if (!match || match.id !== body.expected_match_id || !match.players.some(p => p.player_id === steamId)) return stale;
-    if (stage || count) {
-      if (!stage || !count || typeof body.expected_stage !== 'string'
-          || !['coin','flipping','choice','side','veto','ready'].includes(body.expected_stage)
-          || !Number.isSafeInteger(body.expected_ban_count) || body.expected_ban_count < 0
-          || match.lobby?.stage !== body.expected_stage
-          || (match.lobby?.bans || []).length !== body.expected_ban_count) return stale;
-    }
-    return null;
-  }
-
-  function acceptMatch(steamId, body) {
-    const problem = matchActionProblem(steamId, body);
-    if (problem) return problem;
+  function acceptMatch(steamId) {
     const matchId = inMatch.get(steamId);
     const match = matchId && matches.get(matchId);
     if (!match || match.state !== 'found') return { ok: false, error: 'No match to accept.' };
@@ -3020,8 +2878,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   /** The designated captain calls heads/tails; the SERVER decides the face once and works out
    * the winning team. The captain is team 1's, so the call is FOR team 1. */
   function flipCoin(steamId, body) {
-    const problem = matchActionProblem(steamId, body);
-    if (problem) return problem;
     const match = matches.get(inMatch.get(steamId));
     if (!match || match.state !== 'ready' || !match.lobby) return { ok: false, error: 'No lobby to flip in.' };
     const L = match.lobby;
@@ -3062,8 +2918,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * selector) or the last BAN. The other team gets whatever is left. The ban ORDER is set so
    * the advantage team bans LAST whatever the pool size. */
   function chooseAdvantage(steamId, body) {
-    const problem = matchActionProblem(steamId, body);
-    if (problem) return problem;
     const match = matches.get(inMatch.get(steamId));
     if (!match || match.state !== 'ready' || !match.lobby) return { ok: false, error: 'No lobby.' };
     if (singleMapDuel(match)) return {ok:false,error:'This mode has no advantage choice.'};
@@ -3095,8 +2949,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
 
   /** The team holding the side advantage picks attack or defend; the other gets the opposite. */
   function pickSide(steamId, body) {
-    const problem = matchActionProblem(steamId, body);
-    if (problem) return problem;
     const match = matches.get(inMatch.get(steamId));
     if (!match || match.state !== 'ready' || !match.lobby) return { ok: false, error: 'No lobby.' };
     const L = match.lobby;
@@ -3123,8 +2975,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   /** One veto ban, by the captain whose turn it is. When one map is left it is the match map and
    * the lobby is decided (stage 'ready'); a client then opens the connect window. */
   function banMap(steamId, body) {
-    const problem = matchActionProblem(steamId, body);
-    if (problem) return problem;
     const match = matches.get(inMatch.get(steamId));
     if (!match || match.state !== 'ready' || !match.lobby) return { ok: false, error: 'No lobby.' };
     if (singleMapDuel(match)) return {ok:false,error:'This mode has no map bans.'};
@@ -3209,8 +3059,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   }
 
   function sendChat(steamId, body) {
-    const problem = matchActionProblem(steamId, body);
-    if (problem) return problem;
     const match = matches.get(inMatch.get(steamId));
     if (!match) return { ok: false, error: 'No match.' };
     if (match.state === 'over' || match.state === 'cancelled') return { ok: false, error: 'That match is over.' };
@@ -3569,8 +3417,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * same moment (stage 'ready'), so whoever's POST lands first wins and the rest are no-ops.
    */
   function beginConnect(steamId, body) {
-    const problem = matchActionProblem(steamId, body);
-    if (problem) return problem;
     const matchId = inMatch.get(steamId);
     const match = matchId && matches.get(matchId);
     if (!match) return { ok: false, error: 'No match to start.' };
@@ -3695,9 +3541,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     return progress;
   }
 
-  function reportConnected(steamId, body) {
-    const problem = matchActionProblem(steamId, body);
-    if (problem) return problem;
+  function reportConnected(steamId) {
     const matchId = inMatch.get(steamId);
     const match = matchId && matches.get(matchId);
     if (!match || match.state !== 'connecting') return { ok: false, error: 'No match is connecting.' };
@@ -5732,12 +5576,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     }
     bugCooldown.set(by, now);
 
-    // The platform rides with the hub version it qualifies (noteVersions): a Linux 3.0.x and a
-    // Windows 3.0.x are different builds, and triage has to be able to tell them apart.
     const v = versions.get(by) || {};
     const row = { at: now, by, persona: personaOf(by), text,
-                  hub: String(v.hub || ''), mode: String(v.mode || ''),
-                  platform: String(v.platform || '') };
+                  hub: String(v.hub || ''), mode: String(v.mode || '') };
     const list = (await loadBugs()).slice();
     list.unshift(row);
     saveBugs(list.slice(0, BUG_KEEP));
@@ -8101,32 +7942,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       if (unit) for (const member of unit.members) affected.add(member);
     }
     for (const id of affected) queueIntents.delete(id);
-    queueScopes.invalidate([...affected]);
     for (const id of affected) {
       const unit = removeFromQueue(id);
       if (unit) for (const member of unit.members) sendTo(member, {type:'unqueued', reason:'party_changed'});
-    }
-    broadcast(stats());
-  }
-
-  function networkQueueChanged(id, unavailable = false) {
-    const party = parties.get(partyOf.get(id));
-    const affected = new Set(party ? party.members : [id]);
-    const queued = queueOf.get(id);
-    if (queued) for (const member of queued.members) affected.add(member);
-    // Only a scoped admission is fenced here: invalidate retires its ticket. A legacy join in
-    // flight is left alone, as it was before scoped queues: it reads every member's profile again,
-    // synchronously, before it enqueues, so it queues on the new measurements or refuses with
-    // network_unready, and a Windows hub is not told 'unqueued' about a search it has not joined.
-    const pending = [...affected].some(member => queueScopes.pending.has(member));
-    queueScopes.invalidate([...affected]);
-    for (const member of affected) removeFromQueue(member);
-    if (queued || pending) {
-      const error = affected.size > 1
-        ? 'A party member has no fresh connection measurements. Check Settings before searching again.'
-        : 'Connection measurements are unavailable. Check Settings before searching again.';
-      for (const member of affected) sendTo(member,{type:'unqueued',
-        ...(unavailable ? {network_unready:true,error} : {})});
     }
     broadcast(stats());
   }
@@ -8137,7 +7955,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const party = parties.get(code);
     cancelQueuedFor(party ? party.members : [steamId]);
     partyOf.delete(steamId);
-    rotatePartyContext(steamId);
     if (!party) return null;
     party.members = party.members.filter((id) => id !== steamId);
     if (!party.members.length) {
@@ -8161,15 +7978,13 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (g) { clearTimeout(g); partyGrace.delete(steamId); }
   }
 
-  function handlePartyCreate(res, account, body={}) {
-    const problem = partyActionProblem(account.player_id, body);
-    if (problem) return sendJson(res,409,problem);
+  function handlePartyCreate(res, account) {
     clearOwnGrace(account.player_id);
     const existing = partyOf.get(account.player_id);
     if (existing && parties.has(existing)) {
       // Already in a party: hand it back idempotently rather than minting a second code and
       // orphaning the first. broadcastParty is not needed - nothing changed.
-      return sendJson(res, 200, { ok: true, code: existing, party_context:partyContext(account.player_id) });
+      return sendJson(res, 200, { ok: true, code: existing });
     }
     if (inMatch.has(account.player_id)) return sendJson(res,409,{ok:false,error:'Finish your match before changing parties.'});
     if(competitionGuard?.canChangeParty?.([account.player_id])===false)
@@ -8178,9 +7993,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const code = freshPartyCode();
     parties.set(code, { code, leaderId: account.player_id, members: [account.player_id], created: Date.now() });
     partyOf.set(account.player_id, code);
-    rotatePartyContext(account.player_id);
     broadcastParty(code);
-    return sendJson(res, 200, { ok: true, code, party_context:partyContext(account.player_id) });
+    return sendJson(res, 200, { ok: true, code });
   }
 
   /**
@@ -8197,7 +8011,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     const party = parties.get(code);
     if (!party) return { status: 404, body: { ok: false, error: 'No party with that code.' } };
     if (party.members.includes(steamId)) {
-      return { status: 200, body: { ok: true, code, party_context:partyContext(steamId) } };
+      return { status: 200, body: { ok: true, code } };      // already in it: idempotent
     }
     if (party.members.length >= MAX_PARTY) {
       return { status: 409, body: { ok: false, error: 'That party is full.' } };
@@ -8213,15 +8027,17 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (prev && prev !== code) leaveParty(steamId);
     party.members.push(steamId);
     partyOf.set(steamId, code);
-    rotatePartyContext(steamId);
     broadcastParty(code);
-    return { status: 200, body: { ok: true, code, party_context:partyContext(steamId) } };
+    return { status: 200, body: { ok: true, code } };
   }
 
-  function handlePartyJoin(res, account, body) {
-    const problem = partyActionProblem(account.player_id, body);
-    if (problem) return sendJson(res,409,problem);
+  async function handlePartyJoin(req, res, account) {
     clearOwnGrace(account.player_id);
+    let body = {};
+    try {
+      const raw = await readBody(req, 1024);
+      if (raw && raw.length) body = identity.parse(raw.toString('utf8'));
+    } catch { body = {}; }
     const joined = joinPartyByCode(account.player_id, body && body.code);
     return sendJson(res, joined.status, joined.body);
   }
@@ -8268,11 +8084,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (box) {
       for (const [from, invite] of [...box.entries()]) {
         const party = parties.get(invite.code);
-        if (invite.expires <= now || !party || (invite.party && invite.party !== party)) { dropInvite(steamId, from, false); continue; }
+        if (invite.expires <= now || !party) { dropInvite(steamId, from, false); continue; }
         invites.push({
           from: { player_id: from, persona: personaOf(from) },
           code: invite.code,
-          invite_id: invite.invite_id,
           size: party.members.length,
           max: MAX_PARTY,
           expires_in: Math.max(0, Math.round((invite.expires - now) / 1000)),
@@ -8294,8 +8109,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    */
   async function inviteToParty(meId, body) {
     const me = String(meId || '');
-    const problem = partyActionProblem(me, body);
-    if (problem) return problem;
     const target = String((body && body.target) || '');
     if (!identity.validPlayer(me) || !identity.validPlayer(target)) return { ok: false, error: 'not a steamid64' };
     if (target === me) return { ok: false, error: 'That is you.' };
@@ -8306,13 +8119,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (party.members.includes(target)) return { ok: true, already: 'member', code };
     if (party.members.length >= MAX_PARTY) return { ok: false, error: 'Your party is full.' };
 
-    const context = partyContext(me);
     await loadFriends(me);
-    const changed = partyActionProblem(me, body);
-    if (changed) return changed;
-    if (partyContexts.get(me) !== context || partyOf.get(me) !== code || parties.get(code) !== party || !party.members.includes(me)) return stalePartyAction();
-    if (party.members.includes(target)) return {ok:true, already:'member', code};
-    if (party.members.length >= MAX_PARTY) return {ok:false, error:'Your party is full.'};
     if (!setOf(friends, me).has(target)) return { ok: false, error: 'They are not on your friends list.' };
     // Presence is not politeness here: an invite is delivered over the target's OWN stream and
     // nothing stores it, so one sent to somebody with the hub closed would simply evaporate.
@@ -8323,15 +8130,11 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (!resend && box.size >= MAX_PARTY_INVITES) {
       return { ok: false, error: 'They have too many invites waiting.' };
     }
-    if (resend) clearTimeout(box.get(me).timer);
+    if (resend) dropInvite(target, me, false);
     const expires = Date.now() + PARTY_INVITE_SECONDS * 1000;
-    const invite = {code, party, invite_id:crypto.randomBytes(16).toString('hex'), at:Date.now(), expires};
-    const timer = setTimeout(() => {
-      if (partyInvites.get(target)?.get(me) === invite) dropInvite(target, me, true);
-    }, PARTY_INVITE_SECONDS * 1000);
+    const timer = setTimeout(() => { dropInvite(target, me, true); }, PARTY_INVITE_SECONDS * 1000);
     if (timer.unref) timer.unref();                  // never hold the process open for an invite
-    invite.timer = timer;
-    box.set(me, invite);
+    box.set(me, { code, at: Date.now(), expires, timer });
 
     sendTo(target, invitePayload(target));
     // A cue as well as the list: the inbox is on the Competitive screen and the invitee may be
@@ -8343,15 +8146,12 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   /** Take the seat. Every check is made again HERE - see the note above. */
   function acceptPartyInvite(meId, body) {
     const me = String(meId || '');
-    const problem = inviteActionProblem(me, body);
-    if (problem) return problem;
     const from = String((body && body.from) || '');
     if (!identity.validPlayer(me) || !identity.validPlayer(from)) return { ok: false, error: 'not a steamid64' };
     const box = partyInvites.get(me);
     const invite = box && box.get(from);
     if (!invite) return { ok: false, error: 'That invite has expired.' };
-    if (invite.expires <= Date.now() || !parties.get(invite.code) ||
-        (invite.party && invite.party !== parties.get(invite.code))) {
+    if (invite.expires <= Date.now() || !parties.get(invite.code)) {
       dropInvite(me, from, true);
       return { ok: false, error: 'That party is gone.' };
     }
@@ -8367,7 +8167,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       if (inv.code === invite.code) dropInvite(me, other, false);
     }
     sendTo(me, invitePayload(me));
-    return { ok: true, joined: true, code: invite.code, party_context:partyContext(me) };
+    return { ok: true, joined: true, code: invite.code };
   }
 
   /**
@@ -8377,28 +8177,22 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    */
   function declinePartyInvite(meId, body) {
     const me = String(meId || '');
-    const problem = inviteActionProblem(me, body);
-    if (problem) return problem;
     const from = String((body && body.from) || '');
     if (!identity.validPlayer(me) || !identity.validPlayer(from)) return { ok: false, error: 'not a steamid64' };
     const had = dropInvite(me, from, true);
     return { ok: true, declined: had };
   }
 
-  function handlePartyLeave(res, account, body={}) {
-    const problem = partyActionProblem(account.player_id, body);
-    if (problem) return sendJson(res,409,problem);
+  function handlePartyLeave(res, account) {
     if (inMatch.has(account.player_id)) return sendJson(res,409,{ok:false,error:'Finish your match before changing parties.'});
     clearOwnGrace(account.player_id);
     const was = Boolean(partyOf.get(account.player_id));
     leaveParty(account.player_id);
     sendTo(account.player_id, { type: 'party_update', code: null });    // you are solo now
-    return sendJson(res, 200, { ok: true, was_in_party: was, party_context:partyContext(account.player_id) });
+    return sendJson(res, 200, { ok: true, was_in_party: was });
   }
 
-  function handlePartyRefresh(res, account, body={}) {
-    const problem = partyActionProblem(account.player_id, body);
-    if (problem) return sendJson(res,409,problem);
+  function handlePartyRefresh(res, account) {
     const code = partyOf.get(account.player_id);
     const party = code && parties.get(code);
     if (!party) return sendJson(res, 404, { ok: false, error: 'You are not in a party.' });
@@ -8415,9 +8209,9 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     parties.delete(code);
     party.code = next;
     parties.set(next, party);
-    for (const id of party.members) { partyOf.set(id, next); rotatePartyContext(id); }
+    for (const id of party.members) partyOf.set(id, next);
     broadcastParty(next);
-    return sendJson(res, 200, { ok: true, code: next, party_context:partyContext(account.player_id) });
+    return sendJson(res, 200, { ok: true, code: next });
   }
 
   // ---------------------------------------------------------------- routes
@@ -8449,8 +8243,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
                             avatar: account.avatar || '', since: Date.now() });
     if (!bySteam.has(account.player_id)) bySteam.set(account.player_id, new Set());
     bySteam.get(account.player_id).add(clientId);
-    partyContext(account.player_id);
-    queueScopes.open(account.player_id, bearer(req), clientId);
     // They are back inside the grace window, so the pending "remove from party" never fires: a
     // brief drop is a no-op, and the party replay below hands them the roster again.
     if (partyGrace.has(account.player_id)) {
@@ -8459,8 +8251,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     }
 
     send(clientId, { type: 'hello', player_id: account.player_id, game_steam_id: account.game_steam_id, persona: account.persona || '',
-                     capabilities: {match_action_scopes_v1:true, party_action_scopes_v1:true, queue_action_scopes_v1:true,
-                                    hub_platform_gate_v1:true},
                      match_size: MATCH_SIZE, accept_seconds: ACCEPT_SECONDS,
                      connect_seconds: CONNECT_SECONDS, lobby_seconds: LOBBY_SECONDS,
                      ban_seconds: BAN_SECONDS,
@@ -8570,7 +8360,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     // Survives a brief reconnect: a member whose stream dropped and came back inside the grace
     // is still in the party (see drop()), so hand them the current roster. This is the whole
     // "party survives a reconnect" contract on the server side.
-    send(clientId, partyPayload(partyOf.get(account.player_id)));
+    if (partyOf.has(account.player_id)) send(clientId, partyPayload(partyOf.get(account.player_id)));
     // ...and the invite inbox, for the same reason: it lives only in this process's memory and on
     // the invitee's screen, so a hub that has just (re)connected has to be handed it or an invite
     // sent while it was away is invisible until somebody sends another one.
@@ -8624,58 +8414,27 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * form a ten-player match that cannot be accepted, and burn somebody else's accept window
    * finding that out.
    */
-  async function handleQueueJoin(res, account, callerToken, scopedBody = null) {
-    const partyNow = queueParty(account.player_id);
-    const scoped = queueScopes.begin(account.player_id, callerToken, scopedBody, partyNow);
-    if (!scoped.ok) {
-      // Cancel followed immediately by Find can retire the local leave worker
-      // after the previous admission succeeded. Report that exact existing unit;
-      // never create a second unit or transfer its original cancellation owner.
-      const unit = queueOf.get(account.player_id);
-      if (scoped.code === 'queue_already_joined' && unit && unit.code === partyNow.code
-          && unit.members.length === partyNow.members.length
-          && partyNow.members.every(id => unit.members.includes(id) && queueOf.get(id) === unit)) {
-        for (const clientId of bySteam.get(account.player_id) || []) {
-          const scope = queueScopes.forStream(account.player_id, callerToken, clientId);
-          if (scope.queue_actor !== scopedBody.queue_actor || scope.queue_context !== scopedBody.queue_context
-              || !scope.queue_unit) continue;
-          const position = queuePosition(account.player_id), size = queuedPlayers();
-          send(clientId, {type:'queued', position, size});
-          return sendJson(res,200,{ok:true, already_queued:true, queue_unit:scope.queue_unit,
-            position, size, matched:false, party:unit.members.length > 1 ? unit.members.length : 0});
-        }
-      }
-      return queueRejection(res, scoped);
-    }
-    if (scoped.kind === 'joined') return sendJson(res,200,{ok:true,
-      position:queuePosition(account.player_id), size:queuedPlayers(), matched:false,
-      party:scoped.unit.members.length > 1 ? scoped.unit.members.length : 0});
-    const ticket = scoped.ticket;
-    let retryable = false;
-    function reply(status, body) {
-      retryable = status >= 500;
-      return sendJson(res, status, body);
-    }
+  async function handleQueueJoin(res, account, callerToken) {
     const intent = {};
     queueIntents.set(account.player_id,intent);
     try {
     if(duel&&(partyOf.has(account.player_id)||competitionGuard?.inParty?.(account.player_id)))
-      return reply(409,{ok:false,solo_only:true,error:'Leave your party before entering the 1v1 queue.'});
+      return sendJson(res,409,{ok:false,solo_only:true,error:'Leave your party before entering the 1v1 queue.'});
     if (inMatch.has(account.player_id)) {
-      return reply( 409, { ok: false, error: 'You are already in a match.' });
+      return sendJson(res, 409, { ok: false, error: 'You are already in a match.' });
     }
     const code = partyOf.get(account.player_id) || '';
     const party = code ? parties.get(code) : null;
     if (party && party.leaderId !== account.player_id) {
-      return reply( 403, { ok: false, error: 'Only the party leader starts the search.',
+      return sendJson(res, 403, { ok: false, error: 'Only the party leader starts the search.',
                                   not_leader: true });
     }
     const members = party ? party.members.slice() : [account.player_id];
-    if (bindingConflict(members)) return reply(409,{ok:false,error:'Each player must use a different verified game account.'});
+    if (bindingConflict(members)) return sendJson(res,409,{ok:false,error:'Each player must use a different verified game account.'});
 
     const busy = members.filter((id) => inMatch.has(id));
     if (busy.length) {
-      return reply( 409, { ok: false, error: 'Somebody in your party is already in a match.',
+      return sendJson(res, 409, { ok: false, error: 'Somebody in your party is already in a match.',
                                   who: busy });
     }
     // The CALLER is obviously present - they are making this request - so only the others are
@@ -8683,7 +8442,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     // searching with a hole in it is searching for a match it will cancel twenty seconds later.
     const away = members.filter((id) => id !== account.player_id && !bySteam.has(id));
     if (away.length) {
-      return reply( 409, { ok: false, error: 'Somebody in your party is not connected.',
+      return sendJson(res, 409, { ok: false, error: 'Somebody in your party is not connected.',
                                   who: away });
     }
 
@@ -8698,7 +8457,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (stale.length) {
       const mine = stale.find(([id]) => id === account.player_id);
       const [who, problem] = mine || stale[0];
-      return reply( 426, {
+      return sendJson(res, 426, {
         ok: false,
         error: mine ? 'Update before you queue.'
                     : 'Somebody in your party is not on the current version.',
@@ -8712,13 +8471,13 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     // the hub already reads (competitive.py `_join_result`); somebody else's says who.
     let bans;
     try { bans = await Promise.all(members.map(async (id) => [id, await loadPenalty(id)])); }
-    catch { return reply( 503, { ok: false, error: 'Could not verify queue eligibility. Please try again.' }); }
+    catch { return sendJson(res, 503, { ok: false, error: 'Could not verify queue eligibility. Please try again.' }); }
     const blocked = bans.filter(([, p]) => Boolean(p));
     if (blocked.length) {
       const mine = blocked.find(([id]) => id === account.player_id);
       const [who, penalty] = mine || blocked[0];
       const seconds = Math.max(1, Math.round((penalty.until - Date.now()) / 1000));
-      return reply( 403, {
+      return sendJson(res, 403, {
         ok: false,
         error: mine ? 'You are banned from the queue.' : 'Somebody in your party is banned from the queue.',
         banned: true, reason: penalty.reason, seconds, until: penalty.until,
@@ -8733,7 +8492,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     // put them in the wrong match.
     try { if(duel)await Promise.all(members.map(async id=>recentDuels.set(id,await readHistory(id)))); await loadRatings(members); await Promise.all(members.map(drainRatingWrites)); await Promise.all(members.map(loadBan)); }
     catch {
-      return reply( 503, { ok: false, error: 'Could not load your rank. Please try again.' });
+      return sendJson(res, 503, { ok: false, error: 'Could not load your rank. Please try again.' });
     }
     // An open stream is presence, not proof that its credential is still valid.
     // Recheck every participant after storage reads, then do all state checks below
@@ -8746,30 +8505,28 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         }
         for (const clientId of [...(bySteam.get(id) || [])]) {
           const client = clients.get(clientId);
-          if (ticket && !queueScopes.forStream(id, client?.token, clientId).queue_actor) continue;
           const fresh = client?.token && await whoami(client.token);
           if (fresh && identity.playerOf(fresh) === id && identity.gameOf(fresh) === gameOfPlayer(id)) return true;
           if (client) { try {client.res.end();} catch {} drop(clientId); }
         }
         return false;
       }));
-      if (active.some(ok=>!ok)) return reply(409,{ok:false,error:'Somebody in your party needs to sign in again.'});
-    } catch { return reply(503,{ok:false,error:'Could not verify your party. Please try again.'}); }
+      if (active.some(ok=>!ok)) return sendJson(res,409,{ok:false,error:'Somebody in your party needs to sign in again.'});
+    } catch { return sendJson(res,503,{ok:false,error:'Could not verify your party. Please try again.'}); }
     // Every await above admits party, cancellation, moderation and match events.
     // Revalidate synchronously before mutating the queue.
     const currentCode = partyOf.get(account.player_id) || '';
     const currentParty = currentCode ? parties.get(currentCode) : null;
     const currentMembers = currentParty ? currentParty.members : [account.player_id];
-    if (bindingConflict(members)) return reply(409,{ok:false,error:'A game account is already playing or searching.'});
-    if ((ticket && !queueScopes.current(ticket, queueParty(account.player_id)))
-        || queueIntents.get(account.player_id) !== intent || currentCode !== code
+    if (bindingConflict(members)) return sendJson(res,409,{ok:false,error:'A game account is already playing or searching.'});
+    if (queueIntents.get(account.player_id) !== intent || currentCode !== code
         || (currentParty && currentParty.leaderId !== account.player_id)
         || currentMembers.length !== members.length || members.some(id=>!currentMembers.includes(id))
         || members.some(id=>inMatch.has(id) || (id !== account.player_id && !bySteam.has(id)))) {
-      return reply(409,{ok:false,error:'Your party or queue state changed. Please try again.'});
+      return sendJson(res,409,{ok:false,error:'Your party or queue state changed. Please try again.'});
     }
     if (members.some(id=>versionProblem(id) || livePenalty(id) || banOf(id))) {
-      return reply(409,{ok:false,error:'Queue eligibility changed. Please try again.'});
+      return sendJson(res,409,{ok:false,error:'Queue eligibility changed. Please try again.'});
     }
     // A stream's initial read may have failed while storage was unavailable. Refresh its
     // display after recovery instead of leaving it apparently unranked until match end.
@@ -8778,30 +8535,22 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (networkLib.enforced()) {
       const profiles = members.map(id => networkRegistry.player(id));
       const missing = members.filter((id,i) => !networkLib.ready(profiles[i],Date.now()));
-      if (missing.length) return reply(409,{ok:false,network_unready:true,who:missing,
+      if (missing.length) return sendJson(res,409,{ok:false,network_unready:true,who:missing,
         error:'Waiting for fresh relay measurements. Check your region in Settings.'});
-      if (!networkLib.compatible(profiles)) return reply(409,{ok:false,network_unready:true,
+      if (!networkLib.compatible(profiles)) return sendJson(res,409,{ok:false,network_unready:true,
         error:'Every member of a mixed-region party must allow cross-region matchmaking in Settings.'});
     }
 
     if(duel&&(partyOf.has(account.player_id)||competitionGuard?.inParty?.(account.player_id)))
-      return reply(409,{ok:false,solo_only:true,error:'Leave your party before entering the 1v1 queue.'});
+      return sendJson(res,409,{ok:false,solo_only:true,error:'Leave your party before entering the 1v1 queue.'});
     const queuedUnit = queueOf.get(account.player_id);
     if (queuedUnit && (queuedUnit.code !== code || queuedUnit.members.length !== members.length
         || members.some(id=>queueOf.get(id)!==queuedUnit))) {
       cancelQueuedFor(members);
-      return reply(409,{ok:false,error:'Your party changed. Please start the search again.'});
+      return sendJson(res,409,{ok:false,error:'Your party changed. Please start the search again.'});
     }
-    if (ticket && !queueScopes.claim(ticket, queueParty(account.player_id))) {
-      return queueRejection(res, {code:'queue_attempt_stale'});
-    }
-    const createdUnit = queuedUnit ? null : enqueue(members, code, Date.now());
-    if (!queuedUnit && !createdUnit) {
-      return reply(409,{ok:false,error:'Somebody in your party is already searching or in a match.'});
-    }
-    if (ticket && !queueScopes.bind(ticket, createdUnit, queueParty(account.player_id))) {
-      if (createdUnit && queueOf.get(account.player_id) === createdUnit) removeFromQueue(account.player_id);
-      return queueRejection(res, {code:'queue_attempt_stale'});
+    if (!queuedUnit && !enqueue(members, code, Date.now())) {
+      return sendJson(res,409,{ok:false,error:'Somebody in your party is already searching or in a match.'});
     }
     const size = queuedPlayers();
     for (const id of members) {
@@ -8809,14 +8558,10 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     }
     broadcast(stats());
     const match = tryFormMatch();
-    reply( 200, { ok: true, position: queuePosition(account.player_id),
+    sendJson(res, 200, { ok: true, position: queuePosition(account.player_id),
                          size, matched: Boolean(match), party: members.length > 1 ? members.length : 0 });
     } finally {
       if (queueIntents.get(account.player_id) === intent) queueIntents.delete(account.player_id);
-      if (ticket) {
-        if (retryable) queueScopes.release(ticket);
-        else queueScopes.abort(ticket);
-      }
     }
   }
 
@@ -8879,18 +8624,26 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         if (body && body.unavailable === true) {
           networkRegistry.profiles.delete(id);
           networkRegistry.retirePlayer(id);
-          if (competitionGuard?.networkChanged) competitionGuard.networkChanged(id,true);
-          else networkQueueChanged(id,true);
+          const removed = removeFromQueue(id);
+          if (removed) {
+            const error = removed.members.length > 1
+              ? 'A party member has no fresh connection measurements. Check Settings before searching again.'
+              : 'Connection measurements are unavailable. Check Settings before searching again.';
+            for (const member of removed.members) sendTo(member,{type:'unqueued',network_unready:true,error});
+            broadcast(stats());
+          }
           return sendJson(res,200,{ok:true,ready:false});
         }
         const changed = old && (old.region !== body?.region || old.cross_region !== (body?.cross_region === true));
-        if (changed && (inMatch.has(id) || competitionGuard?.inMatch?.(id)))
-          return sendJson(res,409,{ok:false,error:'Finish your match before changing regions.'});
+        if (changed && inMatch.has(id)) return sendJson(res,409,{ok:false,error:'Finish your match before changing regions.'});
         const oldRevision = networkRegistry.player(id)?.revision;
         const profile = networkRegistry.profile(id,body,now);
         if (changed || (oldRevision && oldRevision !== profile.revision)) {
-          if (competitionGuard?.networkChanged) competitionGuard.networkChanged(id,false);
-          else networkQueueChanged(id,false);
+          const removed = removeFromQueue(id);
+          if (removed) {
+            for (const member of removed.members) sendTo(member,{type:'unqueued'});
+            broadcast(stats());
+          }
         }
         return sendJson(res,200,{ok:true,ready:true,player_id:id,transport:networkLib.TRANSPORT,
           region:profile.region,revision:profile.revision,
@@ -8945,21 +8698,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * wandered off mid-queue must not be a trap, and the cost of being wrong is one re-queue.
    * The whole unit comes out (removeFromQueue) and everybody in it is told.
    */
-  function handleQueueLeave(res, account, callerToken, scopedBody = null) {
-    const scoped = queueScopes.leave(account.player_id, callerToken, scopedBody, queueParty(account.player_id));
-    if (!scoped.ok) return queueRejection(res, scoped);
-    if (scoped.kind !== 'legacy') {
-      if (scoped.duplicate) return sendJson(res,200,{ok:true,was_queued:false});
-      for (const id of scoped.members) queueIntents.delete(id);
-      if (scoped.unit && queueOf.get(account.player_id) !== scoped.unit)
-        return queueRejection(res, {code:'queue_unit_stale'});
-      const removed = scoped.unit ? removeFromQueue(account.player_id) : null;
-      for (const id of scoped.members) sendTo(id,{type:'unqueued'});
-      broadcast(stats());
-      return sendJson(res,200,{ok:true,was_queued:Boolean(removed)});
-    }
+  function handleQueueLeave(res, account) {
     const pendingParty = parties.get(partyOf.get(account.player_id));
-    queueScopes.invalidate(pendingParty ? pendingParty.members : [account.player_id]);
     for (const id of pendingParty ? pendingParty.members : [account.player_id]) queueIntents.delete(id);
     const unit = removeFromQueue(account.player_id);
     for (const id of (unit ? unit.members : [account.player_id])) {
@@ -9009,22 +8749,16 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     sendJson(res, result.ok ? 200 : (result.error === 'too_fast' ? 429 : 400), result);
   }
 
-  async function handleMatchLeave(res, account, body) {
-    const problem = matchActionProblem(account.player_id, body);
-    if (problem) return sendJson(res,409,problem);
+  async function handleMatchLeave(res, account) {
     const matchId = inMatch.get(account.player_id);
     if(matches.get(matchId)?.state==='live')return matchOperation(matchId,async()=>{
       const match=matches.get(matchId);
-      const current = () => inMatch.get(account.player_id) === matchId && matches.get(matchId) === match
-        && match?.players.some(p => p.player_id === account.player_id);
-      if(!current())return sendJson(res,409,{ok:false,stale_action:true,error:'The match has changed.'});
       if(!match||match.state!=='live'||match.final_snapshot)return sendJson(res,409,{ok:false,error:'Match is finishing.'});
       const before=match.reconnect;
       const since=Date.now();
       match.reconnect={...(before||{}),[account.player_id]:before?.[account.player_id]||{since,deadline:since+300000}};
       try { await persistLive(match); }
       catch { match.reconnect=before; return sendJson(res,503,{ok:false,error:'Reconnect window could not be saved.'}); }
-      if(!current())return sendJson(res,409,{ok:false,stale_action:true,error:'The match has changed.'});
       if(matches.get(matchId)!==match || match.state!=='live' || match.final_snapshot)
         return sendJson(res,409,{ok:false,error:'Match is finishing.'});
       revokeJoinPermit(account.player_id);
@@ -9088,19 +8822,23 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     return sendJson(res, 200, { ok: true, was_in_match: true, declined: false });
   }
 
-  async function handleAccept(req, res, account) {
-    const result = acceptMatch(account.player_id, await readMatchActionBody(req));
+  function handleAccept(res, account) {
+    const result = acceptMatch(account.player_id);
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
   async function handleConnecting(req, res, account) {
-    const body = await readMatchActionBody(req);
+    let body = {};
+    try {
+      const raw = await readBody(req, 4096);
+      if (raw && raw.length) body = identity.parse(raw.toString('utf8'));
+    } catch { body = {}; }
     const result = beginConnect(account.player_id, body);
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
-  async function handleConnected(req, res, account) {
-    const result = reportConnected(account.player_id, await readMatchActionBody(req));
+  function handleConnected(res, account) {
+    const result = reportConnected(account.player_id);
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
@@ -9115,38 +8853,28 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     return {};
   }
 
-  async function readMatchActionBody(req) {
-    try {
-      const raw = await readBody(req, 4096);
-      if (!raw || !raw.length) return {};
-      const body = identity.parse(raw.toString('utf8'));
-      if (body && typeof body === 'object' && !Array.isArray(body)) return body;
-    } catch { /* Invalid input must never downgrade an expected match to legacy behavior. */ }
-    return {expected_match_id:null};
-  }
-
   async function handleCoin(req, res, account) {
-    const result = flipCoin(account.player_id, await readMatchActionBody(req));
+    const result = flipCoin(account.player_id, await readJsonBody(req));
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
   async function handleChoose(req, res, account) {
-    const result = chooseAdvantage(account.player_id, await readMatchActionBody(req));
+    const result = chooseAdvantage(account.player_id, await readJsonBody(req));
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
   async function handleSide(req, res, account) {
-    const result = pickSide(account.player_id, await readMatchActionBody(req));
+    const result = pickSide(account.player_id, await readJsonBody(req));
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
   async function handleBan(req, res, account) {
-    const result = banMap(account.player_id, await readMatchActionBody(req));
+    const result = banMap(account.player_id, await readJsonBody(req));
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
   async function handleChat(req, res, account) {
-    const result = sendChat(account.player_id, await readMatchActionBody(req));
+    const result = sendChat(account.player_id, await readJsonBody(req));
     sendJson(res, result.ok ? 200 : 409, result);
   }
 
@@ -9279,39 +9007,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         }
       } catch {sendJson(res,503,{ok:false,error:'Account verification is temporarily unavailable.'});return true;}
     }
-    if(pathname.startsWith('/api/match/scoped/') && method==='POST') {
-      const body = await readMatchActionBody(req);
-      if (!Object.prototype.hasOwnProperty.call(body, 'expected_match_id')) {
-        sendJson(res,409,{ok:false,stale_action:true,error:'An expected match is required.'});return true;
-      }
-      const action = pathname.slice('/api/match/scoped/'.length);
-      if (action === 'leave') await handleMatchLeave(res, account, body);
-      else {
-        const handlers = {accept:acceptMatch, coin:flipCoin, choose:chooseAdvantage, side:pickSide,
-          ban:banMap, chat:sendChat, connecting:beginConnect, connected:reportConnected};
-        const result = handlers[action](account.player_id, body);
-        sendJson(res,result.ok?200:409,result);
-      }
-      return true;
-    }
-    if (pathname.startsWith('/api/party/') && method === 'POST') {
-      const scoped = pathname.startsWith('/api/party/scoped/');
-      const action = pathname.slice((scoped ? '/api/party/scoped/' : '/api/party/').length);
-      const body = await readPartyActionBody(req);
-      const problem = (action === 'invite/accept' || action === 'invite/decline')
-        ? inviteActionProblem(account.player_id, body, scoped)
-        : partyActionProblem(account.player_id, body, scoped);
-      if (problem) { sendJson(res,409,problem); return true; }
-      const handlers = {create:handlePartyCreate, join:handlePartyJoin,
-        leave:handlePartyLeave, 'refresh-code':handlePartyRefresh};
-      if (handlers[action]) handlers[action](res, account, body);
-      else {
-        const fn = {invite:inviteToParty, 'invite/accept':acceptPartyInvite, 'invite/decline':declinePartyInvite}[action];
-        const result = await fn(account.player_id, body);
-        sendJson(res,result.ok?200:409,result);
-      }
-      return true;
-    }
     if(pathname==='/api/match/concede'&&method==='POST'){
       const result=await concedeMatch(account,await readJsonBody(req));
       sendJson(res,result.ok?200:result.unavailable?503:409,result);return true;
@@ -9352,20 +9047,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     }
     if (pathname === '/api/live' && method === 'GET') { await handleStream(req, res, account); return true; }
     if (pathname.startsWith('/api/network/')) { await handleNetwork(req,res,account,pathname,method); return true; }
-    if ((pathname === '/api/queue/scoped/join' || pathname === '/api/queue/scoped/leave') && method === 'POST') {
-      let body;
-      try {
-        const raw = await readBody(req, 1024);
-        if (!raw || raw.length > 1024) throw Error('Invalid queue request');
-        body = JSON.parse(raw.toString('utf8'));
-        if (!body || typeof body !== 'object' || Array.isArray(body)
-            || !['queue_actor','queue_context','queue_attempt','queue_unit'].every(key => Object.hasOwn(body,key)))
-          throw Error('Missing queue identity');
-      } catch { queueRejection(res,{status:400,code:'queue_scope_invalid'}); return true; }
-      if (pathname.endsWith('/join')) await handleQueueJoin(res, account, bearer(req), body);
-      else handleQueueLeave(res, account, bearer(req), body);
-      return true;
-    }
     if (pathname === '/api/queue/join' && method === 'POST') { await handleQueueJoin(res, account, bearer(req)); return true; }
     if (pathname === '/api/queue/leave' && method === 'POST') { handleQueueLeave(res, account); return true; }
     if (pathname === '/api/match/combat-warning' && method === 'POST') {
@@ -9375,7 +9056,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       } catch { sendJson(res, 503, { ok: false, error: 'Warning receipt unavailable.' }); }
       return true;
     }
-    if (pathname === '/api/match/accept' && method === 'POST') { await handleAccept(req, res, account); return true; }
+    if (pathname === '/api/match/accept' && method === 'POST') { handleAccept(res, account); return true; }
     if (pathname === '/api/match/recovery' && method === 'POST') {
       res.setHeader('cache-control','no-store, private');
       try { const result=await recoveryAction(account.player_id,await readJsonBody(req));
@@ -9388,7 +9069,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       sendJson(res, result.ok ? 200 : result.unavailable ? 503 : 409, result);
       return true;
     }
-    if (pathname === '/api/match/leave' && method === 'POST') { await handleMatchLeave(res, account, await readMatchActionBody(req)); return true; }
+    if (pathname === '/api/match/leave' && method === 'POST') { await handleMatchLeave(res, account); return true; }
     if (pathname === '/api/report' && method === 'POST') { await handleReport(req, res, account); return true; }
     if (pathname === '/api/bug' && method === 'POST') { await handleBugReport(req, res, account); return true; }
     if (pathname === '/api/admin/chat' && (method === 'GET' || method === 'HEAD')) {
@@ -9454,7 +9135,27 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (pathname === '/api/match/ban' && method === 'POST') { await handleBan(req, res, account); return true; }
     if (pathname === '/api/match/chat' && method === 'POST') { await handleChat(req, res, account); return true; }
     if (pathname === '/api/match/connecting' && method === 'POST') { await handleConnecting(req, res, account); return true; }
-    if (pathname === '/api/match/connected' && method === 'POST') { await handleConnected(req, res, account); return true; }
+    if (pathname === '/api/match/connected' && method === 'POST') { handleConnected(res, account); return true; }
+    if (pathname === '/api/party/create' && method === 'POST') { handlePartyCreate(res, account); return true; }
+    if (pathname === '/api/party/join' && method === 'POST') { await handlePartyJoin(req, res, account); return true; }
+    if (pathname === '/api/party/leave' && method === 'POST') { handlePartyLeave(res, account); return true; }
+    if (pathname === '/api/party/refresh-code' && method === 'POST') { handlePartyRefresh(res, account); return true; }
+    if (pathname.startsWith('/api/party/invite') && method === 'POST') {
+      let body = {};
+      try {
+        const raw = await readBody(req, 1024);
+        if (raw && raw.length) body = identity.parse(raw.toString('utf8'));
+      } catch { body = {}; }
+      let result;
+      if (pathname === '/api/party/invite') result = await inviteToParty(account.player_id, body);
+      else if (pathname === '/api/party/invite/accept') result = acceptPartyInvite(account.player_id, body);
+      else if (pathname === '/api/party/invite/decline') result = declinePartyInvite(account.player_id, body);
+      else return false;
+      // 409 for every refusal, as the friends verbs do: these are all "the world says no"
+      // (not in a party, not a friend, party full, invite gone), never a malformed request.
+      sendJson(res, result.ok ? 200 : 409, result);
+      return true;
+    }
     if (pathname === '/api/match/completion' && method === 'GET') {
       const result = await completion(account.player_id, url?.searchParams.get('id'));
       sendJson(res, result.ok ? 200 : 409, result); return true;
@@ -9495,9 +9196,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       for (const key of ['timer','collectTimer','stage_timer','ban_timer']) if (match[key]) clearTimeout(match[key]);
     }
     for (const timer of partyGrace.values()) clearTimeout(timer);
-    partyContexts.clear();
-    soloPartyContexts.clear();
-    clearInterval(partyContextPruner);
     for (const box of partyInvites.values()) for (const invite of box.values()) clearTimeout(invite.timer);
     for (const clientId of [...clients.keys()]) drop(clientId);
   }
@@ -9607,7 +9305,6 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     correctionJobs:()=>restitution.statuses(),
     route,
     broadcastStats:()=>broadcast(stats()),
-    networkQueueChanged,
     prepareOwnership, ownershipChanged,
     owns,
     shutdown,
@@ -9678,9 +9375,8 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     takeJoinPermit: nativePermit(takeJoinPermit),
     revokeJoinPermit: nativePermit(revokeJoinPermit),
     _internals: { networkRegistry, hostPermits,   // exposed for focused policy tests
-                  queueScopes,   // its per-player rows: a closed stream must not leave one behind
                   clients, bySteam, queue, queueOf, matches, inMatch, penalties, history, archived,
-                  parties, partyOf, partyGrace, partyInvites, partyContext, partyContexts, prunePartyContexts, ratings,
+                  parties, partyOf, partyGrace, partyInvites, ratings,
                   inviteToParty, acceptPartyInvite, declinePartyInvite, invitePayload,
                   joinPartyByCode, PARTY_INVITE_SECONDS, MAX_PARTY_INVITES,
                   readHistory, readMatch, archiveMatch, scoreboardOf,

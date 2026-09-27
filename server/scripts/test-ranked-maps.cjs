@@ -32,7 +32,7 @@ for(const choice of ['side','ban'])for(const winner of [1,2])test(`three-map 1v1
  assert.equal(m.expected_score_limit,5);assert.equal(m.expected_max_rounds,9);
 });
 test('three-map lobby survives a restart and automatically completes timed out choices',t=>{
- const {I,m}=setup(t);const raw=I.serialiseMatch(m);clearTimeout(m.timer);clearTimeout(m.stage_timer);
+ const {I,m}=setup(t);const raw=I.serialiseMatch(m);clearTimeout(m.timer);clearTimeout(m.lobby.stage_timer);
  const restored=I.reviveMatch(JSON.parse(JSON.stringify(raw)));I.matches.set(m.id,restored);
  for(let n=0;n<4;n++)I.expireStageTurn(m.id);
  assert.equal(restored.lobby.stage,'ready');assert.equal(restored.lobby.bans.length,2);
