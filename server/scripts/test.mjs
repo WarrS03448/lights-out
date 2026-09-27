@@ -1093,7 +1093,7 @@ async function main() {
       assert.equal(res.status, 200);
       const body = await res.json();
       assert.match(body.code, /^[A-Z2-9]{4}-[A-Z2-9]{2}$/, 'a formatted, unambiguous code');
-      const update = await a.wait('party_update');
+      const update = await waitParty(a, e => e.code === body.code);
       assert.equal(update.code, body.code);
       assert.equal(update.leader_id, '76561198000000001');
       assert.equal(update.members.length, 1);
