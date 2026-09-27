@@ -8219,9 +8219,13 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   /**
    * A player's relay measurements changed or went away, so their search - their party's - stops.
    *
-   * Run on EVERY ladder (competitionGuard.networkChanged): the registry is shared, so a profile
-   * posted through BB5 has to end a 1v1 search too. That reach only ever adds a correct unqueue.
-   * A player in a match is queued on neither ladder (canEnter), so nothing here reaches a match.
+   * For a SCOPED caller it runs on every ladder (competitionGuard.networkChanged): the registry is
+   * shared, so a profile posted through BB5 ends a 1v1 search too, and the Linux client's
+   * queue_context rotates on both. For any other caller handleNetwork runs it on the posted ladder
+   * alone, which is where 2d25405 looked: a member of a BB5 party who has the 1v1 tab open posts
+   * through BB1, and the leader's BB5 search is not theirs to end. When a scoped member does end a
+   * mixed party's search on the other ladder, a Windows member is told exactly what a same-ladder
+   * change told it in 2d25405. A player in a match is queued on neither ladder (canEnter).
    *
    * ON THE WIRE THIS IS 2d25405's RULE: 'unqueued' goes only to the members of a unit that really
    * left the queue, and stats only go out when the queue changed. What the scopes add is for
@@ -8425,7 +8429,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
    * invite only offers a seat, and the person who has to live with the answer is the one holding
    * the invite, who can decline it.
    */
-  async function inviteToParty(meId, body) {
+  async function inviteToParty(meId, body, scoped = true) {
     const me = String(meId || '');
     const problem = partyActionProblem(me, body);
     if (problem) return problem;
@@ -8439,13 +8443,18 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (party.members.includes(target)) return { ok: true, already: 'member', code };
     if (party.members.length >= MAX_PARTY) return { ok: false, error: 'Your party is full.' };
 
-    const context = partyContext(me);
+    // A scoped caller's party is checked again after the friends read. A caller that is not
+    // scoped (handleLegacyParty) is checked before it only, as 2d25405 did: whatever the party
+    // does during the read, the invite still goes out pointing at the code it was sent for.
+    const context = scoped ? partyContext(me) : null;
     await loadFriends(me);
-    const changed = partyActionProblem(me, body);
-    if (changed) return changed;
-    if (partyContexts.get(me) !== context || partyOf.get(me) !== code || parties.get(code) !== party || !party.members.includes(me)) return stalePartyAction();
-    if (party.members.includes(target)) return {ok:true, already:'member', code};
-    if (party.members.length >= MAX_PARTY) return {ok:false, error:'Your party is full.'};
+    if (scoped) {
+      const changed = partyActionProblem(me, body);
+      if (changed) return changed;
+      if (partyContexts.get(me) !== context || partyOf.get(me) !== code || parties.get(code) !== party || !party.members.includes(me)) return stalePartyAction();
+      if (party.members.includes(target)) return {ok:true, already:'member', code};
+      if (party.members.length >= MAX_PARTY) return {ok:false, error:'Your party is full.'};
+    }
     if (!setOf(friends, me).has(target)) return { ok: false, error: 'They are not on your friends list.' };
     // Presence is not politeness here: an invite is delivered over the target's OWN stream and
     // nothing stores it, so one sent to somebody with the hub closed would simply evaporate.
@@ -8456,11 +8465,20 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     if (!resend && box.size >= MAX_PARTY_INVITES) {
       return { ok: false, error: 'They have too many invites waiting.' };
     }
-    if (resend) clearTimeout(box.get(me).timer);
+    // A scoped resend replaces the row where it stands, and its timer can only drop that row.
+    // Any other caller's resend is 2d25405's, flaw included: dropInvite deletes an inbox it
+    // empties, so a re-sent SOLE invite is written into that orphaned copy - the invitee is sent
+    // an empty inbox and their accept answers "That invite has expired." - and its timer drops
+    // whatever row this inviter has in the live inbox when it fires.
+    if (resend && scoped) clearTimeout(box.get(me).timer);
+    else if (resend) dropInvite(target, me, false);
     const expires = Date.now() + PARTY_INVITE_SECONDS * 1000;
-    const invite = {code, party, invite_id:crypto.randomBytes(16).toString('hex'), at:Date.now(), expires};
+    // Only a scoped invite is pinned to this party object (invitePayload, acceptPartyInvite), so
+    // a code minted again for a new party cannot inherit it. 2d25405's invite named the code.
+    const invite = {code, ...(scoped ? {party} : {}), invite_id:crypto.randomBytes(16).toString('hex'),
+                    at:Date.now(), expires};
     const timer = setTimeout(() => {
-      if (partyInvites.get(target)?.get(me) === invite) dropInvite(target, me, true);
+      if (!scoped || partyInvites.get(target)?.get(me) === invite) dropInvite(target, me, true);
     }, PARTY_INVITE_SECONDS * 1000);
     if (timer.unref) timer.unref();                  // never hold the process open for an invite
     invite.timer = timer;
@@ -8556,13 +8574,17 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
   /**
    * The seven party routes exactly as 2d25405 served them, for a caller that is not scoped
    * (scopedClient). create, leave and refresh-code never read a body; join and the invite verbs
-   * read 1024 bytes and treat an unreadable one as {}. No response carries party_context. The
-   * membership contexts still rotate underneath, so a scoped member of the same party is fenced.
+   * read 1024 bytes and treat an unreadable one as {}. No response carries party_context, and an
+   * invite is 2d25405's (inviteToParty). The membership contexts still rotate underneath, so a
+   * scoped member of the same party is fenced.
    */
   async function handleLegacyParty(req, res, account, action) {
     if (action === 'create') return handlePartyCreate(res, account, {}, false);
     if (action === 'leave') return handlePartyLeave(res, account, {}, false);
     if (action === 'refresh-code') return handlePartyRefresh(res, account, {}, false);
+    // 2d25405's join cleared the caller's grace timer BEFORE reading the body, so a timer that
+    // would fire during the read never removes them from their old party first.
+    if (action === 'join') clearOwnGrace(account.player_id);
     let body = {};
     try {
       const raw = await readBody(req, 1024);
@@ -8570,7 +8592,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
     } catch { body = {}; }
     if (action === 'join') return handlePartyJoin(res, account, body, false);
     let result;
-    if (action === 'invite') result = await inviteToParty(account.player_id, body);
+    if (action === 'invite') result = await inviteToParty(account.player_id, body, false);
     else if (action === 'invite/accept') result = legacyPartyBody(acceptPartyInvite(account.player_id, body));
     else result = declinePartyInvite(account.player_id, body);
     // 409 for every refusal, as the friends verbs do: these are all "the world says no"
@@ -9042,10 +9064,15 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
       if (pathname === '/api/network/profile') {
         const currentMatch = matches.get(inMatch.get(id));
         const old = networkRegistry.preferences.get(id) || currentMatch?.network_preferences?.[id];
+        // Only a scoped caller's profile reaches the other ladder's search (see
+        // networkQueueChanged). A Windows hub's post ends a search on the ladder it names in
+        // x-ranked-mode and nowhere else, as in 2d25405: a party member on the 1v1 tab posts
+        // through BB1 while the leader searches BB5, and that search went on.
+        const everyLadder = scopedClient(req) && competitionGuard?.networkChanged;
         if (body && body.unavailable === true) {
           networkRegistry.profiles.delete(id);
           networkRegistry.retirePlayer(id);
-          if (competitionGuard?.networkChanged) competitionGuard.networkChanged(id,true);
+          if (everyLadder) competitionGuard.networkChanged(id,true);
           else networkQueueChanged(id,true);
           return sendJson(res,200,{ok:true,ready:false});
         }
@@ -9057,7 +9084,7 @@ function create({ whoami, bearer, sendJson: rawSendJson, badRequest, readBody, u
         const oldRevision = networkRegistry.player(id)?.revision;
         const profile = networkRegistry.profile(id,body,now);
         if (changed || (oldRevision && oldRevision !== profile.revision)) {
-          if (competitionGuard?.networkChanged) competitionGuard.networkChanged(id,false);
+          if (everyLadder) competitionGuard.networkChanged(id,false);
           else networkQueueChanged(id,false);
         }
         return sendJson(res,200,{ok:true,ready:true,player_id:id,transport:networkLib.TRANSPORT,

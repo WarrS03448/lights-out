@@ -1,6 +1,7 @@
 'use strict';
 // THE WINDOWS WIRE, COMPARED WITH A REFERENCE SERVER. One scripted day for four Windows hubs -
-// a party, invites, searches around network profile changes, reconnects, and a 1v1 through
+// a party, invites (one re-sent while pending), searches around network profile changes (one
+// posted from the 1v1 tab), reconnects, and a 1v1 through
 // accept, the lobby and the connect window to the host's arrival - is run against a reference
 // server and against this one. Every event on every Windows stream and every answer has to
 // match, key order included, once random ids are numbered by first appearance.
@@ -111,6 +112,10 @@ async function run(dir) {
     await call('invite', D, 'POST', '/api/party/invite', {target:A}, 'BB5');
     await call('decline', A, 'POST', '/api/party/invite/decline', {from:D}, 'BB5');
     await call('invite again', D, 'POST', '/api/party/invite', {target:A}, 'BB5');
+    // Re-sent while pending: 2d25405 empties the sole invite's inbox and the accept expires.
+    await call('invite resent', D, 'POST', '/api/party/invite', {target:A}, 'BB5');
+    await call('accept resent', A, 'POST', '/api/party/invite/accept', {from:D}, 'BB5');
+    if (I('BB5').partyOf.has(A)) await call('leave (a server that kept it)', A, 'POST', '/api/party/leave', {}, 'BB5');
     await call('leave', E, 'POST', '/api/party/leave', 'null', 'BB5');
     const code2 = I('BB5').partyOf.get(D);
     await call('rejoin', E, 'POST', '/api/party/join', {code:code2}, 'BB5');
@@ -127,6 +132,12 @@ async function run(dir) {
     close[D](); close[D] = await stream(D, WIN);                // queued replay
     await call('queue leave', D, 'POST', '/api/queue/leave', {}, 'BB5');
     await profile(E, '4'.repeat(32));                           // not queued: nothing to say
+    // A member with the 1v1 tab open posts through BB1 while the leader searches BB5.
+    await call('queue fourth', D, 'POST', '/api/queue/join', {}, 'BB5');
+    await profile(E, '5'.repeat(32), 'BB1');
+    await call('unavailable from the 1v1 tab', E, 'POST', '/api/network/profile', {unavailable:true}, 'BB1');
+    await profile(E, '6'.repeat(32), 'BB1');
+    await call('queue leave again', D, 'POST', '/api/queue/leave', {}, 'BB5');
 
     // ---- the 1v1: queue, accept, lobby, connect window, arrival
     await profile(A, '1'.repeat(32), 'BB1'); await profile(B, '1'.repeat(32), 'BB1');

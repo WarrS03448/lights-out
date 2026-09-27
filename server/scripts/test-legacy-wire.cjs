@@ -23,7 +23,7 @@ const LINUX = {'x-hub-platform':'linux'};
 const SCOPE_KEYS = ['queue_actor', 'queue_context', 'queue_unit', 'queue_attempt', 'party_context', 'capabilities'];
 const MATCH = 'abcdef0123456789';
 
-async function fixture(t, {dual = false} = {}) {
+async function fixture(t, {dual = false, store = null} = {}) {
   let held = null;
   const streams = [];
   const options = {
@@ -44,11 +44,12 @@ async function fixture(t, {dual = false} = {}) {
     // "2d25405 never read this body" is part of the contract.
     readBody:async (req, limit) => {
       req.reads = (req.reads || 0) + 1;
+      req.onRead?.();
       const raw = Buffer.from(req.raw ?? JSON.stringify(req.body ?? {}));
       if (limit && raw.length > limit) throw Object.assign(Error('Request body too large.'), {tooLarge:true});
       return raw;
     },
-    upstashCmd:null,
+    upstashCmd:store,
   };
   const service = dual ? require('../ranked-service.cjs').create(options) : live.create(options);
   t.after(async () => { for (const s of streams) s.close(); await service.shutdown(); });
@@ -56,8 +57,8 @@ async function fixture(t, {dual = false} = {}) {
   const internals = (mode = 'BB5') => dual ? service.forMode(mode)._internals : service._internals;
   const measure = (id, location = '1'.repeat(32)) => internals().networkRegistry.profile(id, {
     region:'NA', cross_region:false, location, transport:'webrtc-relay-v1', age_seconds:0}, Date.now());
-  async function post(token, client, path, body = {}, {mode = 'BB5', raw} = {}) {
-    const req = {token, body, raw, headers:{'x-ranked-mode':mode, ...client}};
+  async function post(token, client, path, body = {}, {mode = 'BB5', raw, onRead} = {}) {
+    const req = {token, body, raw, onRead, headers:{'x-ranked-mode':mode, ...client}};
     const res = {setHeader() {}};
     await service.route(req, res, 'POST', path, new URL('http://fixture' + path));
     return Object.assign(res, {reads:req.reads || 0});
@@ -210,6 +211,125 @@ test('Windows party routes read and answer as 2d25405 did; Linux ones stay stric
   assert.equal(f2.internals().partyOf.has(C), false);
 });
 
+test('a Windows join clears its own grace timer before it reads the body, as 2d25405 did', async t => {
+  const f = await fixture(t);
+  await f.stream(A, WINDOWS);
+  const b = await f.stream(B, WINDOWS);
+  const code = (await f.post(A, WINDOWS, '/api/party/create')).body.code;
+  assert.equal((await f.post(B, WINDOWS, '/api/party/join', {code})).status, 200);
+  b.close();                                             // B's last stream: the grace timer is armed
+  assert.equal(f.internals().partyGrace.has(B), true);
+  let armedAtRead = null;
+  const joined = await f.post(B, WINDOWS, '/api/party/join', {code},
+    {onRead:() => { armedAtRead = f.internals().partyGrace.has(B); }});
+  assert.equal(joined.status, 200);
+  assert.equal(armedAtRead, false, 'cleared before the read, so it cannot fire during it');
+});
+
+// inviteToParty(me, body, scoped). A Windows caller's invite is 2d25405's in full: checked before
+// the friends read only, re-sent with dropInvite, pointing at a code and not a party object.
+test("a Windows inviter's resend is 2d25405's: the sole invite vanishes and its accept expires", async t => {
+  const f = await fixture(t);
+  await f.stream(A, WINDOWS);
+  const c = await f.stream(C, WINDOWS);
+  assert.equal((await f.post(A, WINDOWS, '/api/party/create')).status, 200);
+  f.internals().friends.set(A, new Set([C]));
+  const sent = await f.post(A, WINDOWS, '/api/party/invite', {target:C});
+  assert.deepEqual(sent.body, {ok:true, sent:true, expires_in:f.internals().PARTY_INVITE_SECONDS});
+  assert.equal(c.events.findLast(e => e.type === 'party_invites').invites.length, 1);
+  const toC = c.since();
+  assert.deepEqual((await f.post(A, WINDOWS, '/api/party/invite', {target:C})).body, sent.body);
+  assert.deepEqual(toC().map(e => [e.type, (e.invites || []).length]), [['party_invites', 0], ['party_invite', 0]]);
+  const accepted = await f.post(C, WINDOWS, '/api/party/invite/accept', {from:A});
+  assert.equal(accepted.status, 409);
+  assert.deepEqual(accepted.body, {ok:false, error:'That invite has expired.'});
+  assert.equal(f.internals().partyOf.has(C), false);
+  assertLegacyWire(c.events);
+});
+
+test("a Linux inviter's resend keeps the invite, and its accept seats the invitee", async t => {
+  const f = await fixture(t);
+  const a = await f.stream(A, LINUX), c = await f.stream(C, LINUX);
+  const solo = a.events.find(e => e.type === 'party_update').party_context;
+  const created = await f.post(A, LINUX, '/api/party/scoped/create', {expected_party_context:solo});
+  f.internals().friends.set(A, new Set([C]));
+  const invite = {target:C, expected_party_context:created.body.party_context};
+  assert.equal((await f.post(A, LINUX, '/api/party/scoped/invite', invite)).status, 200);
+  assert.equal((await f.post(A, LINUX, '/api/party/scoped/invite', invite)).status, 200);
+  const rows = c.events.findLast(e => e.type === 'party_invites').invites;
+  assert.equal(rows.length, 1);
+  const context = c.events.findLast(e => e.type === 'party_update').party_context;
+  const accepted = await f.post(C, LINUX, '/api/party/scoped/invite/accept',
+    {from:A, expected_party_context:context, expected_invite_id:rows[0].invite_id});
+  assert.equal(accepted.status, 200);
+  assert.equal(f.internals().partyOf.get(C), created.body.code);
+});
+
+test('a Windows invite is not checked again after the friends read', async t => {
+  // The friends read is the one await in inviteToParty. Hold it while the party re-keys.
+  let hold = null;
+  const store = async ([command, key]) => {
+    if (command === 'SMEMBERS' && key === 'legacy-wire-test:friends:' + A) {
+      if (hold) await hold.wait;
+      return [C];
+    }
+    return command === 'SMEMBERS' ? [] : null;
+  };
+  for (const [client, route] of [[WINDOWS, '/api/party/invite'], [LINUX, '/api/party/scoped/invite']]) {
+    const f = await fixture(t, {store});
+    const a = await f.stream(A, client), c = await f.stream(C, client);
+    const solo = a.events.find(e => e.type === 'party_update')?.party_context;
+    const created = await f.post(A, client, route.replace('invite', 'create'), {expected_party_context:solo});
+    const first = created.body.code;
+    let release;
+    hold = {wait:new Promise(resolve => { release = resolve; })};
+    const inviting = f.post(A, client, route, {target:C, expected_party_context:created.body.party_context});
+    await new Promise(setImmediate);
+    const refreshed = await f.post(A, client, route.replace('invite', 'refresh-code'),
+      {expected_party_context:created.body.party_context});
+    assert.equal(refreshed.status, 200);
+    hold = null;
+    const toC = c.since();
+    release();
+    const answer = await inviting;
+    if (client === WINDOWS) {
+      // 2d25405: sent, for the code it was asked about. The refresh retired that code, so the
+      // inbox drops the row on the way out and only the toast names it.
+      assert.equal(answer.status, 200);
+      assert.deepEqual(answer.body, {ok:true, sent:true, expires_in:f.internals().PARTY_INVITE_SECONDS});
+      assert.deepEqual(toC().map(e => [e.type, e.invites?.length ?? e.code]),
+        [['party_invites', 0], ['party_invite', first]]);
+      assertLegacyWire(c.events);
+    } else {
+      assert.equal(answer.status, 409);
+      assert.equal(answer.body.stale_action, true);
+      assert.deepEqual(toC(), []);
+    }
+  }
+});
+
+test("a Windows invite names a code; a code minted again seats its invitee as 2d25405's did", async t => {
+  for (const [client, prefix, joined] of [[WINDOWS, '/api/party/', true], [LINUX, '/api/party/scoped/', false]]) {
+    const f = await fixture(t);
+    const a = await f.stream(A, client), b = await f.stream(B, client), c = await f.stream(C, client);
+    const context = s => s.events.findLast(e => e.type === 'party_update')?.party_context;
+    const code = (await f.post(A, client, prefix + 'create', {expected_party_context:context(a)})).body.code;
+    f.internals().friends.set(A, new Set([C]));
+    assert.equal((await f.post(A, client, prefix + 'invite', {target:C, expected_party_context:context(a)})).status, 200);
+    const row = c.events.findLast(e => e.type === 'party_invites').invites[0];
+    assert.equal((await f.post(A, client, prefix + 'leave', {expected_party_context:context(a)})).status, 200);
+    // B's new party is given the dissolved party's code, as freshPartyCode may.
+    const I = f.internals();
+    const other = (await f.post(B, client, prefix + 'create', {expected_party_context:context(b)})).body.code;
+    const party = I.parties.get(other);
+    I.parties.delete(other); party.code = code; I.parties.set(code, party); I.partyOf.set(B, code);
+    const answer = await f.post(C, client, prefix + 'invite/accept',
+      {from:A, expected_party_context:context(c), expected_invite_id:row.invite_id});
+    assert.equal(answer.body.ok, joined, JSON.stringify(answer.body));
+    assert.equal(I.partyOf.get(C) === code, joined);
+  }
+});
+
 function matchFixture(f, state) {
   const match = identity.freezeMatch({id:MATCH, state, created:Date.now(),
     players:[A, B].map(steam_id => ({steam_id, accepted:state !== 'found', connected:false})),
@@ -273,14 +393,55 @@ test('a profile change tells a Windows hub nothing unless its search really ende
   // The scoped stream is still handed the stats its rotated queue_context rides on.
   assert.ok(scoped().some(e => e.type === 'stats'));
   f.internals('BB1').inMatch.delete(A);
-  // Searching 1v1: the profile posted through BB5 still ends that search, with one unqueued.
+  // Searching 1v1: a profile posted through BB5 is BB5's business, as it was in 2d25405, so the
+  // 1v1 search goes on and nothing is sent...
   f.measure(A);
   assert.equal((await f.post(A, WINDOWS, '/api/queue/join', {}, {mode:'BB1'})).status, 200);
   after = a.since();
   assert.equal((await f.post(A, WINDOWS, '/api/network/profile', {...MOVED, location:'3'.repeat(32)})).status, 200);
+  assert.equal((await f.post(A, WINDOWS, '/api/network/profile', {unavailable:true})).status, 200);
+  assert.equal(f.internals('BB1').queueOf.has(A), true);
+  assert.deepEqual(after(), []);
+  // ...and the same post through BB1 ends it, with one unqueued and the stats.
+  f.measure(A, '3'.repeat(32));
+  assert.equal((await f.post(A, WINDOWS, '/api/network/profile', {...MOVED, location:'4'.repeat(32)},
+    {mode:'BB1'})).status, 200);
   assert.equal(f.internals('BB1').queueOf.has(A), false);
   assert.deepEqual(after().map(e => [e.type, e.mode]), [['unqueued', 'BB1'], ['stats', 'BB1']]);
   assertLegacyWire(a.events);
+});
+
+// handleNetwork: everyLadder = scopedClient(req) && competitionGuard.networkChanged. A hub posts
+// its profile through the ladder its tab is on (hub/live.py _stamp), and a party member may have
+// the 1v1 tab open while the leader searches BB5 (competitive.py ignores the BB5 'queued' there).
+test('a party member posting through the 1v1 tab ends the BB5 search only when scoped', async t => {
+  const f = await fixture(t, {dual:true});
+  const a = await f.stream(A, WINDOWS), b = await f.stream(B, WINDOWS), c = await f.stream(C, LINUX);
+  const code = (await f.post(A, WINDOWS, '/api/party/create')).body.code;
+  assert.equal((await f.post(B, WINDOWS, '/api/party/join', {code})).status, 200);
+  for (const id of [A, B, C]) f.measure(id);
+  assert.equal((await f.post(A, WINDOWS, '/api/queue/join')).status, 200);
+  const toA = a.since(), toB = b.since();
+  assert.equal((await f.post(B, WINDOWS, '/api/network/profile', MOVED, {mode:'BB1'})).status, 200);
+  assert.equal((await f.post(B, WINDOWS, '/api/network/profile', {unavailable:true}, {mode:'BB1'})).status, 200);
+  assert.equal(f.internals('BB5').queueOf.has(A), true, 'the BB5 search goes on, as in 2d25405');
+  assert.deepEqual(toA(), []);
+  assert.deepEqual(toB(), []);
+  // A Linux member's post does reach the other ladder. The Windows leader is told what a
+  // same-ladder change told it in 2d25405: one unqueued and the stats, nothing scoped.
+  f.measure(B);
+  assert.equal((await f.post(A, WINDOWS, '/api/party/leave')).status, 200);
+  const next = (await f.post(B, WINDOWS, '/api/party/create')).body.code;
+  const context = c.events.findLast(e => e.type === 'party_update').party_context;
+  assert.equal((await f.post(C, LINUX, '/api/party/scoped/join', {code:next, expected_party_context:context})).status, 200);
+  f.measure(C);
+  assert.equal((await f.post(B, WINDOWS, '/api/queue/join')).status, 200);
+  const toLeader = b.since();
+  assert.equal((await f.post(C, LINUX, '/api/network/profile', {...MOVED, location:'5'.repeat(32)},
+    {mode:'BB1'})).status, 200);
+  assert.equal(f.internals('BB5').queueOf.has(B), false);
+  assert.deepEqual(toLeader().map(e => [e.type, e.mode]), [['unqueued', 'BB5'], ['stats', 'BB5']]);
+  for (const s of [a, b]) assertLegacyWire(s.events);
 });
 
 test('a region change through the other ladder is refused mid-match only for a scoped caller', async t => {
