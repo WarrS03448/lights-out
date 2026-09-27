@@ -21,7 +21,7 @@ test('net RR includes losses, ignores placement seed and late registration has n
  const a=receipt('a',start+2000,30),b=receipt('b',start+4000,-10),c=receipt('c',start+6000,0);b.publicMatch.started=start+2000;b.rows[0].won=false;c.publicMatch.started=start+4000;c.rows[0].rr.placed=true;c.rows[0].after={progress:9000};
  const entries=[a,b,c].map(api.matchEntry);
  const [row]=api.standings([reg()],entries);assert.equal(row.net_rr,20);assert.equal(row.gained_rr,30);assert.equal(row.lost_rr,10);assert.equal(row.matches,2);assert.equal(row.history[2].reason,'placement');
- const [late]=api.standings([reg(start+1000)],entries);assert.equal(late.net_rr,-10);assert.equal(late.matches,1);
+ const [late]=api.standings([reg(start+1000)],entries,{...api.EVENT,rr_floor_from:undefined});assert.equal(late.net_rr,-10);assert.equal(late.matches,1);
  assert.equal(api.standings([{...reg(),game_steam_id:ids[1]}],entries)[0].matches,0);
 });
 test('receipt order does not affect results; ties use wins then first reaching final total',()=>{
@@ -102,4 +102,42 @@ test('a placement draw without RR flags is excluded for that player only',()=>{
 
 for(const map of ['Paintball','Airsoft','BombHouse'])test(`launch tournament counts verified 1v1 ${map} results`,()=>{
  const r=receipt();r.publicMatch.map=map;assert.ok(api.matchEntry(r));
+});
+
+// Sam, 2026-09-27: net RR stops at zero from rr_floor_from, and totals already below zero are raised to zero.
+const floorAt=start+5000,floorEvent={...api.EVENT,rr_floor_from:floorAt};
+const run=(id,deltas)=>deltas.map(([at,delta],i)=>({id:id+i,started:at-500,ended:at,rows:[{player_id:ids[0],game_steam_id:ids[0],delta,won:delta>0}]}));
+test('the live event floors net RR from the date Sam set, during the event',()=>{
+ assert.ok(api.EVENT.rr_floor_from>api.EVENT.start_at&&api.EVENT.rr_floor_from<api.EVENT.end_at);
+ assert.equal(api.EVENT.rules_version,6);
+});
+test('a total below zero when the floor begins is raised to zero, and later losses stop at zero',()=>{
+ const [p]=api.standings([reg()],run('f',[[start+1000,-30],[start+2000,10],[start+6000,15],[start+7000,-40],[start+8000,5]]),floorEvent);
+ assert.deepEqual(p.history.map(h=>h.total),[-30,-20,15,0,5]);
+ assert.equal(p.net_rr,5);assert.equal(p.gained_rr,30);assert.equal(p.lost_rr,70,'lost RR stays the RR lost in matches');
+ assert.equal(p.floor_rr,45);assert.equal(p.net_rr,p.gained_rr-p.lost_rr+p.floor_rr);assert.equal(p.matches,5);
+});
+test('a player below zero who has not played since the floor began stands at zero from that moment',()=>{
+ const [p]=api.standings([reg()],run('r',[[start+1000,-30],[start+2000,10]]),floorEvent);
+ assert.equal(p.net_rr,0);assert.equal(p.floor_rr,20);assert.equal(p.reached_at,floorAt);
+});
+test('a player above zero keeps their total: matches before the floor are not rescored',()=>{
+ const [p]=api.standings([reg()],run('k',[[start+1000,-30],[start+2000,40]]),floorEvent);
+ assert.equal(p.net_rr,10);assert.equal(p.floor_rr,0);assert.equal(p.reached_at,start+2000);
+});
+test('the floor never touches excluded matches, and receipt order cannot change it',()=>{
+ const entries=run('o',[[start+1000,-30],[start+6000,-10],[start+7000,25]]);entries[1].reason='voided';
+ const [a]=api.standings([reg()],entries,floorEvent),[b]=api.standings([reg()],[...entries].reverse(),floorEvent);
+ assert.equal(a.net_rr,25);assert.equal(a.floor_rr,30);assert.equal(a.matches,2);assert.deepEqual(b,a);
+});
+test('players raised to zero with equal wins share a place',()=>{
+ const other={...reg(),player_id:ids[5],game_steam_id:ids[5]};
+ const entries=[-30,-50].flatMap((delta,j)=>Array.from({length:5},(_,i)=>({id:'z'+j+i,started:start+i*100,ended:start+100+i*100,rows:[{...(j?other:reg()),delta:i?delta:delta+1,won:false}]})));
+ const rows=api.standings([reg(),other],entries,floorEvent);
+ assert.deepEqual(rows.map(r=>[r.net_rr,r.rank,r.tied]),[[0,1,true],[0,1,true]]);
+});
+test('the player view shows a raised total and what the floor gave back',async()=>{
+ const svc=api.create({now:()=>floorAt+60000,store:async()=>[[JSON.stringify(reg())],run('v',[[start+1000,-30],[start+2000,10]]).map(e=>JSON.stringify(e)),'',[]]});
+ const view=await svc.view(ids[0]);
+ assert.equal(view.you.net_rr,0);assert.equal(view.you.floor_rr,20);assert.equal(view.you.lost_rr,30);assert.equal(view.leaders[0].net_rr,0);
 });

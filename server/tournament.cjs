@@ -4,7 +4,9 @@ const identity=require('./player-identity.cjs');
 const EVENT=Object.freeze({id:'launch-2026',title:'Lights Out 1v1 Launch Tournament',
  start_at:Date.parse('2026-09-26T16:00:00Z'),end_at:Date.parse('2026-09-28T16:00:00Z'),
  timezone:'America/Chicago',currency:'USD',prize_pool:150,prizes:[100,35,15],mode:'BB1',maps:Object.freeze(['Paintball','Airsoft','BombHouse']),
- payout_methods:['Zelle','Venmo','PayPal'],minimum_matches:5,dispute_deadline:Date.parse('2026-09-29T16:00:00Z'),payout_days:7,rules_version:5});
+ payout_methods:['Zelle','Venmo','PayPal'],minimum_matches:5,dispute_deadline:Date.parse('2026-09-29T16:00:00Z'),payout_days:7,rules_version:6,
+ // Sam, 2026-09-27, mid-event: net RR stops at zero from here on, and totals already below zero are raised to zero.
+ rr_floor_from:Date.parse('2026-09-27T13:15:00Z')});
 const BACKFILL_VERSION='tournament-launch-2026-bb1-v3';
 const ledgerBase=prefix=>prefix+'tournament:'+EVENT.id+':'+EVENT.mode+':';
 const eventMode=receipt=>{const m=receipt?.publicMatch||receipt?.full;return !!m&&(receipt.mode||m.mode)===EVENT.mode&&(!receipt.mode||receipt.mode===EVENT.mode)&&(!m.mode||m.mode===EVENT.mode);};
@@ -66,18 +68,28 @@ function matchEntry(receipt,includeCandidates=false){
  if(new Set(rows.map(r=>r.player_id)).size!==2||new Set(rows.map(r=>r.game_steam_id)).size!==2)return null;
  return {id,started:m.started,ended:m.ended,rows:rows.sort((a,b)=>a.player_id.localeCompare(b.player_id))};
 }
+// Net RR has a floor of zero from rr_floor_from: a total still below zero then is raised to zero once, and
+// every later loss stops at zero. gained_rr and lost_rr stay match RR; floor_rr is what the floor gave back.
 function standings(registrations,matches,event=EVENT,exclusions={},reverted=new Set()){
- const ordered=[...matches].sort((a,b)=>a.ended-b.ended||a.id.localeCompare(b.id)),players=new Map();
- for(const r of registrations)players.set(r.player_id,{...r,net_rr:0,gained_rr:0,lost_rr:0,wins:0,matches:0,reached_at:null,history:[],disqualified:!!exclusions[r.player_id]});
+ const ordered=[...matches].sort((a,b)=>a.ended-b.ended||a.id.localeCompare(b.id)),players=new Map(),floorFrom=event.rr_floor_from??Infinity,raisedAt=new Map();
+ for(const r of registrations)players.set(r.player_id,{...r,net_rr:0,gained_rr:0,lost_rr:0,floor_rr:0,wins:0,matches:0,reached_at:null,history:[],disqualified:!!exclusions[r.player_id]});
+ const raise=p=>{if(p.net_rr<0&&floorFrom<Infinity){p.floor_rr-=p.net_rr;p.net_rr=0;raisedAt.set(p.player_id,floorFrom);}};
  for(const m of ordered)for(const r of m.rows){
    const p=players.get(r.player_id);if(!p)continue;
    const reason=reverted.has(m.id)?'cheater_reverted':m.reason|| (r.placement?'placement':p.game_steam_id!==r.game_steam_id?'account_mismatch':m.started<p.registered_at?'before_registration':m.started<event.start_at?'before_start':m.ended>=event.end_at?'after_cutoff':null);
    if(reason){p.history.push({match_id:m.id,started:m.started,ended:m.ended,delta:r.delta,counted:false,reason,total:p.net_rr});continue;}
-   p.net_rr+=r.delta;p.gained_rr+=Math.max(0,r.delta);p.lost_rr+=Math.max(0,-r.delta);p.wins+=r.won?1:0;p.matches++;
+   const floored=m.ended>=floorFrom;if(floored)raise(p);
+   const total=p.net_rr+r.delta,kept=floored?Math.max(0,total):total;
+   p.floor_rr+=kept-total;p.net_rr=kept;p.gained_rr+=Math.max(0,r.delta);p.lost_rr+=Math.max(0,-r.delta);p.wins+=r.won?1:0;p.matches++;
    p.history.push({match_id:m.id,started:m.started,ended:m.ended,delta:r.delta,won:r.won,counted:true,total:p.net_rr});
  }
  const rows=[...players.values()];
- for(const p of rows){p.reached_at=p.history.find(h=>h.counted&&h.total===p.net_rr)?.ended||null;p.eligible=p.matches>=event.minimum_matches&&!p.disqualified;}
+ for(const p of rows){
+   raise(p);
+   // A total raised to zero reached zero when the floor began, unless a counted match got there first.
+   const hit=p.history.find(h=>h.counted&&h.total===p.net_rr)?.ended||null,raised=p.net_rr===0&&raisedAt.get(p.player_id)||null;
+   p.reached_at=hit&&raised?Math.min(hit,raised):hit||raised;p.eligible=p.matches>=event.minimum_matches&&!p.disqualified;
+ }
  const cmp=compareScore;
  rows.sort((a,b)=>Number(b.eligible)-Number(a.eligible)||cmp(a,b)||a.player_id.localeCompare(b.player_id));
  const eligible=rows.filter(p=>p.eligible);
@@ -137,7 +149,7 @@ function create({store,prefix='hub:',now=Date.now,finalizationHealth,notifySuppo
      const reverted=new Set(data[3]);cache={at:now(),registrations,matches,ops,event,reverted,rows:standings(registrations,matches,event,ops.exclusions,reverted)};return cache;
    })().finally(()=>{pending=null;});return pending;
  }
- const publicRow=(p,playerId)=>({rank:p.rank||null,persona:p.persona,net_rr:p.net_rr,gained_rr:p.gained_rr,lost_rr:p.lost_rr,wins:p.wins,matches:p.matches,tied:!!p.tied,eligible:!!p.eligible,is_you:p.player_id===playerId});
+ const publicRow=(p,playerId)=>({rank:p.rank||null,persona:p.persona,net_rr:p.net_rr,gained_rr:p.gained_rr,lost_rr:p.lost_rr,floor_rr:p.floor_rr||0,wins:p.wins,matches:p.matches,tied:!!p.tied,eligible:!!p.eligible,is_you:p.player_id===playerId});
  async function view(playerId){
    if(playerId)await flushNotifications();
    const data=await read(),at=now(),state=phase(at,data.event),registration=data.registrations.find(r=>r.player_id===playerId),you=data.rows.find(r=>r.player_id===playerId);
