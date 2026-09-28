@@ -1,6 +1,6 @@
 # Lights Out
 
-An open-source Windows community client and matchmaking service for **Bodycam**.
+An open-source community client for Windows, with a native Linux beta, and a matchmaking service for **Bodycam**.
 Install community gamemodes, sign in with Steam or a Lights Out account, play with friends, queue for
 Bodybomb 5v5, and review match results and ranks.
 
@@ -11,12 +11,14 @@ anti-cheat guarantee. A separately purchased, compatible Bodycam installation is
 required to play.
 
 [Download the Windows app](https://lightsoutranked.com/)
+· [Download the Linux beta](https://lightsoutranked.com/hub/download/linux)
 · [Source releases](https://github.com/WarrS03448/lights-out/releases)
 · [Report a bug](https://github.com/WarrS03448/lights-out/issues)
 
 The official Windows installer is digitally signed by **Samuel Warren**.
+The Linux beta is a ZIP for 64-bit x86 PCs (x86_64). Its corresponding source, including its GPL and LGPL components, is the source ZIP attached to each `linux-v<version>` pre-release; see [release provenance](docs/release-provenance.md#linux-beta).
 
-See [source/download correspondence and build limits](docs/release-provenance.md) for exact release hashes, omitted hosted components and Linux testing status. The 2.6.9 security release adds Steam login binding, mandatory update signature checks and updated image dependencies.
+See [source/download correspondence and build limits](docs/release-provenance.md) for exact release hashes, omitted hosted components and the Linux beta. The 2.6.9 security release adds Steam login binding, mandatory update signature checks and updated image dependencies.
 
 ## What is included
 

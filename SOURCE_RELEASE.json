@@ -18,7 +18,8 @@
     "Integrate verified account identity and profile counts into Players, Overview and Analytics, with exact profile drilldowns and no account credentials in console data",
     "Include seven distinct participant votes to void matches, authenticated durable voting, Bodycam cleanup and the MATCH VOIDED result screen in 2.5.0",
     "Show registered Lights Out users and tournament registrations in the client header, with refresh and reconnect handling, in 2.6.6",
-    "Harden player/admin Steam login, enforce trusted signed updates, update Pillow, and disclose retention and source/download correspondence in 2.6.9"
+    "Harden player/admin Steam login, enforce trusted signed updates, update Pillow, and disclose retention and source/download correspondence in 2.6.9",
+    "Add the native Linux beta 3.0.7: catalogue entry, download routes and release tooling; its corresponding source is the source ZIP of the linux-v3.0.7 pre-release"
   ],
   "gamemode_packs": [
     {
@@ -37,6 +38,6 @@
     "server/suspicion.cjs: hosted review scoring",
     "server/cheater-restitution.cjs: hosted result-correction operations",
     "Live website leaderboard module, routes and page assets",
-    "Private Linux pilot source and packages"
+    "Linux client source in the repository tree: published as the corresponding-source ZIP of each linux-v<version> pre-release"
   ]
 }
