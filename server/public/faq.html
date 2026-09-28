@@ -106,9 +106,32 @@
             </div>
           </details>
 
+          <!-- linux-offer -->
+          <!-- The "Needs:" paragraph is the bundle README's platform wording, word for word
+               (tools/linux/native/build_bundle.py README). Change both together. -->
+          <details id="faq-linux">
+            <summary>Is there a Linux version?</summary>
+            <div class="answer">
+              <p>Yes, a native Linux beta. <a href="/hub/download/linux">Download the ZIP</a>, extract it, and open <strong>Install and Open Lights Out</strong>. If your file manager asks, choose Run or Launch. Lights Out installs into your user account and opens; after that, open it from your applications menu. No terminal commands, administrator password or Steam launch-option changes are needed.</p>
+              <p>Needs: a 64-bit PC (x86_64) with glibc 2.35 or newer, an X11 or Wayland desktop, and Bodycam installed through the regular Steam app. The Flatpak and Snap versions of Steam, ARM PCs, musl-based systems (such as Alpine) and NixOS are not supported yet. Links open with xdg-open, sound needs PulseAudio or PipeWire, and the window needs working OpenGL graphics drivers.</p>
+              <p>Bodycam is a Windows game, so Steam runs it through Proton. Lights Out works with that install and puts its one file in Bodycam’s <code>~mods</code> folder, the same as on Windows.</p>
+              <p>The Linux beta signs in with Steam only; a Lights Out account cannot sign in there. It does not save your sign-in, so you sign in with Steam each time you open it. Your settings and downloaded packs are kept.</p>
+              <p>Close Bodycam yourself after a match, and before installing or changing gamemodes. The Linux beta does not close the game for you.</p>
+              <p>Updates install from the update strip inside the app, and opening <strong>Install and Open Lights Out</strong> from a newer download also updates it. To uninstall, open Settings in Lights Out and choose Uninstall: it takes its files back out of Bodycam’s <code>~mods</code> folder, and can also delete your settings and downloaded gamemodes.</p>
+              <p>The app installs under <code>~/.local/share/lights-out-linux-beta</code> and keeps its settings, packs and logs under <code>~/.local/state/lights-out-linux-beta</code> (under <code>$XDG_DATA_HOME</code> and <code>$XDG_STATE_HOME</code> instead, if you set them). Its menu entry is in <code>~/.local/share/applications</code>.</p>
+              <p>To check a download before you open it, compare its SHA-256 (for example from <code>sha256sum</code>) with these:</p>
+              <ul>
+                <li>Linux beta ZIP: <code>{{LINUX_SHA256}}</code></li>
+                <li><a href="/hub/download/linux-source">Source code ZIP</a>: <code>{{LINUX_SOURCE_SHA256}}</code></li>
+              </ul>
+              <p>Nothing it installs into the game is a cheat, on Linux or on Windows. It is a beta: <a href="mailto:contact@theneeb.com">tell us</a> what goes wrong.</p>
+            </div>
+          </details>
+          <!-- /linux-offer -->
+
           <details>
             <summary>How do I remove it completely?</summary>
-            <div class="answer"><p>Uninstall inside the app takes the gamemode file back out of Bodycam. Lights Out itself then uninstalls like any Windows program; the only thing left behind is a few small settings files in <code>%LOCALAPPDATA%\CommunityHub</code>, which you can delete by hand.</p></div>
+            <div class="answer"><p>Uninstall inside the app takes the gamemode file back out of Bodycam. On Windows, Lights Out itself then uninstalls like any Windows program; the only thing left behind is a few small settings files in <code>%LOCALAPPDATA%\CommunityHub</code>, which you can delete by hand.</p><!-- linux-offer --><p>On Linux, see <a href="#faq-linux">Is there a Linux version?</a></p><!-- /linux-offer --></div>
           </details>
 
           <details>
@@ -118,7 +141,7 @@
 
           <details>
             <summary>How do updates to the app or the gamemodes work?</summary>
-            <div class="answer"><p>Lights Out checks this site each time it starts. New gamemode versions show an “update available” note next to the mode, and a newer app version installs itself in the background, so there is no need to come back here.</p></div>
+            <div class="answer"><p>Lights Out checks this site each time it starts. New gamemode versions show an “update available” note next to the mode. On Windows, a newer app version installs itself in the background, so there is no need to come back here.</p><!-- linux-offer --><p>On Linux, see <a href="#faq-linux">Is there a Linux version?</a></p><!-- /linux-offer --></div>
           </details>
 
           <details>

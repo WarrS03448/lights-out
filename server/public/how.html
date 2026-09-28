@@ -10,6 +10,7 @@
 <link rel="preload" href="/assets/oswald-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/ibmplexsans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/platform.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#how">Skip to content</a>
@@ -93,6 +94,31 @@
       </div>
     </section>
 
+    <!-- linux-offer -->
+    <section class="section" id="linux">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <h2>On Linux</h2>
+            <p class="section-lede">The native Linux app does the same job the same way: the mod is built on your PC from your own copy of Bodycam, and one file lands in its ~mods folder.</p>
+          </div>
+          <span class="chip">Beta</span>
+        </div>
+
+        <div class="notdo">
+          <h3 class="ui-card-title">What is different</h3>
+          <ul>
+            <li><strong>Extract the ZIP and open “Install and Open Lights Out”.</strong> It installs into your user account, under <code>~/.local/share</code> and <code>~/.local/state</code>, with no administrator password or terminal.</li>
+            <li><strong>A 64-bit (x86_64) PC with Bodycam from the regular Steam app</strong>, which runs the game through Proton. <a href="/faq#faq-linux">Full requirements and checksums</a>.</li>
+            <li><strong>Steam sign-in only</strong>, not a Lights Out account, and you sign in each time you open the app.</li>
+            <li><strong>Close Bodycam yourself after a match.</strong> The Linux beta does not close it for you.</li>
+            <li><strong>Updates install from the app’s update strip</strong>, and opening a newer download also updates it. Uninstall from Settings.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+    <!-- /linux-offer -->
+
     <section class="section">
       <div class="wrap">
         <div class="section-head">
@@ -103,6 +129,10 @@
         </div>
         <div class="hero-cta">
           <a class="btn-primary" href="/hub/download">Download for Windows</a>
+          <!-- linux-offer -->
+          <a class="btn-ghost" href="/hub/download/linux" aria-describedby="linux-download-note">Download for Linux (beta)</a>
+          <p class="download-help" id="linux-download-note">Linux beta {{LINUX_VERSION}} for x86_64 PCs · <a href="/hub/download/linux-source">Source code</a> · <a href="/faq#faq-linux">Linux setup</a></p>
+          <!-- /linux-offer -->
         </div>
       </div>
     </section>

@@ -16,7 +16,8 @@ window.LightsOutAccountStrings = {
     limited:'Too many requests. Please wait before trying again.',
     unavailable:'Account creation is temporarily unavailable. Please try again later.', origin:'Please open this page on the official Lights Out website and try again.',
     failed:'We could not complete this request. Check your connection and try again.', badEmail:'Enter a valid email address.',
-    badPassword:'Use a password between 6 and 128 characters.', badName:'Use a display name between 1 and 40 characters.', badCode:'This code is invalid or expired. Check the code or request a new one.'
+    badPassword:'Use a password between 6 and 128 characters.', badName:'Use a display name between 1 and 40 characters.', badCode:'This code is invalid or expired. Check the code or request a new one.',
+    downloadWindows:'Download for Windows', downloadLinux:'Download for Linux (beta)', linuxBeta:'Linux beta', linuxAccount:'Your new account works in the Windows app. The Linux beta signs in with Steam only.', source:'Source code'
   },
   de: {
     confirm:"Passwort bestätigen", mismatch:"Die Passwörter stimmen nicht überein.", uncertain:"Das Ergebnis konnte nicht bestätigt werden. Versuche, dich mit diesen Daten in Lights Out anzumelden, bevor du einen neuen Code anforderst.",
@@ -34,7 +35,8 @@ window.LightsOutAccountStrings = {
     limited:'Zu viele Anfragen. Bitte warte vor einem neuen Versuch.',
     unavailable:'Die Kontoerstellung ist vorübergehend nicht verfügbar. Bitte versuche es später erneut.', origin:'Öffne diese Seite auf der offiziellen Lights Out-Website und versuche es erneut.',
     failed:'Die Anfrage konnte nicht abgeschlossen werden. Prüfe deine Verbindung und versuche es erneut.', badEmail:'Gib eine gültige E-Mail-Adresse ein.',
-    badPassword:'Verwende ein Passwort mit 6 bis 128 Zeichen.', badName:'Verwende einen Anzeigenamen mit 1 bis 40 Zeichen.', badCode:'Dieser Code ist ungültig oder abgelaufen. Prüfe ihn oder fordere einen neuen an.'
+    badPassword:'Verwende ein Passwort mit 6 bis 128 Zeichen.', badName:'Verwende einen Anzeigenamen mit 1 bis 40 Zeichen.', badCode:'Dieser Code ist ungültig oder abgelaufen. Prüfe ihn oder fordere einen neuen an.',
+    downloadWindows:'Für Windows herunterladen', downloadLinux:'Für Linux herunterladen (Beta)', linuxBeta:'Linux-Beta', linuxAccount:'Dein neues Konto funktioniert in der Windows-App. In der Linux-Beta meldest du dich nur mit Steam an.', source:'Quellcode'
   },
   es: {
     confirm:"Confirmar contraseña", mismatch:"Las contraseñas no coinciden.", uncertain:"No pudimos confirmar el resultado. Intenta iniciar sesión con estos datos en Lights Out antes de pedir otro código.",
@@ -52,7 +54,8 @@ window.LightsOutAccountStrings = {
     limited:'Demasiadas solicitudes. Espera antes de volver a intentarlo.',
     unavailable:'La creación de cuentas no está disponible temporalmente. Inténtalo más tarde.', origin:'Abre esta página en el sitio oficial de Lights Out e inténtalo de nuevo.',
     failed:'No pudimos completar la solicitud. Revisa tu conexión e inténtalo de nuevo.', badEmail:'Introduce un correo válido.',
-    badPassword:'Usa una contraseña de entre 6 y 128 caracteres.', badName:'Usa un nombre visible de entre 1 y 40 caracteres.', badCode:'El código no es válido o ha caducado. Revísalo o solicita uno nuevo.'
+    badPassword:'Usa una contraseña de entre 6 y 128 caracteres.', badName:'Usa un nombre visible de entre 1 y 40 caracteres.', badCode:'El código no es válido o ha caducado. Revísalo o solicita uno nuevo.',
+    downloadWindows:'Descargar para Windows', downloadLinux:'Descargar para Linux (beta)', linuxBeta:'Beta para Linux', linuxAccount:'Tu nueva cuenta funciona en la aplicación para Windows. En la beta para Linux solo puedes iniciar sesión con Steam.', source:'Código fuente'
   },
   fr: {
     confirm:"Confirmer le mot de passe", mismatch:"Les mots de passe ne correspondent pas.", uncertain:"Le résultat n’a pas pu être confirmé. Essayez de vous connecter avec ces identifiants dans Lights Out avant de demander un autre code.",
@@ -70,7 +73,8 @@ window.LightsOutAccountStrings = {
     limited:'Trop de demandes. Patientez avant de réessayer.',
     unavailable:'La création de compte est temporairement indisponible. Réessayez plus tard.', origin:'Ouvrez cette page sur le site officiel de Lights Out et réessayez.',
     failed:'Impossible de terminer cette demande. Vérifiez votre connexion et réessayez.', badEmail:'Saisissez une adresse e-mail valide.',
-    badPassword:'Utilisez un mot de passe de 6 à 128 caractères.', badName:'Utilisez un nom affiché de 1 à 40 caractères.', badCode:'Ce code est invalide ou a expiré. Vérifiez-le ou demandez-en un nouveau.'
+    badPassword:'Utilisez un mot de passe de 6 à 128 caractères.', badName:'Utilisez un nom affiché de 1 à 40 caractères.', badCode:'Ce code est invalide ou a expiré. Vérifiez-le ou demandez-en un nouveau.',
+    downloadWindows:'Télécharger pour Windows', downloadLinux:'Télécharger pour Linux (bêta)', linuxBeta:'Bêta Linux', linuxAccount:'Votre nouveau compte fonctionne dans l’application Windows. Dans la bêta Linux, la connexion se fait uniquement avec Steam.', source:'Code source'
   },
   pt: {
     confirm:"Confirmar senha", mismatch:"As senhas não coincidem.", uncertain:"Não foi possível confirmar o resultado. Tente entrar no Lights Out com esses dados antes de pedir outro código.",
@@ -88,7 +92,8 @@ window.LightsOutAccountStrings = {
     limited:'Muitas solicitações. Aguarde antes de tentar novamente.',
     unavailable:'A criação de contas está temporariamente indisponível. Tente mais tarde.', origin:'Abra esta página no site oficial do Lights Out e tente novamente.',
     failed:'Não foi possível concluir a solicitação. Confira sua conexão e tente novamente.', badEmail:'Digite um e-mail válido.',
-    badPassword:'Use uma senha de 6 a 128 caracteres.', badName:'Use um nome de exibição de 1 a 40 caracteres.', badCode:'Este código é inválido ou expirou. Confira o código ou peça outro.'
+    badPassword:'Use uma senha de 6 a 128 caracteres.', badName:'Use um nome de exibição de 1 a 40 caracteres.', badCode:'Este código é inválido ou expirou. Confira o código ou peça outro.',
+    downloadWindows:'Baixar para Windows', downloadLinux:'Baixar para Linux (beta)', linuxBeta:'Beta para Linux', linuxAccount:'Sua nova conta funciona no aplicativo para Windows. Na beta para Linux, o login é somente pelo Steam.', source:'Código-fonte'
   },
   ru: {
     confirm:"Подтвердите пароль", mismatch:"Пароли не совпадают.", uncertain:"Не удалось подтвердить результат. Попробуйте войти с этими данными в Lights Out, прежде чем запрашивать новый код.",
@@ -106,7 +111,8 @@ window.LightsOutAccountStrings = {
     limited:'Слишком много запросов. Подождите перед новой попыткой.',
     unavailable:'Создание аккаунтов временно недоступно. Попробуйте позже.', origin:'Откройте эту страницу на официальном сайте Lights Out и повторите попытку.',
     failed:'Не удалось завершить запрос. Проверьте подключение и попробуйте снова.', badEmail:'Введите корректный адрес почты.',
-    badPassword:'Используйте пароль от 6 до 128 символов.', badName:'Используйте имя от 1 до 40 символов.', badCode:'Код недействителен или истёк. Проверьте его или запросите новый.'
+    badPassword:'Используйте пароль от 6 до 128 символов.', badName:'Используйте имя от 1 до 40 символов.', badCode:'Код недействителен или истёк. Проверьте его или запросите новый.',
+    downloadWindows:'Скачать для Windows', downloadLinux:'Скачать для Linux (бета)', linuxBeta:'Бета-версия для Linux', linuxAccount:'Новый аккаунт работает в приложении для Windows. В бета-версии для Linux вход только через Steam.', source:'Исходный код'
   },
   zh: {
     confirm:"确认密码", mismatch:"两次输入的密码不一致。", uncertain:"无法确认结果。申请新验证码前，请先尝试使用这些登录信息登录 Lights Out。",
@@ -124,6 +130,7 @@ window.LightsOutAccountStrings = {
     limited:'请求过多，请稍后重试。',
     unavailable:'暂时无法创建账号，请稍后重试。', origin:'请在 Lights Out 官方网站打开此页面并重试。',
     failed:'无法完成请求，请检查网络连接后重试。', badEmail:'请输入有效邮箱地址。',
-    badPassword:'请使用 6–128 个字符的密码。', badName:'请使用 1–40 个字符的显示名称。', badCode:'验证码无效或已过期，请检查验证码或申请新的验证码。'
+    badPassword:'请使用 6–128 个字符的密码。', badName:'请使用 1–40 个字符的显示名称。', badCode:'验证码无效或已过期，请检查验证码或申请新的验证码。',
+    downloadWindows:'下载 Windows 版', downloadLinux:'下载 Linux 版（测试版）', linuxBeta:'Linux 测试版', linuxAccount:'新账号可在 Windows 版应用中使用。Linux 测试版仅支持 Steam 登录。', source:'源代码'
   }
 };

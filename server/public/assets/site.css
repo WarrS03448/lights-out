@@ -475,6 +475,10 @@ a { color: inherit; }
   transition: border-color .15s ease, background .15s ease;
 }
 .btn-ghost:hover { border-color: var(--accent); background: var(--panel); }
+/* The Linux beta download: the secondary action beside "Download for Windows", centred on it in the
+ * same row. assets/platform.js swaps the two classes on a Linux x86_64 desktop. */
+.hero-cta .btn-ghost { align-self: center; text-align: center; }
+.account-card .btn-ghost { display: block; width: 100%; margin-top: var(--sp-3); text-align: center; }
 
 /* ---------------------------------------------------------------- footer */
 .foot { padding: var(--sp-8) 0 var(--sp-10); }
@@ -533,6 +537,8 @@ a { color: inherit; }
     padding-top: clamp(10px, 1.3vh, 20px);
     padding-bottom: clamp(10px, 1.3vh, 20px);
   }
+  /* No taller than the Windows button beside it. */
+  body.home .btn-ghost { padding-top: clamp(10px, 1.3vh, 16px); padding-bottom: clamp(10px, 1.3vh, 16px); }
   body.home .hero-note { margin-top: clamp(8px, 1.2vh, 20px); max-width: none; }
 
   body.home .section { flex: none; padding: clamp(12px, 1.6vh, 44px) 0; }
@@ -589,6 +595,11 @@ a { color: inherit; }
   .hero h1 { max-width: none; }
   .hero-cta { gap: var(--sp-4); }
   .btn-primary { display: block; width: 100%; text-align: center; padding-left: var(--sp-4); padding-right: var(--sp-4); }
+  .hero-cta .btn-ghost { display: block; width: 100%; padding-left: var(--sp-4); padding-right: var(--sp-4); }
+  /* Stacked, the Windows help stays under the Windows button and the Linux button sits on its note.
+   * Only the Linux link, and only while it is secondary: when assets/platform.js promotes it, the
+   * Windows link becomes .btn-ghost and must keep its help under it (Linux, Windows, help). */
+  body.home .hero-cta a.btn-ghost[href="/hub/download/linux"] { order: 1; }
 
   .flow li, .readon a { padding: var(--sp-4) var(--sp-5); }
   .ladder-wrap { padding: var(--sp-4) var(--sp-5); }

@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/assets/account.css">
   <script src="/assets/account-i18n.js" defer></script>
   <script src="/assets/account.js" defer></script>
+  <script src="/assets/platform.js" defer></script>
 </head>
 <body class="account-page">
   <a class="skip" href="#account" data-copy="skip">Skip to account creation</a>
@@ -62,9 +63,15 @@
           <button class="account-link" id="restart" type="button" data-copy="restart">Use another email or request a new code</button>
         </fieldset>
       </form>
-      <div id="complete" hidden>
+      <!-- The account just made signs in to the Windows app only, so assets/platform.js never puts
+           the Linux beta first here (data-download-order="fixed"). -->
+      <div id="complete" data-download-order="fixed" hidden>
         <p data-copy="success">Your account is ready. Open Lights Out and choose Sign in with Lights Out. Each new sign-in uses your password and an emailed login code.</p>
-        <a class="btn-primary" href="/hub/download" data-copy="download">Download the app</a>
+        <a class="btn-primary" href="/hub/download" data-copy="downloadWindows">Download for Windows</a>
+        <!-- linux-offer -->
+        <a class="btn-ghost" href="/hub/download/linux" data-copy="downloadLinux" aria-describedby="linux-download-note">Download for Linux (beta)</a>
+        <p class="field-help" id="linux-download-note"><span data-copy="linuxAccount">Your new account works in the Windows app. The Linux beta signs in with Steam only.</span> <span data-copy="linuxBeta">Linux beta</span> {{LINUX_VERSION}} · x86_64 · <a href="/hub/download/linux-source" data-copy="source">Source code</a></p>
+        <!-- /linux-offer -->
       </div>
       <p class="account-policies"><a href="/privacy" data-copy="privacy">Privacy</a> · <a href="/terms" data-copy="terms">Terms</a></p>
     </section>

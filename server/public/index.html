@@ -13,6 +13,7 @@
 <link rel="preload" href="/assets/oswald-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/ibmplexsans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/platform.js" defer></script>
 </head>
 <!-- `home` is the one-screen layout in site.css: the download page is sized to the viewport so
      the button, the modes and the way onward are all visible without a scroll. Every other page
@@ -50,8 +51,10 @@
 
         <div class="hero-cta" id="get">
           <a class="btn-primary" href="/hub/download" aria-describedby="download-help">Download for Windows</a>
+          <!-- linux-offer --><a class="btn-ghost" href="/hub/download/linux" aria-describedby="linux-download-note">Download for Linux (beta)</a><!-- /linux-offer -->
           <p class="download-help" id="download-help"><strong>Digitally signed installer.</strong> The verified publisher is <strong>Samuel Warren</strong>. Windows SmartScreen may still show “Windows protected your PC” while the download builds reputation. If you trust this download, click <strong>More info</strong>, verify the publisher, then choose <strong>Run anyway</strong>. <a href="/faq#faq-smartscreen">About the signature and Windows prompts</a>.</p>
         </div>
+        <!-- linux-offer --><p class="hero-note" id="linux-download-note">Linux beta {{LINUX_VERSION}} for x86_64 PCs · <a href="/hub/download/linux-source">Source code</a> · <a href="/faq#faq-linux">Linux setup</a></p><!-- /linux-offer -->
 
         <p class="hero-note"><strong>Use at your own risk.</strong> Lights Out is not explicitly endorsed or supported by Bodycam’s developers. While we believe a ban or other disciplinary action is unlikely, the risk is not zero. By downloading and using Lights Out, you accept responsibility for that risk and any resulting account restrictions, bans or other disciplinary action. <a href="/faq#faq-bans">Read more about the risk</a>.</p>
       </div>

@@ -465,6 +465,39 @@ function renderGamemodeRows(catalogue) {
     .join('\n');
 }
 
+// The Linux beta's facts for the pages, from the top-level `linux` catalogue entry. Every value is
+// checked against the shape publish.py writes (X.Y.Z or X.Y.Z.N, a 64-digit SHA-256) and is EMPTY
+// otherwise, so nothing but those characters can ever reach the HTML.
+//
+// `offered` is whether the pages offer the Linux beta at all: only when the entry is complete and
+// both routes would redirect (a version, both SHA-256s, and a usable download_url AND source_url,
+// because the binary is never offered without its corresponding source). Otherwise every
+// linux-offer block is left out of the page (renderLinuxOffer), so a page commit that reaches
+// production before its catalogue entry, or a bad catalogue edit later, shows no dead button, no
+// empty version and no empty checksum.
+function linuxPageFacts(catalogue) {
+  const linux = catalogue && catalogue.linux && typeof catalogue.linux === 'object' ? catalogue.linux : {};
+  const hash = (value) => (typeof value === 'string' && /^[0-9a-f]{64}$/i.test(value) ? value.toLowerCase() : '');
+  const facts = {
+    version: typeof linux.version === 'string' && /^\d{1,9}(?:\.\d{1,9}){2,3}$/.test(linux.version) ? linux.version : '',
+    sha256: hash(linux.sha256),
+    source_sha256: hash(linux.source_sha256),
+  };
+  facts.offered = Boolean(facts.version && facts.sha256 && facts.source_sha256
+    && linuxDownloadLocation(linux.download_url) && linuxDownloadLocation(linux.source_url));
+  return facts;
+}
+
+// Everything a page says about the Linux beta that needs a release behind it (the buttons, the
+// version and checksums, the FAQ answer and its links, the /how section, the source offer) sits
+// between `<!-- linux-offer -->` and `<!-- /linux-offer -->`. With an offer the markers are dropped
+// and the content stays; without one the whole block goes. The markers never reach the browser.
+const LINUX_OFFER_BLOCK = /<!-- linux-offer -->([\s\S]*?)<!-- \/linux-offer -->/g;
+
+function renderLinuxOffer(html, offered) {
+  return html.replace(LINUX_OFFER_BLOCK, (block, inner) => (offered ? inner : ''));
+}
+
 // Renders a page from public/, substituting the placeholders the two pages share. Every value comes
 // from the catalogue, so the site can never advertise a version or a mode list the hub does not
 // actually serve.
@@ -473,8 +506,12 @@ function handleHtmlPage(req, res, htmlPath) {
   const catalogue = readCatalogue();
   const hub = (catalogue && catalogue.hub) || {};
   const modes = (catalogue && Array.isArray(catalogue.gamemodes)) ? catalogue.gamemodes : [];
+  const linux = linuxPageFacts(catalogue);
   const replacements = {
     '{{HUB_VERSION}}': hub.version || 'unknown',
+    '{{LINUX_VERSION}}': linux.version,
+    '{{LINUX_SHA256}}': linux.sha256,
+    '{{LINUX_SOURCE_SHA256}}': linux.source_sha256,
     '{{HUB_SIZE}}': formatBytes(hub.size) || 'Windows',
     '{{GAMEMODE_COUNT}}': String(modes.length),
     '{{GAMEMODES}}': renderGamemodeRows(catalogue),
@@ -483,7 +520,7 @@ function handleHtmlPage(req, res, htmlPath) {
     '{{RANK_DIVISIONS}}': String(ladder.DIVISIONS),
     '{{RANK_LADDER}}': renderRankLadder(),
   };
-  let rendered = html;
+  let rendered = renderLinuxOffer(html, linux.offered);
   for (const [token, value] of Object.entries(replacements)) {
     rendered = rendered.split(token).join(value);
   }
@@ -680,21 +717,86 @@ function handleHubDownload(req, res) {
   if (!downloadUrl) {
     return sendJson(res, 500, { error: 'Server error.' });
   }
-  // A visitor may reach the website while the app hostname resolves to an
-  // unreachable CDN edge. Keep our local installer on the origin they reached;
-  // do not infer an absolute destination from proxy or browser Host headers.
-  let downloadLocation = downloadUrl;
+  res.writeHead(302, {
+    location: sameHostDownloadLocation(downloadUrl),
+    'cache-control': 'no-store',
+    'content-length': 0,
+  });
+  res.end();
+}
+
+// The origins this service is published on. A download under /hub/ on any of them is the same file.
+const OWNED_DOWNLOAD_ORIGINS = ['https://play.lightsoutranked.com', 'https://lightsoutranked.com',
+  'https://www.lightsoutranked.com', 'https://lightsout.up.railway.app'];
+
+/**
+ * Where to send a download for a URL the catalogue publishes.
+ *
+ * A visitor may reach the website while the app hostname resolves to an unreachable CDN edge. Keep
+ * our local files on the origin they reached; do not infer an absolute destination from proxy or
+ * browser Host headers. Anything that is not /hub/ on one of our own origins (another host, a
+ * private capability path, a relative path, something unparseable) goes out exactly as published.
+ */
+function sameHostDownloadLocation(downloadUrl) {
   try {
     const target = new URL(downloadUrl);
-    const owned = ['https://play.lightsoutranked.com', 'https://lightsoutranked.com',
-      'https://www.lightsoutranked.com', 'https://lightsout.up.railway.app'];
-    if (owned.includes(target.origin) && !target.username && !target.password
+    if (OWNED_DOWNLOAD_ORIGINS.includes(target.origin) && !target.username && !target.password
         && target.pathname.startsWith('/hub/')) {
-      downloadLocation = target.pathname + target.search + target.hash;
+      return target.pathname + target.search + target.hash;
     }
   } catch { /* Existing relative download paths already preserve the origin. */ }
+  return downloadUrl;
+}
+
+/**
+ * /hub/download/linux and /hub/download/linux-source: the native Linux beta ZIP and its
+ * corresponding-source ZIP, read from the top-level `linux` catalogue entry that
+ * tools/release/publish.py writes (download_url and source_url).
+ *
+ * Routes of their own on purpose. /hub/download never looks at the User-Agent and stays the
+ * Windows installer: Android and ChromeOS both put "Linux" in theirs.
+ *
+ * Stricter than the Windows route, because nothing depends on its quirks yet: only an https URL or
+ * a same-origin /hub/ path is followed, rewritten onto the reached host exactly as the Windows
+ * download is. No entry, no URL or an unusable one is a 404 with a JSON body, never a 500: before
+ * the first Linux release the catalogue simply has no entry, and that is not a server fault.
+ */
+const LINUX_DOWNLOAD_ROUTES = new Map([
+  ['/hub/download/linux', 'download_url'],
+  ['/hub/download/linux-source', 'source_url'],
+]);
+
+function linuxDownloadLocation(value) {
+  if (typeof value !== 'string' || !value || value.length > 2048) return null;
+  if (/[\s\u0000-\u001f\u007f\\]/.test(value)) return null;
+  const base = 'https://internal.invalid';
+  let target;
+  try {
+    target = new URL(value, base);
+  } catch {
+    return null;
+  }
+  if (value.startsWith('/')) {
+    // A same-origin path. "//host/..." parses onto another origin and is refused here too.
+    if (target.origin !== base || !target.pathname.startsWith('/hub/')) return null;
+    return target.pathname + target.search + target.hash;
+  }
+  if (!/^https:\/\//i.test(value) || target.origin === base || target.username || target.password) return null;
+  // target.href is the parsed URL in ASCII (punycode, percent-encoding): always a valid header.
+  return sameHostDownloadLocation(target.href);
+}
+
+function handleLinuxDownload(req, res, field) {
+  let location = null;
+  try {
+    const linux = readCatalogue().linux;
+    if (linux && typeof linux === 'object') location = linuxDownloadLocation(linux[field]);
+  } catch {
+    location = null;                // an unreadable catalogue has no Linux release to offer
+  }
+  if (!location) return sendJson(res, 404, { error: 'The Linux beta download is not available.' });
   res.writeHead(302, {
-    location: downloadLocation,
+    location,
     'cache-control': 'no-store',
     'content-length': 0,
   });
@@ -1773,6 +1875,11 @@ async function router(req, res) {
     return handleHubDownload(req, res);
   }
 
+  // Before the /hub/ static prefix below, which would refuse the extra path segment.
+  if ((method === 'GET' || method === 'HEAD') && LINUX_DOWNLOAD_ROUTES.has(pathname)) {
+    return handleLinuxDownload(req, res, LINUX_DOWNLOAD_ROUTES.get(pathname));
+  }
+
   if ((method === 'GET' || method === 'HEAD') && pathname.startsWith('/hub/')) {
     const rawSegment = pathname.slice('/hub/'.length);
     return serveStaticFile(req, res, HUB_DIR, rawSegment);
@@ -1980,4 +2087,5 @@ if (require.main === module) {
 }
 
 module.exports = { createServer, start,
-  _internals: { describeHeaders, dispatchRankedReport, applyRestoredLegacyReport, effectiveRankedRules } };
+  _internals: { describeHeaders, dispatchRankedReport, applyRestoredLegacyReport, effectiveRankedRules,
+    sameHostDownloadLocation, linuxDownloadLocation, linuxPageFacts, renderLinuxOffer, requiredVersions } };

@@ -72,12 +72,64 @@ gamemode output. It is not an exact copy of the hosted service or deployment.
 | Third-party UI recordings | Omitted for licensing; provide independently licensed replacements or use silent optional cues. |
 | Extracted game headers, generated Bodycam/plugin stubs, Unreal/game binaries and stock assets | Not redistributed. Re-cooking requires a legally obtained compatible Unreal/game environment. The repository is not a turnkey rebuild of the cooked gamemodes. |
 | Official signing credentials | Kept outside source. A local build cannot acquire the official publisher signature. |
+| Linux client source in this tree | Published as the corresponding-source ZIP beside each Linux download (see "Linux beta" below), not in this repository's tree. |
+| Linux update signing key | Kept outside source. A local build cannot produce an update that installed official Linux clients accept. |
 
-## Linux testing
+## Linux beta
 
-The public downloadable client is a Windows release. A separate private Linux
-pilot has package, installation and automated tests, and a tester has reported
-completing a Steam/Proton bot match. Follow-up checks of game shutdown and restart
-remain outstanding. That limited evidence does not establish general Linux
-support, compatibility across distributions, or equivalence to the Windows
-release. The private pilot is not included in the public v2.6.8 source snapshot.
+Lights Out also has a native Linux beta for 64-bit x86 PCs (x86_64). It is a
+beta: it has been tested on fewer systems than the Windows release, and each
+release note (`docs/releases/linux-<version>.md`) says which systems it was
+tested on. The official Linux download is one ZIP,
+`LightsOut-Linux-Native-<version>-x86_64.zip`, offered at lightsoutranked.com
+next to the Windows download and attached to the public GitHub pre-release
+`linux-v<version>` of WarrS03448/lights-out.
+
+### Corresponding source
+
+The Linux client's source is not in this repository's tree yet. Its
+corresponding source is the ZIP published beside each Linux download,
+`LightsOut-Linux-Native-<version>-source.zip`, on the website and on the same
+GitHub pre-release. That ZIP holds:
+
+- the exact source the release was built from: the app, the native renderer
+  and relay, setup, the launcher, and every build recipe and lock;
+- the source of the bundled GPL and LGPL components: pyooz, CPython, and the
+  Ubuntu source packages of the LGPL and GPL desktop libraries;
+- `SOURCE-MANIFEST.json`, which lists every file in the ZIP with its SHA-256,
+  and the URL and SHA-256 of every upstream source it only refers to.
+
+`SOURCE-MANIFEST.json` also names the commit the source was exported from. That
+commit is in the private development repository. The export leaves out
+private-only files, such as test-deployment helpers and third-party recordings,
+and its `public_export` record lists what was left out. Nothing the release is
+built from is left out.
+
+### Identify a Linux download
+
+The `release-source.json` asset of each `linux-v<version>` pre-release records
+both ZIPs, as the artifacts `linux-native-zip` and `linux-source-zip`, with their
+sizes and SHA-256 hashes. They are read from the catalogue committed at the
+tagged public commit, and the website's `/catalogue.json` (key `linux`) carries
+the same values. To check a download:
+
+```sh
+sha256sum LightsOut-Linux-Native-<version>-x86_64.zip
+python tools/release/source_manifest.py --source-ref linux-v<version> --verify-file LightsOut-Linux-Native-<version>-x86_64.zip
+python tools/release/source_manifest.py --source-ref linux-v<version> --verify-file LightsOut-Linux-Native-<version>-source.zip
+```
+
+### Linux updates
+
+The installed Linux app updates itself from its update strip. It only offers a
+build whose update record (`linux.update` in the catalogue) carries a valid
+Ed25519 signature from a key pinned inside the app, and before it installs
+anything it checks the download's size and SHA-256 against that signed record.
+The signing key is kept outside the repository. You can always download the ZIP
+again from the website and open it instead; that installs or updates too.
+
+The same limits apply as for Windows: the hashes establish a maintainer-declared
+correspondence between the source ZIP and the exact download. They do not prove
+that a third party can rebuild the download byte for byte, and no independently
+reproducible build or signed build attestation is claimed. The source ZIP's
+README describes how the release was built.

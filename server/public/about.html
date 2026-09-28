@@ -10,6 +10,7 @@
 <link rel="preload" href="/assets/oswald-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/ibmplexsans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/platform.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#story">Skip to content</a>
@@ -92,6 +93,10 @@
         </div>
         <div class="hero-cta">
           <a class="btn-primary" href="/hub/download">Download for Windows</a>
+          <!-- linux-offer -->
+          <a class="btn-ghost" href="/hub/download/linux" aria-describedby="linux-download-note">Download for Linux (beta)</a>
+          <p class="download-help" id="linux-download-note">Linux beta {{LINUX_VERSION}} for x86_64 PCs · <a href="/hub/download/linux-source">Source code</a> · <a href="/faq#faq-linux">Linux setup</a></p>
+          <!-- /linux-offer -->
         </div>
       </div>
     </section>
