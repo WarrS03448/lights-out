@@ -116,21 +116,21 @@
     }
   ],
   "linux": {
-    "version": "3.0.7.1",
+    "version": "3.0.7.2",
     "kind": "linux-native-zip",
     "arch": "x86_64",
-    "download_url": "https://play.lightsoutranked.com/hub/LightsOut-Linux-Native-3.0.7.1-x86_64.zip",
-    "size": 36481183,
-    "sha256": "7b48b1ac3f585d888bcde7880c3de1ea1c936f55e6ebe0adf5760e9d27231031",
-    "source_url": "https://github.com/WarrS03448/lights-out/releases/download/linux-v3.0.7.1/LightsOut-Linux-Native-3.0.7.1-source.zip",
-    "source_size": 56122997,
-    "source_sha256": "88b5265db69ef03033a755f3ce3707c63b0b13449eb0f884b11f2799217ed480",
+    "download_url": "https://play.lightsoutranked.com/hub/LightsOut-Linux-Native-3.0.7.2-x86_64.zip",
+    "size": 36483841,
+    "sha256": "a057ce95275d6da857079043964cb87b549028a3d1538b3811f6ceb8fb4250b6",
+    "source_url": "https://github.com/WarrS03448/lights-out/releases/download/linux-v3.0.7.2/LightsOut-Linux-Native-3.0.7.2-source.zip",
+    "source_size": 56127731,
+    "source_sha256": "f5d83b47ca02bf1aa7a7bb67ef0b8ca43c5309834380d6704bf1b844e4c703dd",
     "page_url": "https://lightsoutranked.com/",
     "required": false,
     "update": {
       "key_id": "e4329ff194885dd7",
-      "manifest": "eyJhcmNoIjoieDg2XzY0IiwiYXJjaGl2ZSI6eyJuYW1lIjoiTGlnaHRzT3V0LUxpbnV4LU5hdGl2ZS0zLjAuNy4xLXg4Nl82NC56aXAiLCJzaGEyNTYiOiI3YjQ4YjFhYzNmNTg1ZDg4OGJjZGU3ODgwYzNkZTFlYTFjOTM2ZjU1ZTZlYmUwYWRmNTc2MGU5ZDI3MjMxMDMxIiwic2l6ZSI6MzY0ODExODN9LCJidW5kbGVfc2hhMjU2IjoiNzYwNWFjYzZiMzVhNDg4MWY0MDY5NWM4NjBhMmYwNmNjNDBiMjE3OTIyMGJkODM5NGMxMGM5NDA1Zjc1Y2VjZSIsImNoYW5uZWwiOiJwdWJsaWMtYmV0YSIsImRpc3BsYXlfdmVyc2lvbiI6IjMuMC43LjEiLCJmb2xkZXIiOiJMaWdodHNPdXQtTGludXgtTmF0aXZlLTMuMC43LjEiLCJpbnN0YWxsZWRfYnl0ZXMiOjY4OTczODM4LCJsYXVuY2hlcl9zaGEyNTYiOiIyMDc0ZWYwYTVlYWU3OThiY2JjOGNkMmJjZmFhOTA4ZGRhM2RjODE3MzM1NDg5NzFjYjM1ZDAyZGM1YTYwMGM4IiwicGF5bG9hZF9zaGEyNTYiOiIzZDc0ZWU2Nzg3Yjc1YzVjNzFjMWJhNTk0ZWJkMzI3YjZhMDc3YjdhZDc0NDgzYWEwNGQ5MDRhYzk0MzNlYTE0IiwicGxhdGZvcm0iOiJsaW51eCIsInByb2R1Y3QiOiJMaWdodHMgT3V0IiwicmVsZWFzZSI6IjMuMC43LjEiLCJyb2xlIjoibGludXgtbmF0aXZlLXVwZGF0ZSIsInNjaGVtYSI6MSwic291cmNlIjp7Im5hbWUiOiJMaWdodHNPdXQtTGludXgtTmF0aXZlLTMuMC43LjEtc291cmNlLnppcCIsInNoYTI1NiI6Ijg4YjUyNjVkYjY5ZWYwMzAzM2E3NTVmM2NlMzcwN2M2M2IwYjEzNDQ5ZWIwZjg4NGIxMWYyNzk5MjE3ZWQ0ODAiLCJzaXplIjo1NjEyMjk5N30sInZlcnNpb24iOlszLDAsNywxXX0=",
-      "signature": "+Sx22mpZkYihp7mohovSefhAT4VRkvM78SQlO7ws3cQh3xN87wqaIYkpmtCyXW+jcOtM2di14Oj+KBe2we/cCA=="
+      "manifest": "eyJhcmNoIjoieDg2XzY0IiwiYXJjaGl2ZSI6eyJuYW1lIjoiTGlnaHRzT3V0LUxpbnV4LU5hdGl2ZS0zLjAuNy4yLXg4Nl82NC56aXAiLCJzaGEyNTYiOiJhMDU3Y2U5NTI3NWQ2ZGE4NTcwNzkwNDM5NjRjYjg3YjU0OTAyOGEzZDE1MzhiMzgxMWY2Y2ViOGZiNDI1MGI2Iiwic2l6ZSI6MzY0ODM4NDF9LCJidW5kbGVfc2hhMjU2IjoiNTRkMzlmMWM3MGRjNmIwMzVlOTQ0NWZiMDA1NjY1MjRjN2Q4MDNlYTBkYTg3ZGUwN2U2OGZhZmZmYzdlMWRhZiIsImNoYW5uZWwiOiJwdWJsaWMtYmV0YSIsImRpc3BsYXlfdmVyc2lvbiI6IjMuMC43LjIiLCJmb2xkZXIiOiJMaWdodHNPdXQtTGludXgtTmF0aXZlLTMuMC43LjIiLCJpbnN0YWxsZWRfYnl0ZXMiOjY4OTgxMjE5LCJsYXVuY2hlcl9zaGEyNTYiOiJkZmY4ZTJkMGFmNDZmM2I5NTVmZjNjYzIwMmI0ZWNjZGUwYWQwMzE5MGNiNzg3MTU2NWYwYjdmMmIwZjI4MDNmIiwicGF5bG9hZF9zaGEyNTYiOiIwNDA4ZjQ5N2VjZDllNDQ5ZDM2ZTMwZmI0NmVjN2U5NTBkMGU5MWE1YzYxMWY5N2VlMjdkMmEzZmJiMzc3NTQ1IiwicGxhdGZvcm0iOiJsaW51eCIsInByb2R1Y3QiOiJMaWdodHMgT3V0IiwicmVsZWFzZSI6IjMuMC43LjIiLCJyb2xlIjoibGludXgtbmF0aXZlLXVwZGF0ZSIsInNjaGVtYSI6MSwic291cmNlIjp7Im5hbWUiOiJMaWdodHNPdXQtTGludXgtTmF0aXZlLTMuMC43LjItc291cmNlLnppcCIsInNoYTI1NiI6ImY1ZDgzYjQ3Y2EwMmJmMWFhN2E3YmI2N2VmMGI4Y2E0M2M1MzA5ODM0MzgwZDY3MDRiZjFiODQ0ZTRjNzAzZGQiLCJzaXplIjo1NjEyNzczMX0sInZlcnNpb24iOlszLDAsNywyXX0=",
+      "signature": "Lh77hbqG0ji8NAXCfdsGdctkFgd01wXiP69gNZe6DC/9rXib5UL44vL8igR0i7cwgrn4ZN75nV0VRlmN0kk+Cw=="
     }
   }
 }
